@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minkowski Diagram</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Minkowski Spacetime Diagram</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480,OX=360,OY=380,SC=30;
+let beta=.5, paused=false, tAnim=0, speed=1;
+
+function lorentz(x,t){const g=1/Math.sqrt(1-beta*beta);return{xp:g*(x-beta*t),tp:g*(t-beta*x)}}
+function toS(x,t){return{sx:OX+x*SC,sy:OY-t*SC}}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const g=1/Math.sqrt(1-beta*beta);
+  const showLC=document.getElementById('chkLC').checked;
+  const showWL=document.getElementById('chkWL').checked;
+  const showHyp=document.getElementById('chkHyp').checked;
+  const showParticle=document.getElementById('chkParticle').checked;
+
+  // grid
+  ctx.strokeStyle='#eee';ctx.lineWidth=.5;
+  for(let i=-8;i<=8;i++){
+    const p1=toS(i,-8),p2=toS(i,8);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();
+    const p3=toS(-8,i),p4=toS(8,i);ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();
+  }
+
+  // axes
+  ctx.strokeStyle='#000';ctx.lineWidth=2;
+  const xA=toS(-8,0),xA2=toS(8,0);ctx.beginPath();ctx.moveTo(xA.sx,xA.sy);ctx.lineTo(xA2.sx,xA2.sy);ctx.stroke();
+  const tA=toS(0,-7),tA2=toS(0,8);ctx.beginPath();ctx.moveTo(tA.sx,tA.sy);ctx.lineTo(tA2.sx,tA2.sy);ctx.stroke();
+  ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='left';
+  ctx.fillText('x',xA2.sx-5,xA2.sy+15);ctx.fillText('ct',tA2.sx+8,tA2.sy-3);
+  ctx.font='8px monospace';ctx.fillStyle='#999';
+  for(let i=-7;i<=7;i++){if(!i)continue;const px=toS(i,0);ctx.fillText(i,px.sx-6,px.sy+12);const py=toS(0,i);ctx.fillText(i,py.sx+6,py.sy+3)}
+
+  // light cone
+  if(showLC){
+    ctx.strokeStyle='#bbb';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+    const l1=toS(-6,6),l2=toS(6,-6);ctx.beginPath();ctx.moveTo(l1.sx,l1.sy);ctx.lineTo(l2.sx,l2.sy);ctx.stroke();
+    const l3=toS(-6,-6),l4=toS(6,6);ctx.beginPath();ctx.moveTo(l3.sx,l3.sy);ctx.lineTo(l4.sx,l4.sy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,0,0,0.03)';
+    ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(toS(6,6).sx,toS(6,6).sy);ctx.lineTo(toS(-6,6).sx,toS(-6,6).sy);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(toS(6,-6).sx,toS(6,-6).sy);ctx.lineTo(toS(-6,-6).sx,toS(-6,-6).sy);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='center';
+    ctx.fillText('FUTURE',OX,OY-5.5*SC);ctx.fillText('PAST',OX,OY+5.5*SC+15);
+  }
+
+  // invariant hyperbolas
+  if(showHyp){
+    ctx.strokeStyle='rgba(0,0,0,0.07)';ctx.lineWidth=.6;
+    for(let s=1;s<=4;s++){
+      ctx.beginPath();for(let tt=-6;tt<=6;tt+=.05){const x=Math.sqrt(s*s+tt*tt);const p=toS(x,tt);tt===-6?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy)}ctx.stroke();
+      ctx.beginPath();for(let tt=-6;tt<=6;tt+=.05){const x=-Math.sqrt(s*s+tt*tt);const p=toS(x,tt);tt===-6?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy)}ctx.stroke();
+    }
+  }
+
+  // S' axes
+  if(showWL){
+    ctx.strokeStyle='#666';ctx.lineWidth=1.5;
+    const xpDir=g, tpDir=-g*beta;
+    ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(OX+xpDir*SC*.95,OY+tpDir*SC*.95);ctx.stroke();
+    ctx.fillStyle='#666';ctx.font='10px monospace';ctx.textAlign='left';
+    ctx.fillText("x'",OX+xpDir*SC*.95+3,OY+tpDir*SC*.95+3);
+    const xpDir2=-g*beta, tpDir2=g;
+    ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(OX+xpDir2*SC*.95,OY+tpDir2*SC*.95);ctx.stroke();
+    ctx.fillText("ct'",OX+xpDir2*SC*.95-22,OY+tpDir2*SC*.95);
+  }
+
+  // particle worldline
+  if(showParticle){
+    ctx.strokeStyle='#333';ctx.lineWidth=2;
+    const particleV=.35;
+    ctx.beginPath();
+    for(let tt=-5;tt<=5;tt+=.05){const x=particleV*tt;const p=toS(x,tt);tt===-5?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy)}
+    ctx.stroke();
+    ctx.fillStyle='#333';ctx.font='8px monospace';ctx.textAlign='left';
+    const lp=toS(particleV*3.5,3.5);ctx.fillText('Particle (v=0.35c)',lp.sx+5,lp.sy);
+  }
+
+  // animated events
+  if(!paused)tAnim+=.015*speed;
+  const events=[
+    {x:2,t:2,l:'A',c:'#000'},{x:-1,t:3,l:'B',c:'#333'},
+    {x:3,t:-1.5,l:'C',c:'#666'},{x:-2.5,t:-2,l:'D',c:'#555'}
+  ];
+  for(const e of events){
+    const s=toS(e.x,e.t);const tf=lorentz(e.x,e.t);
+    ctx.fillStyle=e.c;ctx.beginPath();ctx.arc(s.sx,s.sy,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=e.c;ctx.font='8px monospace';ctx.textAlign='left';
+    ctx.fillText(`${e.l}: (${e.x},${e.t})→S'(${tf.xp.toFixed(1)},${tf.tp.toFixed(1)})`,s.sx+6,s.sy-2);
+  }
+
+  // animated light signal
+  const lightT=tAnim%8-4;
+  if(lightT>-4&&lightT<4){
+    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.beginPath();ctx.arc(toS(lightT,lightT).sx,toS(lightT,lightT).sy,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.beginPath();ctx.arc(toS(-lightT,lightT).sx,toS(-lightT,lightT).sy,3,0,Math.PI*2);ctx.fill();
+  }
+
+  // proper time labels on hyperbola
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='8px monospace';
+  ctx.textAlign='center';ctx.fillText('τ = const',OX+3.5*SC,OY-4*SC+12);
+
+  // bottom info
+  ctx.fillStyle='#666';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText('Spacetime interval Δs² = Δx² - c²Δt² is invariant',375,460);
+
+  // interval computation for some events
+  const invs=events.slice(0,3).map(e=>{
+    const tf=lorentz(e.x,e.t);return{lab:e.l,s2:e.x*e.x-e.t*e.t,s2p:tf.xp*tf.xp-tf.tp*tf.tp}
+  });
+
+  data.innerHTML=
+    `β = ${beta.toFixed(3)} | γ = ${g.toFixed(3)} | Interval invariant: ${invs.map(i=>i.lab+': '+i.s2.toFixed(2)+' = '+i.s2p.toFixed(2)).join(' | ')}`+
+    ` | t = ${tAnim.toFixed(1)} | S' velocity = ${(beta*3e8).toExponential(2)} m/s`;
+}
+
+function loop(){draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>β <input type="range" id="betaS" min="0" max="0.9" value="${beta*100}" step="1"><span id="betaD">${beta.toFixed(2)}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>
+<label><input type="checkbox" id="chkLC" checked>LC</label>
+<label><input type="checkbox" id="chkWL" checked>S'</label>
+<label><input type="checkbox" id="chkHyp" checked>Hyp</label>
+<label><input type="checkbox" id="chkParticle" checked>WL</label>`;
+
+document.getElementById('betaS').oninput=function(){beta=parseInt(this.value)/100;document.getElementById('betaD').textContent=beta.toFixed(2)};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=()=>{tAnim=0};
+Array.from(document.querySelectorAll('#ctrl input[type=checkbox]')).forEach(cb=>cb.checked=true);
+</script>
+</body>
+</html>

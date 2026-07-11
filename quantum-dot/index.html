@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Dot · 2D particle in a box</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.2em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;margin:5px 0;max-width:940px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:60px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:0.6em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0;font-size:0.6em;color:#666;max-width:940px;justify-content:center}
+.s sp{white-space:nowrap}
+.s .l{color:#999}
+.s .vl{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Quantum Dot</h1>
+<p>ψ(x,y) ∝ sin(nₓπx/L) sin(nᵧπy/L) — E ∝ (nₓ² + nᵧ²)</p>
+<canvas id="c" width="940" height="480"></canvas>
+<div class="c" id="ctrl"></div><div class="s" id="st"></div>
+<script>
+const C=document.getElementById('c'),x=C.getContext('2d'),W=940,H=480;
+let nx=2,ny=1,paused=0,speed=1;const L=280;
+const cx=200,cy=240;
+const HL=100;
+let hs={E:[],nodes:[],probMax:[]};
+let time=0;
+function reset(){nx=2;ny=1;paused=0;speed=1;time=0;for(let k in hs)hs[k]=[];}
+// Wavefunction: ψ = sin(nxπx/L) sin(nyπy/L)·cos(ωt)
+function psi(x0,y0,t){const s=Math.sin(nx*Math.PI*x0/L)*Math.sin(ny*Math.PI*y0/L);
+const E=nx*nx+ny*ny;const omega=E*0.5;return s*Math.cos(omega*t);}
+function step(){if(paused)return;for(let _=0;_<speed;_++)time+=0.02;
+const E=nx*nx+ny*ny;let pm=0;
+for(let y=0;y<L;y+=5)for(let x=0;x<L;x+=5){const p=psi(x,y,time);const p2=p*p;if(p2>pm)pm=p2;}
+hs.E.push(E);hs.nodes.push((nx-1)+(ny-1));hs.probMax.push(pm);
+for(let k in hs)if(hs[k].length>HL)hs[k].shift();}
+function draw(){
+x.fillStyle='#fff';x.fillRect(0,0,W,H);
+const E=nx*nx+ny*ny;const omega=Math.sqrt(E)*0.5;
+// Well with probability density
+x.strokeStyle='#111';x.lineWidth=2;x.strokeRect(cx-L/2,cy-L/2,L,L);
+x.fillStyle='rgba(0,0,0,0.01)';x.fillRect(cx-L/2+2,cy-L/2+2,L-4,L-4);
+const img=x.createImageData(L,L);
+for(let y=0;y<L;y++)for(let x0=0;x0<L;x0++){
+  const p=psi(x0,y,time);const prob=p*p;const v=Math.round(255-prob*200);
+  const idx=(y*L+x0)*4;img.data[idx]=v;img.data[idx+1]=v;img.data[idx+2]=v;img.data[idx+3]=255;
+}
+x.putImageData(img,cx-L/2,cy-L/2);
+// Nodal lines
+x.strokeStyle='rgba(0,0,0,0.08)';x.lineWidth=.5;x.setLineDash([3,3]);
+for(let i=1;i<nx;i++){const xp=cx-L/2+i*L/nx;x.beginPath();x.moveTo(xp,cy-L/2);x.lineTo(xp,cy+L/2);x.stroke();}
+for(let j=1;j<ny;j++){const yp=cy-L/2+j*L/ny;x.beginPath();x.moveTo(cx-L/2,yp);x.lineTo(cx+L/2,yp);x.stroke();}
+x.setLineDash([]);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='center';
+x.fillText('nₓ='+nx+'  nᵧ='+ny+'  E∝'+E,cx,cy+L/2+16);
+x.fillText('time = '+time.toFixed(2)+'  ωt = '+(omega*time).toFixed(2),cx,cy+L/2+30);
+// Standing wave cross-section (middle row)
+const wX=cx-L/2,wY=cy-L/2-26,wW=L,wH=22;
+x.strokeStyle='#eee';x.lineWidth=.5;x.strokeRect(wX,wY,wW,wH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('ψ(x, L/2)',wX+2,wY+8);
+x.strokeStyle='rgba(0,0,0,0.15)';x.lineWidth=.8;x.beginPath();let fi=true;
+for(let x0=0;x0<=wW;x0++){const p=psi(x0,Math.floor(L/2),time);const py=wY+wH/2-p*10;fi?x.moveTo(wX+x0,py):x.lineTo(wX+x0,py);fi=false;}
+x.stroke();
+// Energy level diagram
+const sX=500,sY=30,sW=400,sH=260;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(sX,sY,sW,sH);
+x.fillStyle='#999';x.font='7px monospace';x.textAlign='center';x.fillText('Energy spectrum E ∝ nₓ² + nᵧ²',sX+sW/2,sY-3);
+const levels=[];const seen={};
+for(let i=1;i<=5;i++)for(let j=1;j<=5;j++){const e=i*i+j*j;const deg=i===j?1:2;
+if(!seen[e]){seen[e]={count:0};levels.push({E:e,nx:i,ny:j,deg});}seen[e].count++;}
+levels.sort((a,b)=>a.E-b.E);
+const maxE=levels[levels.length-1].E;
+for(let l of levels){const ey=sY+sH-(l.E-2)/(maxE-2)*sH;
+const active=l.nx===nx&&l.ny===ny||l.nx===ny&&l.ny===nx;
+x.strokeStyle=active?'#111':'rgba(0,0,0,0.06)';x.lineWidth=active?2:.3;
+x.beginPath();x.moveTo(sX+35,ey);x.lineTo(sX+sW-35,ey);x.stroke();
+x.fillStyle=active?'#111':'#999';x.font='5px monospace';x.textAlign='right';
+x.fillText('('+l.nx+','+l.ny+')',sX+32,ey+2);
+x.fillStyle=active?'#111':'#999';x.font='5px monospace';x.textAlign='left';
+x.fillText('E='+l.E+' (d='+l.deg+')',sX+sW-33,ey+2);
+if(active)x.fillStyle='#111';x.beginPath();x.arc(sX+40,ey,3,0,Math.PI*2);x.fill();}
+// History mini graph
+const mgX=500,mgY=310,mgW=400,mgH=55;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(mgX,mgY,mgW,mgH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('Prob. max history',mgX+3,mgY+8);
+const arr=hs.probMax;if(arr.length>1){x.strokeStyle='rgba(0,0,0,0.2)';x.lineWidth=.7;x.beginPath();let fi2=true;
+const mn=Math.min(...arr),mx=Math.max(...arr),rg=mx-mn||1;
+for(let i=0;i<arr.length;i++){const px=mgX+i*mgW/HL,py=mgY+mgH-3-(arr[i]-mn)/rg*(mgH-6);fi2?x.moveTo(px,py):x.lineTo(px,py);fi2=false;}
+x.stroke();}
+// Standing wave mode visualization
+const mX=500,mY=380,mW=200,mH=60;
+x.strokeStyle='#eee';x.lineWidth=.5;x.strokeRect(mX,mY,mW,mH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('Mode: ('+nx+','+ny+')',mX+3,mY+8);
+x.fillStyle='#111';x.font='6px monospace';x.fillText('λₓ = 2L/'+nx+' = '+(2*L/nx).toFixed(0),mX+5,mY+24);
+x.fillText('λᵧ = 2L/'+ny+' = '+(2*L/ny).toFixed(0),mX+5,mY+40);
+// Phase indicator
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';
+x.fillText('Phase: '+(Math.cos(omega*time)>0?'+':'−'),500,460);
+x.fillText('ω = '+omega.toFixed(2),500,472);
+// Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="cg"><label>nₓ</label><input type="range" id="nxS" min="1" max="6" step="1" value="${nx}"><span class="v" id="nxV">${nx}</span></div>`+
+`<div class="cg"><label>nᵧ</label><input type="range" id="nyS" min="1" max="6" step="1" value="${ny}"><span class="v" id="nyV">${ny}</span></div>`+
+`<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="v" id="spV">${speed}</span></div>`+
+`<button id="ppBtn">⏸</button><button id="rsBtn">↺</button>`;
+document.getElementById('nxS').oninput=function(){nx=+this.value;document.getElementById('nxV').textContent=nx;};
+document.getElementById('nyS').oninput=function(){ny=+this.value;document.getElementById('nyV').textContent=ny;};
+document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+document.getElementById('ppBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶':'⏸';};
+document.getElementById('rsBtn').onclick=reset;
+}
+const nodesX=nx-1,nodesY=ny-1,totalNodes=nodesX+nodesY;
+const deg=nx===ny?1:2;const sym=nx===ny?'Degenerate':'Non-degenerate';
+const lambdaX=2*L/nx,lambdaY=2*L/ny;
+document.getElementById('st').innerHTML=
+`<sp><span class="l">(nₓ, nᵧ) =</span> <span class="vl">(${nx}, ${ny})</span></sp>`+
+`<sp><span class="l">E ∝</span> <span class="vl">${E}</span></sp>`+
+`<sp><span class="l">Nodes x</span> <span class="vl">${nodesX}</span></sp>`+
+`<sp><span class="l">Nodes y</span> <span class="vl">${nodesY}</span></sp>`+
+`<sp><span class="l">Total nodes</span> <span class="vl">${totalNodes}</span></sp>`+
+`<sp><span class="l">Symmetry</span> <span class="vl">${sym}</span></sp>`+
+`<sp><span class="l">Degeneracy</span> <span class="vl">${deg}</span></sp>`+
+`<sp><span class="l">Parity x</span> <span class="vl">${nx%2===0?'even':'odd'}</span></sp>`+
+`<sp><span class="l">Parity y</span> <span class="vl">${ny%2===0?'even':'odd'}</span></sp>`+
+`<sp><span class="l">λₓ = 2L/nₓ</span> <span class="vl">${lambdaX.toFixed(0)}</span></sp>`+
+`<sp><span class="l">λᵧ = 2L/nᵧ</span> <span class="vl">${lambdaY.toFixed(0)}</span></sp>`+
+`<sp><span class="l">ω = √E</span> <span class="vl">${Math.sqrt(E).toFixed(3)}</span></sp>`+
+`<sp><span class="l">L =</span> <span class="vl">${L}</span></sp>`;
+}
+reset();
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

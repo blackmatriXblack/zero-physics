@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mass-Spring Array · Normal Modes</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.a{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Mass-Spring Array</h1>
+<p>N coupled oscillators &nbsp;·&nbsp; <span class="eq">ω<sub>p</sub> = 2√(k/m) sin(pπ/(2(N+1)))</span></p>
+<canvas id="c" width="900" height="440"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=440;
+const N=8,sp=70,sx=80;
+let k=300,damp=0.3,sm=1,p=0,st=0;
+let masses=[];
+const h={t:[],y:[],ke:[],pe:[],te:[],vmax:[]};
+function init(){masses=[];for(let i=0;i<N;i++)masses.push({x:sx+i*sp,y:220,vx:0,vy:0,x0:sx+i*sp,y0:220,m:1});st=0;h.t.length=0;h.y.length=0;h.ke.length=0;h.pe.length=0;h.te.length=0;h.vmax.length=0}
+init();
+function setM(n){for(let i=0;i<N;i++){masses[i].x=masses[i].x0;masses[i].y=masses[i].y0+25*Math.sin((n+1)*(i+1)*Math.PI/(N+1));masses[i].vy=0;masses[i].vx=0}}
+function stp(){
+  if(p)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.004,fs=[];
+    masses[0].vy-=k*(masses[0].y-masses[1].y)*dt/masses[0].m-damp*masses[0].vy*dt;
+    masses[0].y+=masses[0].vy*dt;
+    for(let i=1;i<N-1;i++){let f=0;f+=k*(masses[i-1].y-masses[i].y);f+=k*(masses[i+1].y-masses[i].y);masses[i].vy+=f*dt/masses[i].m-damp*masses[i].vy*dt;masses[i].y+=masses[i].vy*dt}
+    masses[N-1].vy-=k*(masses[N-1].y-masses[N-2].y)*dt/masses[N-1].m-damp*masses[N-1].vy*dt;
+    masses[N-1].y+=masses[N-1].vy*dt;
+    st+=dt;
+    let ke=0,pe=0,vmax=0;
+    for(let i=0;i<N;i++){ke+=0.5*masses[i].m*masses[i].vy*masses[i].vy;vmax=Math.max(vmax,Math.abs(masses[i].vy))}
+    for(let i=0;i<N-1;i++)pe+=0.5*k*(masses[i+1].y-masses[i].y)*(masses[i+1].y-masses[i].y);
+    h.t.push(st);h.y.push(masses.map(m=>m.y));h.ke.push(ke);h.pe.push(pe);h.te.push(ke+pe);h.vmax.push(vmax);
+    while(h.t.length>400){h.t.shift();h.y.shift();h.ke.shift();h.pe.shift();h.te.shift();h.vmax.shift()}
+  }
+}
+function rs(){init();p=0;document.getElementById('pb').textContent='Pause'}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(30,220);ctx.lineTo(sx+(N-1)*sp+60,220);ctx.stroke();ctx.setLineDash([]);
+  for(let i=0;i<N;i++){const m=masses[i];
+    if(i>0){const pm=masses[i-1],dx=m.x-pm.x,dy=m.y-pm.y,dist=Math.hypot(dx,dy)||1,coils=Math.floor(sp/12);ctx.strokeStyle='#111';ctx.lineWidth=0.8;for(let c=0;c<coils;c++){const t1=c/coils,t3=(c+1)/coils,x1=pm.x+dx*t1,y1=pm.y+dy*t1,x2=pm.x+dx*t3,y2=pm.y+dy*t3,off=Math.min(5,2+dist*0.02);ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2+off*dy/dist,(y1+y2)/2-off*dx/dist,x2,y2);ctx.stroke()}}
+    if(i===0){ctx.fillStyle='#111';ctx.fillRect(m.x0-3,205,6,30)}if(i===N-1){ctx.fillStyle='#111';ctx.fillRect(m.x0-3,205,6,30)}
+    const rad=8,g2=ctx.createRadialGradient(m.x-2,m.y-2,1,m.x,m.y,rad+2);g2.addColorStop(0,'#444');g2.addColorStop(1,'#000');ctx.fillStyle=g2;ctx.beginPath();ctx.arc(m.x,m.y,rad,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,255,255,0.08)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(i+1,m.x,m.y+2)}
+  const gx=460,gy=15,gw=410,gh=90;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('displacement profile',gx+3,gy+10);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gx,gy+gh/2);ctx.lineTo(gx+gw,gy+gh/2);ctx.stroke();
+  const yMax=Math.max(...masses.map(m=>Math.abs(m.y-m.y0)))*1.5||1;ctx.beginPath();for(let i=0;i<N;i++){const px=gx+(i+0.5)/N*gw,py=gy+gh/2-(masses[i].y-masses[i].y0)/yMax*(gh/2-6);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+  const egx=460,egy=115,egw=410,egh=65;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(egx,egy,egw,egh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('energy vs time',egx+3,egy+10);
+  if(h.te.length>2){const em=Math.max(...h.te)*1.1||1;ctx.beginPath();for(let i=0;i<h.ke.length;i++){const px=egx+(i/h.ke.length)*egw,py=egy+egh-(h.ke[i]/em)*egh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();ctx.beginPath();for(let i=0;i<h.te.length;i++){const px=egx+(i/h.te.length)*egw,py=egy+egh-(h.te[i]/em)*egh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.4;ctx.stroke()}
+  const vgx=460,vgy=190,vgw=410,vgh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(vgx,vgy,vgw,vgh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('max |v| vs time',vgx+3,vgy+10);
+  if(h.vmax.length>2){const vm=Math.max(...h.vmax)*1.1||1;ctx.beginPath();for(let i=0;i<h.vmax.length;i++){const px=vgx+(i/h.vmax.length)*vgw,py=vgy+vgh-(h.vmax[i]/vm)*vgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;ctx.stroke()}
+  let ke=0,pe=0;for(let i=0;i<N;i++)ke+=0.5*masses[i].m*masses[i].vy*masses[i].vy;for(let i=0;i<N-1;i++)pe+=0.5*k*(masses[i+1].y-masses[i].y)*(masses[i+1].y-masses[i].y);
+  const ed=h.te.length>2?(Math.max(...h.te)-Math.min(...h.te))/(Math.abs(Math.max(...h.te))||1)*100:0;
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>k</label><input type="range" id="kS" min="50" max="800" step="10" value="${k}"><span class="v" id="kV">${k}</span></div>`+
+    `<div class="cg"><label>Damp</label><input type="range" id="dS" min="0" max="2" step="0.05" value="${damp}"><span class="v" id="dV">${damp.toFixed(2)}</span></div>`+
+    `<button id="m1">Mode 1</button><button id="m2">Mode 2</button><button id="m3">Mode 3</button>`+
+    `<button id="pk">Pluck</button><button id="pb">Pause</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="8" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('kS').oninput=function(){k=+this.value;document.getElementById('kV').textContent=k};
+  document.getElementById('dS').oninput=function(){damp=+this.value;document.getElementById('dV').textContent=damp.toFixed(2)};
+  document.getElementById('m1').onclick=()=>setM(0);
+  document.getElementById('m2').onclick=()=>setM(1);
+  document.getElementById('m3').onclick=()=>setM(2);
+  document.getElementById('pk').onclick=()=>{for(let i=0;i<N;i++){masses[i].vy=(Math.random()-0.5)*80;masses[i].vx=0}};
+  document.getElementById('pb').onclick=function(){p=!p;this.textContent=p?'Play':'Pause'};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">N =</span> <span class="v">${N}</span></span>`+
+    `<span><span class="l">k =</span> <span class="v">${k}</span></span>`+
+    `<span><span class="l">damp =</span> <span class="v">${damp.toFixed(2)}</span></span>`+
+    `<span><span class="l">KE =</span> <span class="v">${ke.toFixed(2)}</span></span>`+
+    `<span><span class="l">PE =</span> <span class="v">${pe.toFixed(2)}</span></span>`+
+    `<span><span class="l">E =</span> <span class="v">${(ke+pe).toFixed(2)}</span></span>`+
+    `<span><span class="l">ΔE/E =</span> <span class="v">${ed.toFixed(4)}%</span></span>`+
+    `<span><span class="l">M1 ω ≈</span> <span class="v">${(2*Math.sqrt(k/1)*Math.sin(Math.PI/(2*(N+1)))).toFixed(2)}</span></span>`+
+    `<span><span class="l">Max |v| =</span> <span class="v">${(Math.max(...masses.map(m=>Math.abs(m.vy)))).toFixed(2)}</span></span>`+
+    `<span><span class="l">M1 y<sub>max</sub> =</span> <span class="v">${(Math.max(...masses.map(m=>Math.abs(m.y-m.y0)))).toFixed(1)}</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

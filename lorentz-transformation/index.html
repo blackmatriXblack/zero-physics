@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lorentz Transformation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Lorentz Transformation</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480,OX=360,OY=380,SC=28;
+let beta=.5, cVal=1, paused=false, tAnim=0, speed=1;
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>β <input type="range" id="betaS" min="0" max="0.95" value="50" step="1"><span id="betaD">0.50</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>
+<label><input type="checkbox" id="showGrid" checked>Grid</label>
+<label><input type="checkbox" id="showInv" checked>Inv Hyperb</label>
+`;
+
+function lorentz(x,t){const g=1/Math.sqrt(1-beta*beta);return{xp:g*(x-beta*cVal*t),tp:g*(t-beta*x/cVal)}}
+function toS(x,t){return{sx:OX+x*SC,sy:OY-t*SC}}
+function fromS(sx,sy){return{x:(sx-OX)/SC,t:(OY-sy)/SC}}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const g=1/Math.sqrt(1-beta*beta), showGrid=document.getElementById('showGrid').checked, showInv=document.getElementById('showInv').checked;
+
+  if(showGrid){
+    ctx.strokeStyle='#eee';ctx.lineWidth=.5;
+    for(let i=-10;i<=12;i++){
+      const p1=toS(i,-8),p2=toS(i,8);ctx.beginPath();ctx.moveTo(p1.sx,p1.sy);ctx.lineTo(p2.sx,p2.sy);ctx.stroke();
+      const p3=toS(-8,i),p4=toS(12,i);ctx.beginPath();ctx.moveTo(p3.sx,p3.sy);ctx.lineTo(p4.sx,p4.sy);ctx.stroke();
+    }
+  }
+
+  // invariant hyperbolas
+  if(showInv){
+    ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=.8;
+    for(let s=1;s<=5;s++){
+      ctx.beginPath();
+      for(let t=-7;t<=7;t+=.05){
+        const x=Math.sqrt(s*s+t*t);const p=toS(x,t);t===-7?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy);
+      }
+      ctx.stroke();ctx.beginPath();
+      for(let t=-7;t<=7;t+=.05){
+        const x=-Math.sqrt(s*s+t*t);const p=toS(x,t);t===-7?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.fillText('x²-(ct)²=const',OX+120,30);
+  }
+
+  // axes
+  ctx.strokeStyle='#000';ctx.lineWidth=2;
+  const xA=toS(-8,0),xA2=toS(12,0);ctx.beginPath();ctx.moveTo(xA.sx,xA.sy);ctx.lineTo(xA2.sx,xA2.sy);ctx.stroke();
+  const tA=toS(0,-7),tA2=toS(0,8);ctx.beginPath();ctx.moveTo(tA.sx,tA.sy);ctx.lineTo(tA2.sx,tA2.sy);ctx.stroke();
+  ctx.fillStyle='#000';ctx.font='11px monospace';
+  ctx.textAlign='left';ctx.fillText('x',xA2.sx-5,xA2.sy+15);
+  ctx.fillText('ct',tA2.sx+8,tA2.sy-3);
+  ctx.font='8px monospace';ctx.fillStyle='#999';
+  for(let i=-7;i<=7;i++){if(!i)continue;const px=toS(i,0);ctx.fillText(i,px.sx-6,px.sy+12);const py=toS(0,i);ctx.fillText(i,py.sx+6,py.sy+3)}
+
+  // S' axes
+  ctx.strokeStyle='#666';ctx.lineWidth=1.5;
+  const phi=Math.atan(beta), cosP=Math.cos(phi), sinP=Math.sin(phi);
+  const xpDir=g, tpDir=-g*beta;
+  ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(OX+xpDir*SC*.95,OY+tpDir*SC*.95);ctx.stroke();
+  ctx.fillStyle='#666';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText("x'",OX+xpDir*SC*.95+3,OY+tpDir*SC*.95+3);
+  const xpDir2=-g*beta, tpDir2=g;
+  ctx.beginPath();ctx.moveTo(OX,OY);ctx.lineTo(OX+xpDir2*SC*.95,OY+tpDir2*SC*.95);ctx.stroke();
+  ctx.fillText("ct'",OX+xpDir2*SC*.95-22,OY+tpDir2*SC*.95);
+
+  // light cone
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  const l1=toS(-6,6),l2=toS(6,-6);ctx.beginPath();ctx.moveTo(l1.sx,l1.sy);ctx.lineTo(l2.sx,l2.sy);ctx.stroke();
+  const l3=toS(-6,-6),l4=toS(6,6);ctx.beginPath();ctx.moveTo(l3.sx,l3.sy);ctx.lineTo(l4.sx,l4.sy);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // animated light signal
+  if(!paused)tAnim+=.015*speed;
+  const lightPhase=tAnim%12-6;
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.arc(toS(lightPhase,lightPhase).sx,toS(lightPhase,lightPhase).sy,3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.arc(toS(-lightPhase,lightPhase).sx,toS(-lightPhase,lightPhase).sy,3,0,Math.PI*2);ctx.fill();
+
+  // test events
+  const pts=[{x:2,t:0,l:'P'},{x:0,t:3,l:'Q'},{x:-1.5,t:2,l:'R'},{x:3,t:-1,l:'S'}];
+  for(const p of pts){
+    const s=toS(p.x,p.t);const tf=lorentz(p.x,p.t);
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(s.sx,s.sy,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#333';ctx.font='9px monospace';ctx.textAlign='left';
+    ctx.fillText(`${p.l}: (${p.x},${p.t})→(${tf.xp.toFixed(2)},${tf.tp.toFixed(2)})`,s.sx+7,s.sy+3);
+  }
+
+  // light clock
+  const clockX=toS(-5,0).sx, clockY=toS(0,-6.5).sy;
+  const halfW=30, halfH=18;
+  ctx.strokeStyle='#999';ctx.lineWidth=.8;ctx.strokeRect(clockX-halfW,clockY,2*halfW,2*halfH);
+  ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Light Clock',clockX,clockY-4);
+  const bouncePhase=tAnim*2%2;const bY=clockY+bouncePhase*2*halfH;
+  ctx.fillStyle='#666';ctx.beginPath();ctx.arc(clockX,bY,2.5,0,Math.PI*2);ctx.fill();
+
+  // mini graph: gamma vs beta
+  const mgx=20,mgy=350,mgw=110,mgh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(mgx,mgy,mgw,mgh);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('γ(β)',mgx+3,mgy+10);
+  ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=.6;ctx.beginPath();
+  for(let i=0;i<=mgw;i++){const b=i/mgw*.95;const gg=1/Math.sqrt(1-b*b);const px=mgx+i,py=mgy+mgh-gg/mgh*80;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py)}
+  ctx.stroke();
+  const curBetaX=mgx+beta/.95*mgw, curGammaY=mgy+mgh-g/.95*Math.min(g,6)/6*mgh;
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(curBetaX,curGammaY,2.5,0,Math.PI*2);ctx.fill();
+
+  // invariant display
+  const inv=[...pts].map(p=>{const tf=lorentz(p.x,p.t);return{lab:p.l,s2:p.x*p.x-p.t*p.t,s2p:tf.xp*tf.xp-tf.tp*tf.tp}});
+  data.innerHTML=
+    `β = ${beta.toFixed(3)} | γ = ${g.toFixed(3)} | S' vel = ${(beta*3e8).toExponential(2)} m/s`+
+    ` | x²-(ct)² invariant: ${inv.map(i=>i.lab+': '+i.s2.toFixed(1)+'='+i.s2p.toFixed(1)).join(' | ')}`+
+    ` | t = ${tAnim.toFixed(1)}`;
+}
+
+function loop(){draw();requestAnimationFrame(loop)}
+loop();
+
+document.getElementById('betaS').oninput=function(){beta=parseInt(this.value)/100;document.getElementById('betaD').textContent=beta.toFixed(2)};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=()=>{tAnim=0};
+</script>
+</body>
+</html>

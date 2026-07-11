@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinite Square Well · Eₙ = n²π²ℏ²/2mL²</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Infinite Square Well</h1>
+<p>Eₙ = n²π²ℏ²/2mL² — Time-dependent superposition</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+const N=400,dx=1.5,hbar=1,m=1,wellLeft=80;
+let L=400,n=1,paused=false,time=0,speed=1;
+let psiRe=new Float64Array(N),psiIm=new Float64Array(N),prob=new Float64Array(N);
+const history={t:[],Eexp:[],xp:[],norm:[]};
+const FLOOR=0.001;
+
+function init(){
+  const norm=Math.sqrt(2/L);
+  for(let i=0;i<N;i++){
+    const x=i*dx;
+    if(x>=0&&x<=L){
+      psiRe[i]=norm*Math.sin(n*Math.PI*x/L)*Math.cos(n*n*Math.PI*Math.PI*hbar*time/(2*m*L*L));
+      psiIm[i]=norm*Math.sin(n*Math.PI*x/L)*Math.sin(n*n*Math.PI*Math.PI*hbar*time/(2*m*L*L));
+    }else{psiRe[i]=0;psiIm[i]=0;}
+  }
+  updateProb();
+}
+
+function updateProb(){for(let i=0;i<N;i++)prob[i]=psiRe[i]*psiRe[i]+psiIm[i]*psiIm[i];}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    for(let i=0;i<N;i++){
+      const x=i*dx;
+      if(x>0&&x<L){
+        const re=psiRe[i],im=psiIm[i];
+        const lapRe=(psiRe[i+1]-2*psiRe[i]+psiRe[i-1])/(dx*dx);
+        const lapIm=(psiIm[i+1]-2*psiIm[i]+psiIm[i-1])/(dx*dx);
+        psiRe[i]=re+0.005*(hbar/(2*m))*lapIm;
+        psiIm[i]=im-0.005*(hbar/(2*m))*lapRe;
+      }
+    }
+    psiRe[0]=0;psiIm[0]=0;psiRe[N-1]=0;psiIm[N-1]=0;
+    updateProb();
+    time+=0.005;
+  }
+}
+
+function xpExact(){
+  let sx=0,sp=0;
+  for(let i=0;i<N;i++){sx+=i*dx*prob[i]*dx;sp+=prob[i]*dx;}
+  return sp>FLOOR?sx/sp:0;
+}
+
+function energyExp(){
+  let E=0;
+  for(let i=1;i<N-1;i++){
+    const lapRe=(psiRe[i+1]-2*psiRe[i]+psiRe[i-1])/(dx*dx);
+    const lapIm=(psiIm[i+1]-2*psiIm[i]+psiIm[i-1])/(dx*dx);
+    E+=psiRe[i]*(-hbar*hbar/(2*m)*lapRe)+psiIm[i]*(-hbar*hbar/(2*m)*lapIm);
+  }
+  return Math.abs(E)*dx;
+}
+
+function resetSim(){
+  time=0;init();paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+  history.t.length=0;history.Eexp.length=0;history.xp.length=0;history.norm.length=0;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#000';ctx.lineWidth=0.5;
+  ctx.strokeRect(20,10,W-40,H-20);
+
+  // Wells walls
+  ctx.fillStyle='#111';
+  ctx.fillRect(wellLeft-6,30,6,H-60);ctx.fillRect(wellLeft+L,30,6,H-60);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('V=∞',wellLeft-3,55);ctx.fillText('V=∞',wellLeft+L+3,55);
+
+  // Well fill
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(wellLeft,30,L,H-60);
+
+  // Energy level reference
+  const eScale=(H*0.4)/(Math.max(n*n,1)*2);
+  const eY=H-40-(n*n)*eScale;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(wellLeft+5,eY);ctx.lineTo(wellLeft+L-5,eY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';
+  ctx.fillText(`Eₙ=${(n*n).toFixed(1)}`,wellLeft-8,eY+4);
+
+  // Wavefunction
+  const maxP=Math.max(...prob)*1.05||1;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=2){
+    const x=wellLeft+i*dx;
+    const y=H/2-prob[i]/maxP*(H*0.35);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('|ψ|²',wellLeft+5,35);
+
+  // Real part
+  const maxRe=Math.max(...psiRe.map(Math.abs))*1.05||1;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.4;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=4){
+    const x=wellLeft+i*dx;
+    const y=H/2-psiRe[i]/maxRe*(H*0.15);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Node markers
+  for(let k=1;k<n;k++){
+    const nx=wellLeft+(k/n)*L;
+    ctx.fillStyle='rgba(0,0,0,0.08)';ctx.beginPath();ctx.arc(nx,H/2,3,0,Math.PI*2);ctx.fill();
+  }
+
+  // Info box left
+  const ix=30,iy=350;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,280,90);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('STATIONARY STATE',ix+5,iy+14);
+  const En=n*n*Math.PI*Math.PI*hbar*hbar/(2*m*L*L);
+  const xp=xpExact();
+  const EexpVal=energyExp();
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`Eₙ (exact) = ${En.toFixed(4)}`,ix+5,iy+28);
+  ctx.fillText(`⟨E⟩ (num) = ${EexpVal.toFixed(4)}`,ix+5,iy+42);
+  ctx.fillText(`⟨x⟩ = ${xp.toFixed(2)}`,ix+5,iy+56);
+  ctx.fillText(`t = ${time.toFixed(2)}`,ix+5,iy+70);
+  let totP=0;for(let i=0;i<N;i++)totP+=prob[i]*dx;
+  ctx.fillText(`∫|ψ|²dx = ${totP.toFixed(4)} ${Math.abs(totP-1)<0.01?'✓':'⚠'}`,ix+5,iy+84);
+
+  // Mini graph: energy spectrum
+  const gx=590,gy=30,gw=280,gh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('ENERGY SPECTRUM Eₙ ∝ n²',gx+3,gy+10);
+  for(let i=1;i<=8;i++){
+    const barH=(i*i/64)*gh*0.7;
+    ctx.fillStyle=i===n?'#111':'rgba(0,0,0,0.15)';
+    ctx.fillRect(gx+8+(i-1)*(gw-16)/8,gy+gh-8-barH,(gw-16)/8-2,barH);
+    ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';
+    ctx.fillText(`n=${i}`,gx+8+(i-1)*(gw-16)/8+(gw-16)/16,gy+gh-3);
+  }
+
+  // Mini graph: probability tracking
+  const hx=590,hy=130,hw=280,hh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(hx,hy,hw,hh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('⟨x⟩ vs TIME',hx+3,hy+10);
+  if(history.xp.length>2){
+    const vals=history.xp;
+    const lo=Math.min(...vals),hi=Math.max(...vals);
+    const r=Math.max(hi-lo,FLOOR);
+    ctx.beginPath();
+    for(let i=0;i<vals.length;i++){
+      const gx2=hx+(i/vals.length)*hw;
+      const gy2=hy+hh-(vals[i]-lo)/r*hh;
+      i===0?ctx.moveTo(gx2,gy2):ctx.lineTo(gx2,gy2);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+
+  // Store history
+  history.t.push(time);history.Eexp.push(EexpVal);history.xp.push(xp);history.norm.push(totP);
+  if(history.t.length>300){history.t.shift();history.Eexp.shift();history.xp.shift();history.norm.shift();}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>n</label><input type="range" id="nS" min="1" max="10" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+    `<div class="ctrl-group"><label>L</label><input type="range" id="lS" min="200" max="600" step="10" value="${L}"><span class="val" id="lV">${L}</span></div>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="val" id="spV">${speed}×</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('nS').addEventListener('input',function(){n=parseInt(this.value);document.getElementById('nV').textContent=n;init();});
+  document.getElementById('lS').addEventListener('input',function(){L=parseFloat(this.value);document.getElementById('lV').textContent=L;init();});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('spV').textContent=speed+'×';});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+  // Stats
+  const nodes=n-1;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">n =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">Eₙ = n²·E₁ =</span> <span class="val">${(n*n).toFixed(1)}</span></span>`+
+    `<span><span class="label">λₙ = 2L/n =</span> <span class="val">${(2*L/n).toFixed(1)}</span></span>`+
+    `<span><span class="label">kₙ = nπ/L =</span> <span class="val">${(n*Math.PI/L).toFixed(4)}</span></span>`+
+    `<span><span class="label">Nodes =</span> <span class="val">${nodes}</span></span>`+
+    `<span><span class="label">ZPE</span> <span class="val">${n===1?'✓ E₁>0':''}</span></span>`+
+    `<span><span class="label">⟨x⟩ =</span> <span class="val">${xp.toFixed(2)}</span></span>`+
+    `<span><span class="label">⟨E⟩ =</span> <span class="val">${EexpVal.toFixed(4)}</span></span>`+
+    `<span><span class="label">norm =</span> <span class="val">${totP.toFixed(4)}</span></span>`;
+}
+
+init();
+resetSim();
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

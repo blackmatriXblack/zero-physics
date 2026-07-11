@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ideal Gas Law · PV = nRT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:4px;font-size:0.62em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Ideal Gas Law</h1>
+<p>PV = nRT — Piston-cylinder with moving molecules</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const W=900,H=520,R=8.314;
+let T=300,V=50,n=1,Nmol=80,paused=false,speed=1;
+let mol=[];
+let hist={pv:[],p:[],t:[]};
+
+function init(){
+  mol=[];hist={pv:[],p:[],t:[]};
+  for(let i=0;i<Nmol;i++){mol.push({x:60+Math.random()*(200-60),y:110+Math.random()*(390-110),vx:(Math.random()-0.5)*3,vy:(Math.random()-0.5)*3});}
+}
+init();
+
+function step(){
+  if(paused)return;
+  for(let iter=0;iter<speed;iter++){
+    const wallX=50+V*3;
+    for(const m of mol){
+      m.x+=m.vx;m.y+=m.vy;
+      if(m.x<50){m.x=50;m.vx=Math.abs(m.vx);}
+      if(m.x>wallX){m.x=wallX;m.vx=-Math.abs(m.vx);}
+      if(m.y<110){m.y=110;m.vy=Math.abs(m.vy);}
+      if(m.y>390){m.y=390;m.vy=-Math.abs(m.vy);}
+    }
+  }
+  const P=n*R*T/(V*1e-3);
+  hist.pv.push(P*V*1e-3);hist.p.push(P/1e5);hist.t.push(T);
+  if(hist.pv.length>150){hist.pv.shift();hist.p.shift();hist.t.shift();}
+}
+
+function resetSim(){
+  T=parseFloat(document.getElementById('tS')?.value)||300;
+  V=parseFloat(document.getElementById('vS')?.value)||50;
+  n=parseFloat(document.getElementById('nS')?.value)||1;
+  Nmol=parseInt(document.getElementById('nmS')?.value)||80;
+  init();paused=false;
+  const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const wallX=50+V*3;
+  const P=n*R*T/(V*1e-3);
+
+  // Cylinder
+  ctx.strokeStyle='#111';ctx.lineWidth=2;
+  ctx.strokeRect(50,110,wallX-50,280);
+  // Piston
+  ctx.fillStyle='#111';ctx.fillRect(wallX-4,110,8,280);
+  // Cylinder label
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText(`V = ${V.toFixed(0)} L`,(wallX+50)/2-15,420);
+
+  // Molecules
+  for(const m of mol){
+    const sp=Math.hypot(m.vx,m.vy);
+    ctx.fillStyle=`rgba(0,0,0,${Math.min(0.7,0.1+0.12*sp)})`;
+    ctx.beginPath();ctx.arc(m.x,m.y,1.8+sp*0.5,0,Math.PI*2);ctx.fill();
+  }
+
+  // PV diagram (right top)
+  const pvX=510,pvY=30,pvW=360,pvH=170;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(pvX,pvY,pvW,pvH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('PV DIAGRAM  P (atm) vs V (L)',pvX+3,pvY+10);
+  // Isotherms
+  ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.3;
+  for(let iT=100;iT<=800;iT+=100){ctx.beginPath();for(let x=0;x<=pvW;x++){const vV=20+(x/pvW)*180;const iP=n*R*iT/(vV*1e-3)/1e5;paused;const iy=pvY+pvH-(iP/10)*pvH;x===0?ctx.moveTo(pvX+x,iy):ctx.lineTo(pvX+x,iy);}ctx.stroke();}
+  ctx.fillStyle='#999';ctx.font='5px monospace';ctx.fillText('isotherms',pvX+3,pvY+22);
+
+  // Current point
+  const cPx=pvX+((V-20)/180)*pvW,cPy=pvY+pvH-(P/1e5/10)*pvH;
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(cPx,cPy,4,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(cPx,pvY);ctx.lineTo(cPx,pvY+pvH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pvX,cPy);ctx.lineTo(pvX+pvW,cPy);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='5px monospace';
+  ctx.fillText('V',pvX+pvW-8,pvY+pvH-2);ctx.fillText('P',pvX+2,pvY+10);
+
+  // Pressure history (right middle)
+  const hX=510,hY=220,hW=360,hH=120;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('PRESSURE HISTORY  P (atm)',hX+3,hY+10);
+  if(hist.p.length>2){const pMn=Math.min(...hist.p),pMx=Math.max(...hist.p),pR=pMx-pMn||1;
+    ctx.beginPath();for(let i=0;i<hist.p.length;i++){const sx=hX+(i/hist.p.length)*hW,sy=hY+hH-(hist.p[i]-pMn)/pR*hH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();ctx.fillStyle='#999';ctx.font='5px monospace';
+    ctx.fillText(pMx.toFixed(2),hX+hW-28,hY+8);ctx.fillText(pMn.toFixed(2),hX+hW-28,hY+hH-2);}
+
+  // Energy bar (right bottom)
+  const eX=510,eY=360,eW=360,eH=90;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(eX,eY,eW,eH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('ENERGY  KE = ³/₂ nRT',eX+3,eY+10);
+  const avgKE=1.5*R*T;
+  const barW=Math.min(eW-20,avgKE/30000*eW);
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(eX+10,eY+30,eW-20,20);
+  ctx.fillStyle='#111';ctx.fillRect(eX+10,eY+30,barW,20);
+  ctx.fillStyle='#666';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText(`KE = ${avgKE.toFixed(0)} J`,eX+eW/2,eY+44);
+  ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='left';
+  ctx.fillText('0',eX+10,eY+65);ctx.fillText('30 kJ',eX+eW-30,eY+65);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>V (L)</label><input type="range" id="vS" min="20" max="200" step="1" value="${V}"><span class="val" id="vV">${V}</span></div>`+
+    `<div class="ctrl-group"><label>T (K)</label><input type="range" id="tS" min="100" max="800" step="10" value="${T}"><span class="val" id="tV">${T}</span></div>`+
+    `<div class="ctrl-group"><label>n (mol)</label><input type="range" id="nS" min="0.5" max="5" step="0.5" value="${n.toFixed(1)}"><span class="val" id="nV">${n.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>N<sub>mol</sub></label><input type="range" id="nmS" min="20" max="200" step="10" value="${Nmol}"><span class="val" id="nmV">${Nmol}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="20" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('vS')?.addEventListener('input',function(){V=parseFloat(this.value);document.getElementById('vV').textContent=V;});
+  document.getElementById('tS')?.addEventListener('input',function(){T=parseFloat(this.value);document.getElementById('tV').textContent=T;});
+  document.getElementById('nS')?.addEventListener('input',function(){n=parseFloat(this.value);document.getElementById('nV').textContent=n.toFixed(1);});
+  document.getElementById('nmS')?.addEventListener('input',function(){Nmol=parseInt(this.value);document.getElementById('nmV').textContent=Nmol;});
+  document.getElementById('pauseBtn')?.addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn')?.addEventListener('click',resetSim);
+  document.getElementById('speedS')?.addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">P =</span> <span class="val">${(P/1e5).toFixed(3)}</span> atm</span>`+
+    `<span><span class="label">V =</span> <span class="val">${V.toFixed(1)}</span> L</span>`+
+    `<span><span class="label">T =</span> <span class="val">${T.toFixed(0)}</span> K</span>`+
+    `<span><span class="label">n =</span> <span class="val">${n.toFixed(2)}</span> mol</span>`+
+    `<span><span class="label">PV =</span> <span class="val">${(P*V*1e-3).toFixed(2)}</span> J</span>`+
+    `<span><span class="label">nRT =</span> <span class="val">${(n*R*T).toFixed(2)}</span> J</span>`+
+    `<span><span class="label">PV−nRT =</span> <span class="val">${(P*V*1e-3-n*R*T).toExponential(2)}</span></span>`+
+    `<span><span class="label">KE/mol =</span> <span class="val">${(1.5*R*T).toFixed(2)}</span> J</span>`+
+    `<span><span class="label">N<sub>mol</sub> =</span> <span class="val">${Nmol}</span></span>`+
+    `<span><span class="label">R =</span> <span class="val">${R.toFixed(3)}</span></span>`+
+    `<span><span class="label">N<sub>A</sub>×n =</span> <span class="val">${(n*6.022e23).toExponential(2)}</span></span>`+
+    `<span><span class="label">Piston area =</span> <span class="val">${(V*3*280).toFixed(0)}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

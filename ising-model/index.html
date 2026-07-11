@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ising Model · H = −J Σ σᵢσⱼ − h Σ σᵢ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Ising Model</h1>
+<p>H = −J Σ σᵢσⱼ − h Σ σᵢ — Metropolis Monte Carlo</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const L=80, Nspins=L*L;
+const spins=new Int8Array(Nspins);
+let beta=0.8, J=1, hField=0;
+let E=0, M=0;
+let paused=false, speed=1, showGrid=true;
+let mcStep=0;
+
+const cs=Math.min(400,H-40)/L;
+const gridOx=(W-440)/2, gridOy=(H-L*cs)/2;
+
+// Energy graph
+const gX=W-240, gY=30, gW=210, gH=100;
+// Magnetization graph
+const mX=W-240, mY=155, mW=210, mH=100;
+// Heat capacity / susceptibility display
+const hX=W-240, hY=280, hW=210, hH=90;
+
+const history={E:[],M:[],T:[]};
+
+function init(){
+  E=0;M=0;
+  for(let i=0;i<Nspins;i++){
+    spins[i]=Math.random()<0.5?1:-1;
+    M+=spins[i];
+  }
+  for(let y=0;y<L;y++){
+    for(let x=0;x<L;x++){
+      const s=spins[y*L+x];
+      E-=J*s*(spins[y*L+((x+1)%L)]+spins[((y+1)%L)*L+x]);
+    }
+  }
+  history.E.length=0;history.M.length=0;history.T.length=0;
+  mcStep=0;
+}
+
+init();
+
+const dirs=[[1,0],[0,1],[-1,0],[0,-1]];
+
+function metropolis(nsteps){
+  if(paused)return;
+  for(let s=0;s<nsteps*speed;s++){
+    const i=Math.floor(Math.random()*Nspins);
+    const x=i%L, y=Math.floor(i/L);
+    const si=spins[i];
+    let sumNb=0;
+    for(const [dx,dy] of dirs){
+      const nx=(x+dx+L)%L, ny=(y+dy+L)%L;
+      sumNb+=spins[ny*L+nx];
+    }
+    const dE=2*J*si*sumNb+2*hField*si;
+    if(dE<=0||Math.random()<Math.exp(-beta*dE)){
+      spins[i]=-si;
+      E+=dE;
+      M-=2*si;
+    }
+  }
+  mcStep+=nsteps*speed;
+}
+
+function resetSim(){
+  beta=parseFloat(document.getElementById('betaS')?.value)||0.8;
+  hField=parseFloat(document.getElementById('hS')?.value)||0;
+  init();
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Spin grid
+  for(let y=0;y<L;y++){
+    for(let x=0;x<L;x++){
+      ctx.fillStyle=spins[y*L+x]===1?'#111':'#f0f0f0';
+      ctx.fillRect(gridOx+x*cs,gridOy+y*cs,cs-0.5,cs-0.5);
+    }
+  }
+
+  // Border
+  ctx.strokeStyle='#111';ctx.lineWidth=0.8;
+  ctx.strokeRect(gridOx,gridOy,L*cs,L*cs);
+
+  // Grid lines
+  if(showGrid){
+    ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.2;
+    for(let x=0;x<=L;x++){ctx.beginPath();ctx.moveTo(gridOx+x*cs,gridOy);ctx.lineTo(gridOx+x*cs,gridOy+L*cs);ctx.stroke();}
+    for(let y=0;y<=L;y++){ctx.beginPath();ctx.moveTo(gridOx,gridOy+y*cs);ctx.lineTo(gridOx+L*cs,gridOy+y*cs);ctx.stroke();}
+  }
+
+  // Energy graph
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('ENERGY',gX+3,gY+10);
+  if(history.E.length>2){
+    const eMin=Math.min(...history.E), eMax=Math.max(...history.E);
+    const eR=eMax-eMin||1;
+    ctx.beginPath();
+    for(let i=0;i<history.E.length;i++){
+      const gx=gX+(i/history.E.length)*gW;
+      const gy=gY+gH-(history.E[i]-eMin)/eR*gH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='6px monospace';
+    ctx.fillText(eMax.toFixed(0),gX+gW-30,gY+8);
+    ctx.fillText(eMin.toFixed(0),gX+gW-30,gY+gH-2);
+  }
+
+  // Magnetization graph
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(mX,mY,mW,mH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  ctx.fillText('|M|/N',mX+3,mY+10);
+  if(history.M.length>2){
+    ctx.beginPath();
+    for(let i=0;i<history.M.length;i++){
+      const gx=mX+(i/history.M.length)*mW;
+      const gy=mY+mH-(Math.abs(history.M[i])/Nspins)*mH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='6px monospace';
+    ctx.fillText('1.0',mX+mW-25,mY+8);
+    ctx.fillText('0',mX+mW-15,mY+mH-2);
+  }
+
+  // Stats box
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(hX,hY,hW,hH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  ctx.fillText('THERMODYNAMICS',hX+3,hY+10);
+  const avgM=Math.abs(M)/Nspins;
+  const avgE=E/Nspins;
+
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText(`β = ${beta.toFixed(4)}  T = ${(1/(beta||0.001)).toFixed(2)}`,hX+3,hY+25);
+  ctx.fillText(`⟨E⟩ = ${avgE.toFixed(4)}  ⟨|M|⟩ = ${avgM.toFixed(4)}`,hX+3,hY+38);
+  ctx.fillText(`|M|/N = ${avgM.toFixed(4)}  χ = dM/dH ~ ${(avgM/(Math.abs(hField)+0.001)).toFixed(3)}`,hX+3,hY+51);
+  ctx.fillText(`McSteps = ${mcStep}  βc ≈ 0.4407 (2D)`,hX+3,hY+64);
+  ctx.fillText(`E/N = ${avgE.toFixed(4)}  Phase: ${avgM>0.3?'FERRO':avgM<0.1?'PARA':'CRITICAL'}`,hX+3,hY+77);
+
+  // Domain wall count
+  let walls=0;
+  for(let y=0;y<L;y++)for(let x=0;x<L;x++){
+    const s=spins[y*L+x];
+    if(s!==spins[y*L+((x+1)%L)])walls++;
+    if(s!==spins[((y+1)%L)*L+x])walls++;
+  }
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='6px monospace';
+  ctx.fillText(`Domain walls: ${walls}  Clusters: ~${avgM>0.5?2:avgM>0.3?4:L}`,gridOx,gridOy+L*cs+15);
+
+  // Store history
+  history.E.push(E);history.M.push(M);history.T.push(mcStep);
+  if(history.E.length>200){history.E.shift();history.M.shift();history.T.shift();}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>β</label><input type="range" id="betaS" min="0.05" max="2" step="0.005" value="${beta}"><span class="val" id="betaV">${beta.toFixed(3)}</span></div>`+
+    `<div class="ctrl-group"><label>h</label><input type="range" id="hS" min="-2" max="2" step="0.01" value="${hField}"><span class="val" id="hV">${hField.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>J</label><input type="range" id="jS" min="0.1" max="3" step="0.05" value="${J}"><span class="val" id="jV">${J.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>L</label><input type="range" id="lS" min="16" max="120" step="2" value="${L}"><span class="val" id="lV">${L}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="20" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('betaS').addEventListener('input',function(){
+    beta=parseFloat(this.value);document.getElementById('betaV').textContent=beta.toFixed(3);
+  });
+  document.getElementById('hS').addEventListener('input',function(){
+    hField=parseFloat(this.value);document.getElementById('hV').textContent=hField.toFixed(2);
+  });
+  document.getElementById('jS').addEventListener('input',function(){
+    J=parseFloat(this.value);document.getElementById('jV').textContent=J.toFixed(2);
+  });
+  document.getElementById('lS').addEventListener('input',function(){
+    // Reinit with new size
+    location.reload(); // Simplest approach for lattice resize
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+}
+
+}
+function loop(){
+  metropolis(1000);
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

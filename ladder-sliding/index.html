@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sliding Ladder · μ = tanθ/2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Sliding Ladder</h1>
+<p>θ<sub>c</sub> = arctan(1/2μ) &nbsp;·&nbsp; <span class="eq">τ = 0 about base → μ = tanθ/(2)</span></p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=480,wx=120,fl=400,Len=340;
+let theta=65*Math.PI/180,mu=0.25,th=theta,vth=0,run=0,slip=0,st=0,p=0,sm=1;
+const h={t:[],th:[],slip:[],bot:[],top:[]};
+function gc(){return Math.atan(1/(2*(mu||0.001)))}
+function stp(){
+  if(p||!run)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.004,ca2=gc();
+    slip=th>ca2;const c=Math.cos(th),s2=Math.sin(th);
+    const Nw=100*c*c*0.5,Nf=100*c*s2*0.5,maxF=mu*Nf;
+    if(slip&&Nw>maxF){vth+=((Nw-maxF)/(100/g)*dt/(Len*0.5))}
+    vth*=0.99;th+=vth*dt;
+    if(th<0.05){th=0.05;vth=0;run=0;p=0;document.getElementById('rb2').textContent='Release'}
+    const botX=wx+Len*s2;if(botX>W-40){th=Math.asin((W-40-wx)/Len);vth=0}
+    st+=dt;h.t.push(st);h.th.push(th);h.slip.push(slip?1:0);h.bot.push(botX);h.top.push(fl-Len*c);
+    while(h.t.length>400){h.t.shift();h.th.shift();h.slip.shift();h.bot.shift();h.top.shift()}
+  }
+}
+function rs(){th=theta;vth=0;run=0;p=0;st=0;h.t.length=0;h.th.length=0;h.slip.length=0;h.bot.length=0;h.top.length=0;document.getElementById('rb2').textContent='Release'}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(0,0,wx-3,H);ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(0,fl,W,H-fl);
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;ctx.strokeRect(wx-3,50,3,fl-50);ctx.beginPath();ctx.moveTo(20,fl);ctx.lineTo(W-20,fl);ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=0.5;for(let y=60;y<fl;y+=12){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(wx-3,y);ctx.stroke()}
+  for(let x=0;x<wx-3;x+=20){ctx.beginPath();ctx.moveTo(x,60);ctx.lineTo(x,fl);ctx.stroke()}
+  for(let i=0;i<W;i+=15){ctx.fillStyle='rgba(0,0,0,0.04)';ctx.fillRect(i,fl+3,8,1)}
+  const botX=wx+Len*Math.sin(th),topY=fl-Len*Math.cos(th);
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.8;ctx.beginPath();ctx.arc(botX,fl,40,-Math.PI/2,-Math.PI/2+th,th<0);ctx.stroke();
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.fillText(`θ=${(th*180/Math.PI).toFixed(1)}°`,botX+45,fl-10);
+  ctx.strokeStyle='#111';ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(botX,fl);ctx.lineTo(wx,topY);ctx.stroke();
+  for(let i=1;i<=10;i++){const t=i/11,lx=wx+(botX-wx)*t,ly=topY+(fl-topY)*t;ctx.strokeStyle='#111';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(lx-6,ly);ctx.lineTo(lx+6,ly);ctx.stroke()}
+  const cgX=(wx+botX)/2,cgY=(topY+fl)/2;ctx.fillStyle='rgba(0,0,0,0.35)';ctx.beginPath();ctx.arc(cgX,cgY,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='8px monospace';ctx.fillText('CG',cgX+8,cgY+3);
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cgX,cgY);ctx.lineTo(cgX,cgY+40);ctx.stroke();ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';ctx.fillText('mg',cgX+5,cgY+30);
+  ctx.beginPath();ctx.moveTo(wx-3,(topY+fl)/2);ctx.lineTo(wx-33,(topY+fl)/2);ctx.stroke();ctx.fillText('N_w',wx-50,(topY+fl)/2+3);
+  ctx.beginPath();ctx.moveTo(botX,fl);ctx.lineTo(botX,fl+30);ctx.stroke();ctx.fillText('N_f',botX-15,fl+42);
+  const ca2=gc();slip=th>ca2;
+  const six=680,siy=15,siw=190,sih=30;ctx.fillStyle=slip?'rgba(0,0,0,0.08)':'rgba(0,0,0,0.03)';ctx.fillRect(six,siy,siw,sih);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.strokeRect(six,siy,siw,sih);ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText(slip?'⚠ SLIPPING':'✓ STABLE',six+siw/2,siy+19);
+  const agx=680,agy=55,agw=190,agh=16;ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(agx,agy,agw,agh);const tf=Math.min(th/ca2,2);ctx.fillStyle='#111';ctx.fillRect(agx+1,agy+1,(agw-2)*Math.min(1,tf),agh-2);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`θ/θc = ${(th/ca2).toFixed(3)}`,agx+agw/2,agy+12);
+  const tgx=660,tgy=85,tgw=220,tgh=65;ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(tgx,tgy,tgw,tgh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('θ vs time',tgx+3,tgy+10);
+  if(h.th.length>2){const tMin=Math.min(theta*0.8,...h.th),tMax=Math.max(theta*1.2,...h.th),tR=tMax-tMin||1;ctx.beginPath();for(let i=0;i<h.th.length;i++){const px=tgx+(i/h.th.length)*tgw,py=tgy+tgh-(h.th[i]-tMin)/tR*tgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke()}
+  const pgx=660,pgy=160,pgw=220,pgh=55;ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(pgx,pgy,pgw,pgh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('bot x vs time',pgx+3,pgy+10);
+  if(h.bot.length>2){const bMin=Math.min(...h.bot),bMax=Math.max(...h.bot),bR=bMax-bMin||1;ctx.beginPath();for(let i=0;i<h.bot.length;i++){const px=pgx+(i/h.bot.length)*pgw,py=pgy+pgh-(h.bot[i]-bMin)/bR*pgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.6;ctx.stroke()}
+  const Nw=100*Math.cos(th)*Math.cos(th)*0.5,Nf=100*Math.cos(th)*Math.sin(th)*0.5;
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>θ₀</label><input type="range" id="tS" min="5" max="85" step="0.5" value="${theta*180/Math.PI}"><span class="v" id="tV">${(theta*180/Math.PI).toFixed(1)}°</span></div>`+
+    `<div class="cg"><label>μ</label><input type="range" id="mS" min="0" max="0.8" step="0.01" value="${mu}"><span class="v" id="mV">${mu.toFixed(2)}</span></div>`+
+    `<button id="rb2">Release</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('tS').oninput=function(){theta=+this.value*Math.PI/180;document.getElementById('tV').textContent=(theta*180/Math.PI).toFixed(1)+'°';if(!run)th=theta};
+  document.getElementById('mS').oninput=function(){mu=+this.value;document.getElementById('mV').textContent=mu.toFixed(2)};
+  document.getElementById('rb2').onclick=function(){run=!run;p=0;this.textContent=run?'Pause':'Release';if(run)th=theta};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">θ =</span> <span class="v">${(th*180/Math.PI).toFixed(2)}</span>°</span>`+
+    `<span><span class="l">θ<sub>c</sub> =</span> <span class="v">${(ca2*180/Math.PI).toFixed(2)}</span>°</span>`+
+    `<span><span class="l">μ =</span> <span class="v">${mu.toFixed(3)}</span></span>`+
+    `<span><span class="l">State =</span> <span class="v">${slip?'SLIPPING':'STABLE'}</span></span>`+
+    `<span><span class="l">N<sub>w</sub> =</span> <span class="v">${Nw.toFixed(2)}</span> N</span>`+
+    `<span><span class="l">N<sub>f</sub> =</span> <span class="v">${Nf.toFixed(2)}</span> N</span>`+
+    `<span><span class="l">F<sub>f</sub><sup>max</sup> =</span> <span class="v">${(mu*Nf).toFixed(2)}</span> N</span>`+
+    `<span><span class="l">tanθ =</span> <span class="v">${Math.tan(th).toFixed(3)}</span></span>`+
+    `<span><span class="l">1/(2μ) =</span> <span class="v">${(1/(2*(mu||0.001))).toFixed(3)}</span></span>`+
+    `<span><span class="l">bot x =</span> <span class="v">${botX.toFixed(1)}</span></span>`+
+    `<span><span class="l">top y =</span> <span class="v">${topY.toFixed(1)}</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

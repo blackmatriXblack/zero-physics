@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polarization · Malus's law I = I₀ cos²θ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Polarization</h1>
+<p>Malus's law I = I₀ cos²θ — Light through crossed polarizers</p>
+<canvas id="c" width="920" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=540;
+let theta=45,paused=false,speed=1,time=0,I0=1;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const rad=theta*Math.PI/180,I=I0*Math.cos(rad)**2;
+ hist.push(I);if(hist.length>hMax)hist.shift();
+ const ax=40,ay=260;
+ ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=0.3;
+ for(let i=0;i<20;i++){const ang=Math.PI*i/10;ctx.beginPath();ctx.moveTo(ax-20,ay);ctx.lineTo(ax+30+25*Math.cos(ang),ay+25*Math.sin(ang));ctx.stroke();}
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('unpolarized',ax+30,ay-44);
+ const p1X=110;ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+ ctx.beginPath();ctx.moveTo(p1X-8,ay-60);ctx.lineTo(p1X+8,ay-60);
+ for(let y=ay-50;y<=ay+50;y+=8){ctx.beginPath();ctx.moveTo(p1X-6,y-4);ctx.lineTo(p1X+6,y+4);ctx.stroke();}
+ ctx.fillStyle='#111';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('P₁ (V)',p1X,ay+70);
+ ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.4;
+ for(let x=p1X+10;x<280;x+=15){const val=Math.sin(x*0.3+time*5)*20;ctx.beginPath();ctx.moveTo(x,ay-val);ctx.lineTo(x,ay+val);ctx.stroke();}
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('→ polarized',200,ay-44);
+ const p2X=310;ctx.save();ctx.translate(p2X,ay);ctx.rotate(rad);
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-6,-55);ctx.lineTo(6,-55);
+ for(let r=-50;r<=50;r+=8){ctx.beginPath();ctx.moveTo(-6,r-4);ctx.lineTo(6,r+4);ctx.stroke();}
+ ctx.restore();ctx.fillStyle='#111';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`P₂ (θ=${theta}°)`,p2X,ay+70);
+ ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;
+ const outLen=I*60+2;
+ for(let x=p2X+15;x<=p2X+15+outLen;x+=6){const val=Math.sin(x*0.3+time*5)*I*20;
+  ctx.strokeStyle=`rgba(0,0,0,${0.05+I*0.25})`;ctx.lineWidth=0.4+1.2*I;ctx.beginPath();ctx.moveTo(x,ay-val);ctx.lineTo(x,ay+val);ctx.stroke();}
+ const gX=450,gY=30,gW=440,gH=200;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('I/I₀ = cos²θ',gX+3,gY+10);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.beginPath();
+ for(let x=0;x<=gW;x++){const th=(x/gW)*360;const val=Math.cos(th*Math.PI/180)**2;const py=gY+gH-val*gH;x===0?ctx.moveTo(gX+x,py):ctx.lineTo(gX+x,py);}
+ ctx.stroke();
+ const opX=gX+(theta/360)*gW,opY=gY+gH-I*gH;
+ ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(opX,gY+gH+4);ctx.lineTo(opX,opY);ctx.lineTo(gX-4,opY);ctx.stroke();
+ ctx.fillStyle='#111';ctx.beginPath();ctx.arc(opX,opY,3,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#111';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`θ=${theta}°`,opX,opY-8);
+ const bX=450,bY=260,bW=300,bH=16;
+ ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(bX,bY,bW,bH);ctx.fillStyle='#111';ctx.fillRect(bX,bY,bW*I,bH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`I/I₀ = ${I.toFixed(4)}`,bX,bY-4);
+ const hX=450,hY=290,hW=440,hH=100;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Intensity over θ sweep',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-(hist[i]||0)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Malus: I = I₀ cos²θ',10,H-16);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`I = ${I0}·cos²(${theta}°) = ${I.toFixed(4)}`,10,H-32);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>θ (°)</label><input type="range" id="tS" min="0" max="360" step="1" value="${theta}"><span class="val" id="tV">${theta}</span></div>`+
+ `<div class="ctrl-group"><label>I₀</label><input type="range" id="iS" min="0.1" max="2" step="0.1" value="${I0}"><span class="val" id="iV">${I0.toFixed(1)}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('tS').oninput=function(){theta=+this.value;tV.textContent=theta;};
+ document.getElementById('iS').oninput=function(){I0=+this.value;iV.textContent=I0.toFixed(1);};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+}
+
+ const absDiff=Math.abs(theta-90*Math.round(theta/90));
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">θ =</span> <span class="val">${theta}°</span></span>`+
+ `<span><span class="label">cos²θ =</span> <span class="val">${(Math.cos(rad)**2).toFixed(4)}</span></span>`+
+ `<span><span class="label">I/I₀ =</span> <span class="val">${I.toFixed(4)}</span></span>`+
+ `<span><span class="label">I =</span> <span class="val">${(I0*I).toFixed(4)}</span></span>`+
+ `<span><span class="label">Angle diff</span> <span class="val">${absDiff>90?180-absDiff:absDiff}°</span></span>`+
+ `<span><span class="label">Malus ∝</span> <span class="val">cos²(${theta}°)</span></span>`+
+ `<span><span class="label">cosθ =</span> <span class="val">${Math.cos(rad).toFixed(4)}</span></span>`+
+ `<span><span class="label">sinθ =</span> <span class="val">${Math.sin(rad).toFixed(4)}</span></span>`+
+ `<span><span class="label">I₀ set =</span> <span class="val">${I0.toFixed(1)}</span></span>`+
+ `<span><span class="label">Transmission</span> <span class="val">${(I*100).toFixed(1)}%</span></span>`+
+ `<span><span class="label">Rule</span> <span class="val">Malus: I∝cos²θ</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

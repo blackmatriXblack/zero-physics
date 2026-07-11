@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monte Carlo Gas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Monte Carlo Gas — Metropolis sampling in a box</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <label>T <input type="range" id="tS" min="10" max="1000" step="5" value="300"><span class="v" id="tV">300</span></label>
+  <label>N <input type="range" id="nS" min="20" max="200" step="5" value="80"><span class="v" id="nV">80</span></label>
+  <label>σ <input type="range" id="sigS" min="3" max="40" step="1" value="15"><span class="v" id="sigV">15</span></label>
+  <label>Spd <input type="range" id="sS" min="1" max="20" value="10"><span class="v" id="sV">10</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let T = 300, kB = 1, N = 80, stepSize = 15, speed = 10, running = true;
+let mcSteps = 0, accepted = 0;
+
+const HIST_LEN = 150;
+let histEnergy = [], histAccept = [];
+
+let box = { x: W * 0.15, y: H * 0.08, w: Math.min(W * 0.6, 500), h: Math.min(H * 0.65, 380) };
+function resizeBox() {
+  box.x = W * 0.15; box.y = H * 0.08;
+  box.w = Math.min(W * 0.6, 500); box.h = Math.min(H * 0.65, 380);
+}
+window.addEventListener('resize', () => { resizeCanvas(); resizeBox(); });
+resizeBox();
+
+let particles = [];
+
+function initParticles() {
+  particles = [];
+  mcSteps = 0; accepted = 0;
+  histEnergy = []; histAccept = [];
+  for (let i = 0; i < N; i++) {
+    particles.push({
+      x: box.x + 20 + Math.random() * (box.w - 40),
+      y: box.y + 20 + Math.random() * (box.h - 40)
+    });
+  }
+}
+
+function pairEnergy(i) {
+  let e = 0;
+  const p = particles[i];
+  for (let j = 0; j < N; j++) {
+    if (i === j) continue;
+    const dx = p.x - particles[j].x, dy = p.y - particles[j].y;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < 10) e += 50 * (1 - r / 10) * (1 - r / 10);
+  }
+  return e;
+}
+
+function totalEnergy() {
+  let e = 0;
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r < 10) e += 50 * (1 - r / 10) * (1 - r / 10);
+    }
+  }
+  return e;
+}
+
+function metropolisStep() {
+  const idx = Math.floor(Math.random() * N);
+  const oldE = pairEnergy(idx);
+  const ox = particles[idx].x, oy = particles[idx].y;
+  particles[idx].x += (Math.random() - 0.5) * stepSize;
+  particles[idx].y += (Math.random() - 0.5) * stepSize;
+  if (particles[idx].x < box.x + 2) particles[idx].x = box.x + 2;
+  if (particles[idx].x > box.x + box.w - 2) particles[idx].x = box.x + box.w - 2;
+  if (particles[idx].y < box.y + 2) particles[idx].y = box.y + 2;
+  if (particles[idx].y > box.y + box.h - 2) particles[idx].y = box.y + box.h - 2;
+  const dE = pairEnergy(idx) - oldE;
+  mcSteps++;
+  if (dE <= 0 || Math.random() < Math.exp(-dE / (kB * T))) {
+    accepted++;
+    return;
+  }
+  particles[idx].x = ox;
+  particles[idx].y = oy;
+}
+
+function draw() {
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  cx.strokeStyle = '#000'; cx.lineWidth = 1.5;
+  cx.strokeRect(box.x, box.y, box.w, box.h);
+  cx.fillStyle = '#f8f8f8';
+  cx.fillRect(box.x, box.y, box.w, box.h);
+
+  for (const p of particles) {
+    cx.beginPath(); cx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    cx.fillStyle = '#000'; cx.fill();
+    cx.strokeStyle = '#555'; cx.lineWidth = 0.5; cx.stroke();
+  }
+
+  const E = totalEnergy();
+  const acceptRate = mcSteps > 0 ? accepted / mcSteps : 0;
+
+  // Mini energy graph
+  const mgx = W * 0.78, mgy = H * 0.08;
+  const mgw = Math.min(W * 0.18, 160), mgh = Math.min(H * 0.25, 120);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(mgx, mgy, mgw, mgh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.font = '7px monospace';
+  cx.fillText('Energy', mgx + 4, mgy + 10);
+
+  if (histEnergy.length > 1) {
+    const eMin = Math.min(...histEnergy), eMax = Math.max(...histEnergy);
+    const eRange = eMax - eMin || 1;
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histEnergy.length; i++) {
+      const x = mgx + (i / (HIST_LEN - 1)) * mgw;
+      const y = mgy + mgh - (histEnergy[i] - eMin) / eRange * mgh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  // Nearest neighbor distance
+  let sumDist = 0;
+  for (let i = 0; i < N; i++) {
+    let minD = 1e9;
+    for (let j = 0; j < N; j++) {
+      if (i === j) continue;
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r < minD) minD = r;
+    }
+    sumDist += minD;
+  }
+  const meanDist = sumDist / N;
+  const pressure = N * kB * T / (box.w * box.h / 1e4) * 1e-3;
+
+  document.getElementById('d').innerHTML =
+    'Steps=' + mcSteps +
+    '<br>Energy=' + E.toFixed(2) +
+    '<br>T=' + T.toFixed(0) + ' K' +
+    '<br>k<sub>B</sub>T=' + (kB * T).toFixed(1) +
+    '<br>Accept=' + (acceptRate * 100).toFixed(1) + '%' +
+    '<br>N=' + N +
+    '<br>σ=' + stepSize +
+    '<br>E<sub>max</sub>=' + (Math.max(...histEnergy) || 0).toFixed(1) +
+    '<br>E<sub>min</sub>=' + (Math.min(...histEnergy) || 0).toFixed(1) +
+    '<br>Press≈' + pressure.toFixed(2) +
+    '<br>NN dist=' + meanDist.toFixed(2) +
+    '<br>Acc=' + accepted;
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+document.getElementById('rb').onclick = initParticles;
+document.getElementById('tS').oninput = function () { T = parseFloat(this.value); document.getElementById('tV').textContent = T; };
+document.getElementById('nS').oninput = function () { N = parseInt(this.value); document.getElementById('nV').textContent = N; initParticles(); };
+document.getElementById('sigS').oninput = function () { stepSize = parseFloat(this.value); document.getElementById('sigV').textContent = stepSize; };
+document.getElementById('sS').oninput = function () { speed = parseFloat(this.value); document.getElementById('sV').textContent = speed; };
+
+initParticles();
+
+function loop() {
+  if (running) {
+    for (let i = 0; i < speed * 5; i++) metropolisStep();
+    histEnergy.push(totalEnergy());
+    histAccept.push(accepted / (mcSteps || 1));
+    if (histEnergy.length > HIST_LEN) { histEnergy.shift(); histAccept.shift(); }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resizeCanvas();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

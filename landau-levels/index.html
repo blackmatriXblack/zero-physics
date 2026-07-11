@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Landau Levels</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Landau Levels</h1>
+<p>E<sub>n</sub> = ℏω<sub>c</sub>(n + ½) · ω<sub>c</sub> = qB/m</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let B=1.5,n=0,t=0,run=1,spd=1,hbar=1,m=1,q=1
+let hx=[],hy=[],ht=0
+function wc(){return q*B/m}
+function En(ni){return hbar*wc()*(ni+0.5)}
+function lB(){return Math.sqrt(hbar/(q*B))}
+function psi(r,ni){const lb=lB(),rh=r/lb
+if(ni===0)return Math.exp(-rh*rh/2)/Math.sqrt(Math.PI*lb*lb)
+if(ni===1){const p0=Math.exp(-rh*rh/2)/Math.sqrt(Math.PI*lb*lb);return p0*Math.sqrt(2)*rh}
+if(ni===2){const p0=Math.exp(-rh*rh/2)/Math.sqrt(Math.PI*lb*lb);return p0*Math.sqrt(2)*(2*rh*rh-1)}
+return Math.exp(-rh*rh/2)*Math.pow(rh,ni)/Math.sqrt(Math.PI*lb*lb*fac(ni))}
+function fac(x){let r=1;for(let i=2;i<=x;i++)r*=i;return r}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const cx=250,cy=250,lb=lB()
+for(let ni=0;ni<=2;ni++){const r=lb*Math.sqrt(2*ni+1)*3,en=En(ni)
+ctx.beginPath();ctx.strokeStyle=ni===n?'#000':'#ccc';ctx.lineWidth=ni===n?2.5:1;ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke()
+ctx.fillStyle=ni===n?'#000':'#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`n=${ni} E=${en.toFixed(2)}`,cx+r+35,cy+(ni-1)*14)}
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill()
+const oR=lb*Math.sqrt(2*n+1)*3,th=t*wc(),px=cx+oR*Math.cos(th),py=cy+oR*Math.sin(th)
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill()
+ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('e⁻',px+8,py+3)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([])
+const gX=480,gY=50,gW=200,gH=350
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gX,gY,gW,gH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('E_n = ℏω_c(n+½)',gX+gW/2,gY-4);ctx.fillText('ℏω_c = '+wc().toFixed(2),gX+gW/2,gY+gH+14)
+const mN=8,mE=En(mN)
+for(let ni=0;ni<=mN;ni++){const en=En(ni),y=gY+gH-(en/En(mN))*gH
+ctx.strokeStyle=ni===n?'#000':'#bbb';ctx.lineWidth=ni===n?2:1;ctx.beginPath();ctx.moveTo(gX+10,y);ctx.lineTo(gX+gW-10,y);ctx.stroke()
+ctx.fillStyle=ni===n?'#000':'#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`n=${ni}`,gX+12,y-3);ctx.textAlign='right';ctx.fillText(en.toFixed(2),gX+gW-12,y-3)}
+const wX=250,wY=430,wW=220,wH=70
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(cx-wW/2,wY-wH/2,wW,wH)
+ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`|ψ_n(r)|² n=${n}`,cx,wY-wH/2-4)
+const sam=100;ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath();let mp=0;const pr=[]
+for(let i=0;i<=sam;i++){const r=(i/sam)*4*lb*Math.sqrt(2*n+1),ps=psi(r,n),p=ps*ps;pr.push(p);if(p>mp)mp=p}
+if(mp>0)for(let i=0;i<=sam;i++){const x=cx-wW/2+(i/sam)*wW,y=wY+wH/2-(pr[i]/mp)*wH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke()
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(cx,wY-wH/2);ctx.lineTo(cx,wY+wH/2);ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('r=0',cx,wY+wH/2+12);ctx.fillText('r',cx+wW/2+4,wY+wH/2+12)
+if(!paused){t+=0.015*spd;ht+=0.1*spd;if(ht<200){hx.push(ht);hy.push(En(n));if(hx.length>150){hx.shift();hy.shift()}}}
+if(hx.length>1){const mgX=480,mgY=440,mgW=200,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('E_n(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+const my=Math.max(...hy,1);for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/200)*mgW,yy=mgY+mgH-(hy[i]/my)*mgH*0.7
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+document.getElementById('st').innerHTML=
+`<span><span class="l">B =</span> <span class="v">${B.toFixed(2)}</span> T</span>`+
+`<span><span class="l">n =</span> <span class="v">${n}</span></span>`+
+`<span><span class="l">E_n =</span> <span class="v">${En(n).toFixed(3)}</span></span>`+
+`<span><span class="l">ω_c =</span> <span class="v">${wc().toFixed(3)}</span></span>`+
+`<span><span class="l">ℓ_B =</span> <span class="v">${lb.toFixed(3)}</span></span>`+
+`<span><span class="l">DE = ℏω_c =</span> <span class="v">${wc().toFixed(3)}</span></span>`+
+`<span><span class="l">Orbit r_n =</span> <span class="v">${(lb*Math.sqrt(2*n+1)*3).toFixed(2)}</span></span>`+
+`<span><span class="l">v = ω_c·r =</span> <span class="v">${(wc()*lb*Math.sqrt(2*n+1)*3).toFixed(2)}</span></span>`+
+`<span><span class="l">E_0 = ½ℏω_c =</span> <span class="v">${(0.5*wc()).toFixed(3)}</span></span>`+
+`<span><span class="l">Δn=1 gap =</span> <span class="v">${wc().toFixed(3)}</span></span>`+
+`<span><span class="l">Phase θ =</span> <span class="v">${(t*wc()*180/Math.PI%360).toFixed(1)}°</span></span>`+
+`<span><span class="l">B·ℓ² = h/q =</span> <span class="v">${(B*lb*lb).toFixed(3)}</span></span>`
+}
+let paused=0
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>B field</label><input type="range" id="bS" min="0.2" max="4" step="0.1" value="${B}"><span class="val" id="bV">${B}</span></div>`+
+`<div class="ctrl-g"><label>n</label><input type="range" id="nS" min="0" max="6" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('bS').oninput=function(){B=+this.value;document.getElementById('bV').textContent=B}
+document.getElementById('nS').oninput=function(){n=+this.value;document.getElementById('nV').textContent=n;hx=[];hy=[];ht=0}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){t=0;hx=[];hy=[];ht=0}
+}
+anim()
+</script></body></html>

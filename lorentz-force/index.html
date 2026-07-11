@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lorentz Force · F = q(E + v × B)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+canvas:active{cursor:crosshair}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.graph-container{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.graph-box{border:1px solid #ddd;position:relative}
+.graph-box .gtitle{position:absolute;top:3px;left:6px;font-size:0.6em;color:#999;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Lorentz Force</h1>
+<p>F = q(E + v × B) — Click canvas to reposition particle</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<div class="graph-container" id="graphs"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+let q=1, m=1, E=0.8, B=0.6;
+let px=50, py=250, vx=2.5, vy=0;
+let trail=[], paused=false, simTime=0;
+const tHist=[], pxHist=[], pyHist=[], vxHist=[], vyHist=[];
+const maxHist=600;
+let speed=1;
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    const dt=0.008;
+    const ax=q/m*E + q/m*vy*B, ay=-q/m*vx*B;
+    vx+=ax*dt; vy+=ay*dt;
+    px+=vx*dt; py+=vy*dt;
+    if(px<-80||px>W+80||py<-80||py>H+80){
+      px=50; py=250; vx=2.5; vy=0; trail=[]; tHist.length=0; pxHist.length=0; pyHist.length=0; vxHist.length=0; vyHist.length=0;
+    }
+    trail.push({x:px,y:py});
+    if(trail.length>maxHist)trail.shift();
+    tHist.push(simTime); pxHist.push(px); pyHist.push(py); vxHist.push(vx); vyHist.push(vy);
+    if(tHist.length>maxHist){tHist.shift();pxHist.shift();pyHist.shift();vxHist.shift();vyHist.shift();}
+    simTime+=dt;
+  }
+}
+
+function resetSim(){px=50;py=250;vx=2.5;vy=0;trail=[];simTime=0;tHist.length=0;pxHist.length=0;pyHist.length=0;vxHist.length=0;vyHist.length=0;paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // E field arrows
+  for(let y=40;y<H;y+=40){for(let x=30;x<W;x+=40){
+    ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(x-6,y);ctx.lineTo(x+6,y);ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.08)';
+    ctx.beginPath();ctx.moveTo(x+6,y);ctx.lineTo(x+3,y-2);ctx.lineTo(x+3,y+2);ctx.fill();
+  }}
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('E →',450,18);
+
+  // B field dots
+  for(let y=40;y<H;y+=40)for(let x=35;x<W;x+=40){
+    ctx.fillStyle='rgba(0,0,0,0.08)';ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillText('B ⊙',450,H-10);
+
+  // Trail
+  if(trail.length>2){
+    ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.6;
+    ctx.beginPath();
+    for(let i=0;i<trail.length;i++){i===0?ctx.moveTo(trail[i].x,trail[i].y):ctx.lineTo(trail[i].x,trail[i].y);}
+    ctx.stroke();
+    for(let i=0;i<trail.length;i+=5){
+      const frac=i/trail.length;
+      ctx.fillStyle=`rgba(0,0,0,${0.03+0.07*frac})`;
+      ctx.beginPath();ctx.arc(trail[i].x,trail[i].y,1+frac*1.5,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Particle
+  const grad=ctx.createRadialGradient(px-3,py-3,1,px,py,7);
+  grad.addColorStop(0,'#555');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('+',px,py+2);
+
+  const spd=Math.hypot(vx,vy);
+  const vExB=E/B;
+
+  // Force vectors
+  if(spd>0.1){
+    const fE=q*E, fB=q*spd*B;
+    const sc=Math.min(3,40/fE||1);
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+fE*sc,py);ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=1;
+    const fBx=q*vy*B*sc, fBy=-q*vx*B*sc;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+fBx,py+fBy);ctx.stroke();
+  }
+
+  // Graphs
+  // y vs t (drift)
+  const gX=600,gY=20,gW=280,gH=90;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('y vs t (drift)',gX+3,gY+10);
+  if(pyHist.length>2){
+    const yMin=Math.min(...pyHist),yMax=Math.max(...pyHist),yR=yMax-yMin||1;
+    ctx.beginPath();
+    for(let i=0;i<pyHist.length;i++){
+      const px2=gX+(i/pyHist.length)*gW,py2=gY+gH-(pyHist[i]-yMin)/yR*gH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.7;ctx.stroke();
+  }
+
+  // Speed vs t
+  const g2X=600,g2Y=120,g2W=280,g2H=60;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(g2X,g2Y,g2W,g2H);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('|v| vs t',g2X+3,g2Y+10);
+  if(pxHist.length>2){
+    const sMax=Math.max(...pxHist.map((_,i)=>Math.hypot(pxHist[i],pyHist[i])))*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<pxHist.length;i++){
+      const s=Math.hypot(pxHist[i],pyHist[i]);
+      const px2=g2X+(i/pxHist.length)*g2W,py2=g2Y+g2H-(s/sMax)*g2H;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // KE vs t
+  const g3X=600,g3Y=190,g3W=280,g3H=60;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(g3X,g3Y,g3W,g3H);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('KE vs t',g3X+3,g3Y+10);
+  if(pxHist.length>2){
+    const keHist=pxHist.map((_,i)=>0.5*m*(vxHist[i]*vxHist[i]+vyHist[i]*vyHist[i]));
+    const keMax=Math.max(...keHist)*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<keHist.length;i++){
+      const px2=g3X+(i/keHist.length)*g3W,py2=g3Y+g3H-(keHist[i]/keMax)*g3H;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // Mouse click to reposition
+  canvas.onmousedown=function(e){
+    if(dragging)return;
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left, my_=e.clientY-rect.top;
+    if(my_<430){px=mx; py=my_; vx=2.5; vy=0; trail=[]; tHist.length=0; pxHist.length=0; pyHist.length=0; vxHist.length=0; vyHist.length=0;}
+  };
+
+  const FE=Math.abs(q*E), FB=Math.abs(q*spd*B);
+  const ke=0.5*m*spd*spd;
+  const p=m*spd;
+  const ax_t=q/m*E + q/m*vy*B, ay_t=-q/m*vx*B;
+  const aTot=Math.hypot(ax_t,ay_t);
+  const gyroR=m*spd/(Math.abs(q*B)||1);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>E</label><input type="range" id="eS" min="0" max="2" step="0.1" value="${E}"><span class="val" id="eV">${E.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>B</label><input type="range" id="bS" min="0" max="2" step="0.1" value="${B}"><span class="val" id="bV">${B.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>v₀</label><input type="range" id="vS" min="0.5" max="5" step="0.2" value="${2.5}"><span class="val" id="vV">2.5</span></div>`+
+    `<div class="ctrl-group"><label>q</label><input type="range" id="qS" min="0.5" max="3" step="0.1" value="${q}"><span class="val" id="qV">${q.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m</label><input type="range" id="mS" min="0.2" max="3" step="0.1" value="${m}"><span class="val" id="mV">${m.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('eS').addEventListener('input',function(){E=parseFloat(this.value);document.getElementById('eV').textContent=E.toFixed(1);});
+  document.getElementById('bS').addEventListener('input',function(){B=parseFloat(this.value);document.getElementById('bV').textContent=B.toFixed(1);});
+  document.getElementById('vS').addEventListener('input',function(){vx=parseFloat(this.value);vy=0;px=50;py=250;trail=[];tHist.length=0;pxHist.length=0;pyHist.length=0;vxHist.length=0;vyHist.length=0;});
+  document.getElementById('qS').addEventListener('input',function(){q=parseFloat(this.value);document.getElementById('qV').textContent=q.toFixed(1);});
+  document.getElementById('mS').addEventListener('input',function(){m=parseFloat(this.value);document.getElementById('mV').textContent=m.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">|v| =</span> <span class="val">${spd.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">|F<sub>E</sub>| =</span> <span class="val">${FE.toFixed(3)}</span> N</span>`+
+    `<span><span class="label">|F<sub>B</sub>| =</span> <span class="val">${FB.toFixed(3)}</span> N</span>`+
+    `<span><span class="label">v<sub>E×B</sub> =</span> <span class="val">${vExB.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${ke.toFixed(3)}</span> J</span>`+
+    `<span><span class="label">p =</span> <span class="val">${p.toFixed(3)}</span> kg·m/s</span>`+
+    `<span><span class="label">|a| =</span> <span class="val">${aTot.toFixed(3)}</span> m/s²</span>`+
+    `<span><span class="label">r<sub>g</sub> =</span> <span class="val">${gyroR.toFixed(2)}</span> m</span>`+
+    `<span><span class="label">x =</span> <span class="val">${px.toFixed(1)}</span></span>`+
+    `<span><span class="label">y =</span> <span class="val">${py.toFixed(1)}</span></span>`+
+    `<span><span class="label">a<sub>x</sub> =</span> <span class="val">${ax_t.toFixed(2)}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

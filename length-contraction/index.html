@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Length Contraction</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Length Contraction</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480;
+let paused=false, speed=1, beta=0.6, rodPhase=0;
+const L0=200;
+let historyBeta=[], historyL=[], historyGamma=[], historyRatio=[];
+
+function resetSim(){rodPhase=0;historyBeta=[];historyL=[];historyGamma=[];historyRatio=[]}
+
+function update(){
+  if(paused)return;
+  rodPhase+=.02*speed;
+  const gamma=1/Math.sqrt(1-beta*beta);
+  const L=L0/gamma;
+  historyBeta.push({t:rodPhase,val:beta});historyL.push({t:rodPhase,val:L});
+  historyGamma.push({t:rodPhase,val:gamma});historyRatio.push({t:rodPhase,val:L/L0});
+  if(historyBeta.length>400){historyBeta.shift();historyL.shift();historyGamma.shift();historyRatio.shift()}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const gamma=1/Math.sqrt(1-beta*beta);
+  const L=L0/gamma;
+
+  // stationary rod
+  ctx.fillStyle='#ccc';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('Rest frame S (observer)',20,50);
+  ctx.strokeStyle='#000';ctx.lineWidth=4;
+  const sMidY=70;
+  ctx.beginPath();ctx.moveTo(375-L0/2,sMidY);ctx.lineTo(375+L0/2,sMidY);ctx.stroke();
+  ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText(`L₀ = ${L0}`,375,sMidY-10);
+
+  // moving rod (contracted)
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('Moving frame S\' (rod moving at β)',20,120);
+  ctx.strokeStyle='#666';ctx.lineWidth=4;
+  const mOffset=Math.sin(rodPhase)*120;
+  const mBaseX=375+mOffset;
+  ctx.beginPath();ctx.moveTo(mBaseX-L/2,140);ctx.lineTo(mBaseX+L/2,140);ctx.stroke();
+  ctx.fillStyle='#666';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText(`L = L₀/γ = ${L.toFixed(1)}`,mBaseX,140-10);
+
+  // ruler markings on rod
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=.5;
+  for(let i=0;i<=10;i++){
+    const x=mBaseX-L/2+i*(L/10);
+    ctx.beginPath();ctx.moveTo(x,132);ctx.lineTo(x,148);ctx.stroke();
+  }
+
+  // comparison overlay
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(375-L0/2,160,L0,3);
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(mBaseX-L/2,170,L,3);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('Rest length (top) vs Contracted (bottom)',375,185);
+
+  // moving rod circles (atoms)
+  for(let i=0;i<8;i++){
+    const x=mBaseX-L/2+i*(L/7);
+    ctx.fillStyle='rgba(0,0,0,0.08)';ctx.beginPath();ctx.arc(x,155,2,0,Math.PI*2);ctx.fill();
+  }
+
+  // data readout center
+  ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='center';
+  ctx.fillText(`β = v/c = ${beta.toFixed(3)}`,375,240);
+  ctx.fillStyle='#666';
+  ctx.fillText(`γ = 1/√(1-β²) = ${gamma.toFixed(4)}`,375,260);
+  ctx.fillText(`L = L₀/γ = ${L.toFixed(2)}  (contraction = ${(L0-L).toFixed(2)})`,375,280);
+  ctx.fillStyle='#999';ctx.font='9px monospace';
+  ctx.fillText(`L/L₀ = ${(L/L0).toFixed(4)}  |  γ factor = ${gamma.toFixed(4)}`,375,300);
+
+  // mini graph: L/L0 vs beta
+  const gx=40,gy=330,gw=160,gh=100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('L/L₀ vs β',gx+3,gy+10);
+  ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=.8;ctx.beginPath();
+  for(let i=0;i<=gw;i++){const b=i/gw*.95;const r=1/Math.sqrt(1-b*b);const lr=1/r;if(i===0)ctx.moveTo(gx+i,gy+gh-lr*gh);else ctx.lineTo(gx+i,gy+gh-lr*gh)}
+  ctx.stroke();
+  const cgx=gx+beta/.95*gw,cgy=gy+gh-(L/L0)*gh;
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cgx,cgy,3,0,Math.PI*2);ctx.fill();
+
+  // mini history graph
+  const gx2=W-180,gy2=330,gw2=160,gh2=100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('Contraction history',gx2+3,gy2+10);
+  if(historyL.length>3){
+    ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=.6;ctx.beginPath();
+    const maxL=Math.max(...historyL.map(d=>d.val));
+    for(let i=0;i<historyL.length;i++){
+      const px=gx2+i/historyL.length*gw2, py=gy2+gh2-(historyL[i].val/maxL)*gh2;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)
+    }
+    ctx.stroke();
+  }
+
+  data.innerHTML=
+    `β = ${beta.toFixed(3)} | γ = ${gamma.toFixed(3)} | L₀ = ${L0} | L = ${L.toFixed(2)} | L/L₀ = ${(L/L0).toFixed(4)}`+
+    ` | ΔL = ${(L0-L).toFixed(2)} | v = ${(beta*3e8).toExponential(2)} m/s`+
+    ` | Time = ${rodPhase.toFixed(1)}`;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>β <input type="range" id="betaS" min="0" max="0.95" value="${beta*100}" step="1"><span id="betaD">${beta.toFixed(2)}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>`;
+
+document.getElementById('betaS').oninput=function(){beta=parseInt(this.value)/100;document.getElementById('betaD').textContent=beta.toFixed(2);resetSim()};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=resetSim;
+</script>
+</body>
+</html>

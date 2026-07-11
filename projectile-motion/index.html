@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projectile Motion · mẍ = −c|v|v_x, mÿ = −mg − c|v|v_y</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Projectile Motion</h1>
+<p>With & without air resistance — adjustable angle, speed, drag</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const g=9.81, dt=0.015;
+let angle=55, v0=22, drag=0.05, mass=1;
+let paused=false, speed=1, showBoth=true;
+
+const ground=H*0.88, ox=W*0.08;
+const scale_=12;
+
+// Main projectile
+let x,y,vx,vy,t;
+
+// No-drag projectile
+let nx,ny,nvx,nvy;
+
+// High-drag for comparison
+let hx,hy,hvx,hvy;
+
+const trail=[], trailNoDrag=[], trailHighDrag=[];
+
+function deg2rad(d){return d*Math.PI/180;}
+
+function initProjectiles(){
+  const rad=deg2rad(angle);
+  vx=v0*Math.cos(rad); vy=v0*Math.sin(rad);
+  x=ox; y=ground;
+  t=0;
+  nvx=vx; nvy=vy; nx=ox; ny=ground;
+  hvx=vx; hvy=vy; hx=ox; hy=ground;
+  trail.length=0; trailNoDrag.length=0; trailHighDrag.length=0;
+}
+
+function stepProjectile(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    // With drag
+    const spd=Math.sqrt(vx*vx+vy*vy);
+    const dragForce=drag*spd*spd;
+    vx-=dragForce*vx/spd*dt/mass;
+    vy-=g*dt+dragForce*vy/spd*dt/mass;
+    x+=vx*dt; y+=vy*dt;
+    trail.push({x:x,y:y});
+    if(trail.length>800)trail.shift();
+
+    // No drag
+    nvy-=g*dt;
+    nx+=nvx*dt; ny+=nvy*dt;
+    trailNoDrag.push({x:nx,y:ny});
+    if(trailNoDrag.length>800)trailNoDrag.shift();
+
+    // High drag (2x)
+    const hspd=Math.sqrt(hvx*hvx+hvy*hvy);
+    const hdrag=2*drag*hspd*hspd;
+    hvx-=hdrag*hvx/hspd*dt/mass;
+    hvy-=g*dt+hdrag*hvy/hspd*dt/mass;
+    hx+=hvx*dt; hy+=hvy*dt;
+    trailHighDrag.push({x:hx,y:hy});
+    if(trailHighDrag.length>800)trailHighDrag.shift();
+
+    t+=dt;
+
+    // Reset if below ground
+    if(y>ground&&vy<0||x>W+50){
+      initProjectiles();
+      // Pre-run a bit to show trajectory
+      for(let i=0;i<20;i++){
+        const spd=Math.sqrt(vx*vx+vy*vy);
+        const df=drag*spd*spd;
+        vx-=df*vx/spd*dt/mass; vy-=g*dt+df*vy/spd*dt/mass; x+=vx*dt; y+=vy*dt;
+        trail.push({x:x,y:y});
+        nvy-=g*dt; nx+=nvx*dt; ny+=nvy*dt;
+        trailNoDrag.push({x:nx,y:ny});
+        const hspd=Math.sqrt(hvx*hvx+hvy*hvy);
+        const hd=2*drag*hspd*hspd;
+        hvx-=hd*hvx/hspd*dt/mass; hvy-=g*dt+hd*hvy/hspd*dt/mass; hx+=hvx*dt; hy+=hvy*dt;
+        trailHighDrag.push({x:hx,y:hy});
+        t+=dt;
+        if(y>ground)break;
+      }
+      break;
+    }
+  }
+}
+
+function resetSim(){
+  initProjectiles();
+  for(let i=0;i<15;i++){
+    const spd=Math.sqrt(vx*vx+vy*vy);
+    const df=drag*spd*spd;
+    vx-=df*vx/spd*dt/mass; vy-=g*dt+df*vy/spd*dt/mass; x+=vx*dt; y+=vy*dt; trail.push({x:x,y:y});
+    nvy-=g*dt; nx+=nvx*dt; ny+=nvy*dt; trailNoDrag.push({x:nx,y:ny});
+    const hspd=Math.sqrt(hvx*hvx+hvy*hvy);
+    const hd=2*drag*hspd*hspd;
+    hvx-=hd*hvx/hspd*dt/mass; hvy-=g*dt+hd*hvy/hspd*dt/mass; hx+=hvx*dt; hy+=hvy*dt; trailHighDrag.push({x:hx,y:hy});
+    t+=dt;
+  }
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+initProjectiles();
+resetSim();
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Ground
+  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=0;gx<W;gx+=6){
+    ctx.moveTo(gx,ground);ctx.lineTo(gx+3,ground);
+  }
+  ctx.stroke();
+
+  // Trajectories
+  // No drag (analytical - parabola)
+  if(showBoth&&trailNoDrag.length>1){
+    ctx.beginPath();ctx.moveTo(trailNoDrag[0].x,trailNoDrag[0].y);
+    for(let i=0;i<trailNoDrag.length;i++)ctx.lineTo(trailNoDrag[i].x,trailNoDrag[i].y);
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.8;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // High drag (dotted)
+  if(showBoth&&trailHighDrag.length>1){
+    ctx.beginPath();ctx.moveTo(trailHighDrag[0].x,trailHighDrag[0].y);
+    for(let i=0;i<trailHighDrag.length;i++)ctx.lineTo(trailHighDrag[i].x,trailHighDrag[i].y);
+    ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.6;ctx.setLineDash([1,3]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Main trajectory
+  if(trail.length>1){
+    ctx.beginPath();ctx.moveTo(trail[0].x,trail[0].y);
+    for(let i=0;i<trail.length;i++)ctx.lineTo(trail[i].x,trail[i].y);
+    ctx.strokeStyle='#111';ctx.lineWidth=1.8;ctx.stroke();
+  }
+
+  // Projectile
+  const grad=ctx.createRadialGradient(x-3,y-3,2,x,y,8);
+  grad.addColorStop(0,'#444');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.fill();
+
+  // Velocity vector
+  const vmag=Math.sqrt(vx*vx+vy*vy);
+  const vsc=1.5;
+  ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+vx*vsc,y+vy*vsc);ctx.stroke();
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(x+vx*vsc,y+vy*vsc,2.5,0,Math.PI*2);ctx.fill();
+
+  // Drag force vector
+  const spd=Math.sqrt(vx*vx+vy*vy);
+  if(spd>0.1){
+    const fDrag=drag*spd*spd/5;
+    ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.5;ctx.setLineDash([2,3]);
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-vx/spd*fDrag*20,y-vy/spd*fDrag*20);
+    ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Legend
+  ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.fillText('── with drag (c='+drag.toFixed(2)+')',W*0.62,30);
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  if(showBoth){
+    ctx.fillText('- - no drag',W*0.62,45);
+    ctx.fillStyle='rgba(0,0,0,0.25)';
+    ctx.fillText('-·- 2× drag',W*0.62,60);
+  }
+
+  // X-Y axes
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.4;
+  ctx.beginPath();ctx.moveTo(ox,ground+5);ctx.lineTo(W-20,ground+5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ox,ground+5);ctx.lineTo(ox,50);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.textAlign='left';
+  ctx.fillText('x (m)',W-50,ground+20);
+  ctx.fillText('y (m)',ox-5,55);
+
+  // Height vs range graph
+  // Analytical max height
+  const rad=deg2rad(angle);
+  const maxH_noDrag=v0*v0*Math.sin(rad)*Math.sin(rad)/(2*g);
+  const range_noDrag=v0*v0*Math.sin(2*rad)/g;
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>Angle</label><input type="range" id="angS" min="5" max="85" step="1" value="${angle}"><span class="val" id="angV">${angle}°</span></div>`+
+    `<div class="ctrl-group"><label>v₀</label><input type="range" id="v0S" min="5" max="45" step="0.5" value="${v0}"><span class="val" id="v0V">${v0.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Drag c</label><input type="range" id="dragS" min="0" max="0.5" step="0.005" value="${drag}"><span class="val" id="dragV">${drag.toFixed(3)}</span></div>`+
+    `<div class="ctrl-group"><label>Mass</label><input type="range" id="massS" min="0.1" max="5" step="0.1" value="${mass}"><span class="val" id="massV">${mass.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('angS').addEventListener('input',function(){
+    angle=parseInt(this.value);document.getElementById('angV').textContent=angle+'°';
+    initProjectiles();resetSim();
+  });
+  document.getElementById('v0S').addEventListener('input',function(){
+    v0=parseFloat(this.value);document.getElementById('v0V').textContent=v0.toFixed(1);
+    initProjectiles();resetSim();
+  });
+  document.getElementById('dragS').addEventListener('input',function(){
+    drag=parseFloat(this.value);document.getElementById('dragV').textContent=drag.toFixed(3);
+    initProjectiles();resetSim();
+  });
+  document.getElementById('massS').addEventListener('input',function(){
+    mass=parseFloat(this.value);document.getElementById('massV').textContent=mass.toFixed(1);
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',function(){initProjectiles();resetSim();});
+  document.getElementById('speedS').addEventListener('input',function(){
+}
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+
+  const KE=0.5*mass*vmag*vmag;
+  const PE=mass*g*(ground-y);
+  const rad_a=deg2rad(angle);
+  const T_flight=v0*Math.sin(rad_a)/g+Math.sqrt(2*maxH_noDrag/g);
+
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">x =</span> <span class="val">${((x-ox)/scale_).toFixed(1)}</span> m</span>`+
+    `<span><span class="label">y =</span> <span class="val">${((ground-y)/scale_).toFixed(1)}</span> m</span>`+
+    `<span><span class="label">|v| =</span> <span class="val">${vmag.toFixed(2)}</span> m/s</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${KE.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">PE =</span> <span class="val">${PE.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">E =</span> <span class="val">${(KE+PE).toFixed(2)}</span> J</span>`+
+    `<span><span class="label">t =</span> <span class="val">${t.toFixed(2)}</span> s</span>`+
+    `<span><span class="label">θ =</span> <span class="val">${Math.atan2(vy,vx)*180/Math.PI.toFixed(1)}°</span></span>`+
+    `<span><span class="label">Range(no drag) ≈</span> <span class="val">${range_noDrag.toFixed(1)}</span> m</span>`+
+    `<span><span class="label">MaxH(no drag) ≈</span> <span class="val">${maxH_noDrag.toFixed(1)}</span> m</span>`+
+    `<span><span class="label">T_flight ≈</span> <span class="val">${T_flight.toFixed(2)}</span> s</span>`;
+}
+
+function loop(){
+  stepProjectile();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

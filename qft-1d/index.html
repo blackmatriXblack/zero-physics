@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QFT 1D · φ⁴ scalar field on a lattice</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.2em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;margin:5px 0;max-width:940px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:60px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:0.6em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0;font-size:0.6em;color:#666;max-width:940px;justify-content:center}
+.s sp{white-space:nowrap}
+.s .l{color:#999}
+.s .vl{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>1D Quantum Field Theory</h1>
+<p>φ⁴ scalar field — Lattice with vacuum fluctuations</p>
+<canvas id="c" width="940" height="480"></canvas>
+<div class="c" id="ctrl"></div><div class="s" id="st"></div>
+<script>
+const C=document.getElementById('c'),x=C.getContext('2d'),W=940,H=480;
+const N=80;const dt=0.005;
+let phi=new Float64Array(N),pi=new Float64Array(N);
+let m=0.5,g=0.02,paused=0,speed=1;
+const HL=100;
+let hs={E:[],rms:[],maxPhi:[],corrLen:[]};
+function initField(){for(let i=0;i<N;i++){phi[i]=0.005*(Math.random()-0.5);pi[i]=0;}}
+function reset(){m=0.5;g=0.02;paused=0;speed=1;initField();for(let k in hs)hs[k]=[];}
+initField();
+function step(){if(paused)return;
+for(let _=0;_<speed;_++){
+  // Leapfrog integration with φ⁴ potential
+  for(let i=0;i<N;i++){
+    const lapl=(phi[(i+1)%N]-2*phi[i]+phi[(i+N-1)%N])/4;
+    const force=lapl-m*m*phi[i]-g*phi[i]*phi[i]*phi[i];
+    pi[i]+=force*dt;
+  }
+  for(let i=0;i<N;i++)phi[i]+=pi[i]*dt;
+}}
+function draw(){
+x.fillStyle='#fff';x.fillRect(0,0,W,H);
+const cellW=(W-60)/N;
+// Lattice field visualization
+for(let i=0;i<N;i++){const xp=30+i*cellW;const yp=200+phi[i]*60;
+x.fillStyle='#111';x.beginPath();x.arc(xp,yp,2.5,0,Math.PI*2);x.fill();
+x.strokeStyle='rgba(0,0,0,0.04)';x.lineWidth=.3;x.beginPath();x.moveTo(xp,200);x.lineTo(xp,yp);x.stroke();}
+x.strokeStyle='rgba(0,0,0,0.02)';x.lineWidth=.5;x.beginPath();x.moveTo(30,200);x.lineTo(W-30,200);x.stroke();
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='center';x.fillText('φ(x) — field amplitude',W/2,8);
+// Compute energies
+let kinE=0,potE=0,gradE=0;
+for(let i=0;i<N;i++){
+  kinE+=0.5*pi[i]*pi[i];
+  potE+=0.5*m*m*phi[i]*phi[i]+0.25*g*Math.pow(phi[i],4);
+  const dx=(phi[(i+1)%N]-phi[(i+N-1)%N])/2;gradE+=dx*dx;
+}
+const totalE=kinE+potE+gradE;
+const fieldRms=Math.sqrt(phi.reduce((s,v)=>s+v*v,0)/N);
+const maxP=Math.max(...phi),minP=Math.min(...phi);
+// Compute correlation length
+let corrSum=0,corrCount=0;
+for(let d=1;d<10;d++){let s=0,c=0;for(let i=0;i<N-d;i++){s+=phi[i]*phi[i+d];c++;}corrSum+=c>0?s/c:0;}
+const corrLen=corrSum/9;
+// Correlation graph
+const cgX=500,cgY=220,cgW=400,cgH=100;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(cgX,cgY,cgW,cgH);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';x.fillText('⟨φ(x)φ(x+d)⟩ correlation',cgX+3,cgY+8);
+x.strokeStyle='#111';x.lineWidth=.8;x.beginPath();let fi=true;
+for(let d=0;d<20;d++){let s=0,c=0;for(let i=0;i<N-d;i++){s+=phi[i]*phi[i+d];c++;}
+const val=c>0?s/c:0;const px=cgX+d*cgW/20,py=cgY+cgH/2-val*30;fi?x.moveTo(px,py):x.lineTo(px,py);fi=false;}
+x.stroke();
+// Energy bar
+const ebX=500,ebY=170,ebW=350,ebH=12;
+x.fillStyle='rgba(0,0,0,0.05)';x.fillRect(ebX,ebY,ebW,ebH);
+x.fillStyle='rgba(0,0,0,0.15)';x.fillRect(ebX,ebY,Math.min(ebW,totalE*5),ebH);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';x.fillText('E = '+totalE.toFixed(4)+'  (K='+kinE.toFixed(4)+' P='+potE.toFixed(4)+' G='+gradE.toFixed(4)+')',500,ebY-4);
+// Kinetic/potential breakdown
+const kx=500,ky=40,kw=200,kh=90;
+x.strokeStyle='#eee';x.lineWidth=.5;x.strokeRect(kx,ky,kw,kh);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';
+x.fillText('Energy breakdown',kx+3,ky+8);
+x.fillText('KE: '+kinE.toFixed(4),kx+5,ky+22);
+x.fillText('PE: '+potE.toFixed(4),kx+5,ky+36);
+x.fillText('GE: '+gradE.toFixed(4),kx+5,ky+50);
+x.fillText('Total: '+totalE.toFixed(4),kx+5,ky+64);
+x.fillText('φ_rms: '+fieldRms.toFixed(4),kx+5,ky+78);
+// Correlation length bar
+x.fillText('ξ ≈ '+(corrLen*N).toFixed(2)+' lattice units',500,150);
+// History mini graph
+const mgX=730,mgY=40,mgW=180,mgH=110;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(mgX,mgY,mgW,mgH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('Total energy history',mgX+3,mgY+8);
+hs.E.push(totalE);hs.rms.push(fieldRms);hs.maxPhi.push(maxP);hs.corrLen.push(corrLen);
+for(let k in hs)if(hs[k].length>HL)hs[k].shift();
+const arr=hs.E;if(arr.length>1){x.strokeStyle='rgba(0,0,0,0.2)';x.lineWidth=.7;x.beginPath();let fi2=true;
+const mn=Math.min(...arr),mx=Math.max(...arr),rg=mx-mn||1;
+for(let i=0;i<arr.length;i++){const px=mgX+i*mgW/HL,py=mgY+mgH-3-(arr[i]-mn)/rg*(mgH-6);fi2?x.moveTo(px,py):x.lineTo(px,py);fi2=false;}
+x.stroke();}
+// Field range bar at top
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('φ ∈ ['+minP.toFixed(3)+', '+maxP.toFixed(3)+']',500,100);
+x.fillStyle='rgba(0,0,0,'+(0.05+Math.abs(maxP)*0.3)+')';x.fillRect(500,106,150,4);
+// Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="cg"><label>m</label><input type="range" id="mS" min="0.1" max="2" step="0.05" value="${m}"><span class="v" id="mV">${m.toFixed(2)}</span></div>`+
+`<div class="cg"><label>g</label><input type="range" id="gS" min="0" max="0.5" step="0.005" value="${g}"><span class="v" id="gV">${g.toFixed(3)}</span></div>`+
+`<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="v" id="spV">${speed}</span></div>`+
+`<button id="ppBtn">⏸</button><button id="rsBtn">↺</button><button id="inBtn">Init</button>`;
+document.getElementById('mS').oninput=function(){m=+this.value;document.getElementById('mV').textContent=m.toFixed(2);};
+document.getElementById('gS').oninput=function(){g=+this.value;document.getElementById('gV').textContent=g.toFixed(3);};
+document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+document.getElementById('ppBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶':'⏸';};
+document.getElementById('rsBtn').onclick=reset;
+document.getElementById('inBtn').onclick=initField;
+}
+document.getElementById('st').innerHTML=
+`<sp><span class="l">m =</span> <span class="vl">${m.toFixed(2)}</span></sp>`+
+`<sp><span class="l">g =</span> <span class="vl">${g.toFixed(3)}</span></sp>`+
+`<sp><span class="l">E_tot =</span> <span class="vl">${totalE.toFixed(4)}</span></sp>`+
+`<sp><span class="l">φ_rms =</span> <span class="vl">${fieldRms.toExponential(3)}</span></sp>`+
+`<sp><span class="l">max φ =</span> <span class="vl">${maxP.toExponential(3)}</span></sp>`+
+`<sp><span class="l">min φ =</span> <span class="vl">${minP.toExponential(3)}</span></sp>`+
+`<sp><span class="l">KE =</span> <span class="vl">${kinE.toExponential(3)}</span></sp>`+
+`<sp><span class="l">PE =</span> <span class="vl">${potE.toExponential(3)}</span></sp>`+
+`<sp><span class="l">GE =</span> <span class="vl">${gradE.toExponential(3)}</span></sp>`+
+`<sp><span class="l">ξ ≈</span> <span class="vl">${(corrLen*N).toFixed(2)}</span> lat.</sp>`+
+`<sp><span class="l">N =</span> <span class="vl">${N}</span> sites</sp>`+
+`<sp><span class="l">Theory</span> <span class="vl">φ⁴</span></sp>`+
+`<sp><span class="l">dt =</span> <span class="vl">${dt}</span></sp>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

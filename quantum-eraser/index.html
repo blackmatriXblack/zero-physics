@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Quantum Eraser</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Quantum Eraser</h1>
+<p>Delayed choice · which-path info → interference destroyed → eraser restores fringes</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let wp=0,eras=1,run=1,spd=1,counts=[],phot=[],nD=300,maxP=800
+const s1X=300,s2X=350,sY=80,scX=325,scY=120,scW=5,scH=340
+function init(){counts=new Array(nD).fill(0);phot=[]}
+function sim(){
+const dY=scY+scH*Math.random();let int
+if(wp){int=Math.random()<0.5?1:0}else{const lam=15
+const pd=Math.hypot(s1X-scX,dY-sY)-Math.hypot(s2X-scX,dY-sY),ph=2*Math.PI*pd/lam
+int=Math.cos(ph/2)**2
+if(eras){const w=Math.random();if(w<0.5)int=Math.random()<0.5?1:0}}
+const idx=Math.floor((dY-scY)/scH*nD)
+if(idx>=0&&idx<nD&&Math.random()<int*0.3+0.05){counts[idx]++;phot.push({x:scX+(Math.random()-0.5)*scW,y:dY,a:1});if(phot.length>maxP)phot.shift()}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.strokeStyle='#000';ctx.lineWidth=2
+ctx.beginPath();ctx.moveTo(50,sY);ctx.lineTo(260,sY);ctx.stroke();ctx.beginPath();ctx.moveTo(390,sY);ctx.lineTo(500,sY);ctx.stroke()
+ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(100,sY-30);ctx.lineTo(100,sY+30);ctx.stroke()
+ctx.setLineDash([3,3]);ctx.strokeStyle='#000';ctx.lineWidth=1
+ctx.beginPath();ctx.moveTo(300,sY-30);ctx.lineTo(300,sY+30);ctx.moveTo(350,sY-30);ctx.lineTo(350,sY+30);ctx.stroke();ctx.setLineDash([])
+ctx.lineWidth=2;ctx.strokeRect(scX-scW/2,scY,scW,scH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center'
+ctx.fillText('Slit 1',s1X-25,sY+15);ctx.fillText('Slit 2',s2X+25,sY+15);ctx.fillText('Screen',scX-20,scY+scH/2);ctx.fillText('Laser',80,sY-15)
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='left'
+ctx.fillText('Which-path: '+(wp?'YES':'NO'),530,30);ctx.fillText('Eraser: '+(eras?'ON':'OFF'),530,50)
+for(const p of phot){ctx.fillStyle=`rgba(0,0,0,${p.a})`;ctx.fillRect(p.x-1,p.y-1,2,2);p.a-=0.003}
+phot=phot.filter(p=>p.a>0)
+const gX=520,gY=80,gW=350,gH=390
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gX,gY,gW,gH)
+ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Detection Count',gX+gW/2,gY-4)
+const mC=Math.max(...counts,1),bW=gW/nD
+for(let i=0;i<nD;i++){const h=(counts[i]/mC)*gH
+ctx.fillStyle=counts[i]>0?'#000':'#eee';ctx.fillRect(gX+i*bW,gY+gH-h,bW+0.5,h)}
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('0',gX,gY+gH+10);ctx.fillText(nD,gX+gW,gY+gH+10)
+if(!wp&&!eras){ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('INTERFERENCE',gX+8,gY+14)}
+else if(wp){ctx.fillStyle='#999';ctx.font='8px monospace';ctx.fillText('WHICH-PATH → NO FRINGES',gX+8,gY+14)}
+else if(eras){ctx.fillStyle='#000';ctx.font='8px monospace';ctx.fillText('ERASER → FRINGES RESTORED',gX+8,gY+14)}
+let fringe=0,peak=0;for(let i=1;i<nD-1;i++){if(counts[i]>counts[i-1]&&counts[i]>counts[i+1]){fringe++;if(counts[i]>peak)peak=counts[i]}}
+const tot=counts.reduce((a,b)=>a+b,0),contrast=mC>0?((mC-Math.min(...counts.filter(x=>x>0))||0)/mC):0
+document.getElementById('st').innerHTML=
+`<span><span class="l">Photons =</span> <span class="v">${tot}</span></span>`+
+`<span><span class="l">Max bin =</span> <span class="v">${mC}</span></span>`+
+`<span><span class="l">Which-path =</span> <span class="v">${wp?'YES':'NO'}</span></span>`+
+`<span><span class="l">Eraser =</span> <span class="v">${eras?'ON':'OFF'}</span></span>`+
+`<span><span class="l">Fringes =</span> <span class="v">${fringe}</span></span>`+
+`<span><span class="l">Visibility =</span> <span class="v">${contrast.toFixed(2)}</span></span>`+
+`<span><span class="l">Pattern =</span> <span class="v">${wp?'broad':(eras?'interference':'interference')}</span></span>`+
+`<span><span class="l">Peak count =</span> <span class="v">${peak}</span></span>`+
+`<span><span class="l">Detectors =</span> <span class="v">${nD}</span></span>`+
+`<span><span class="l">λ =</span> <span class="v">15 px</span></span>`+
+`<span><span class="l">Slit sep =</span> <span class="v">50 px</span></span>`+
+`<span><span class="l">In flight =</span> <span class="v">${phot.length}</span></span>`
+}
+function anim(){ctx.clearRect(0,0,W,H);if(run&&!paused)for(let i=0;i<5*spd;i++)sim();drw();requestAnimationFrame(anim)}
+let paused=0
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="wpB">WP: ${wp?'ON':'OFF'}</button>`+
+`<button id="erasB">Eraser: ${eras?'ON':'OFF'}</button>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('wpB').onclick=function(){wp=!wp;this.textContent='WP: '+(wp?'ON':'OFF')}
+document.getElementById('erasB').onclick=function(){eras=!eras;this.textContent='Eraser: '+(eras?'ON':'OFF')}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=init
+}
+init();anim()
+</script></body></html>

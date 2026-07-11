@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Joule–Thomson · μ<sub>JT</sub> = (∂T/∂P)<sub>H</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+select{background:#fff;border:1px solid #000;padding:3px 6px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Joule–Thomson Effect</h1>
+<p>μ<sub>JT</sub> = (∂T/∂P)<sub>H</sub> — cooling via throttling through porous plug</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+
+let T = 300, P1 = 200, P2 = 50, gas = 'N2';
+let paused = 0, speed = 1, steps = 0;
+let hMu = [], hT = [], hSt = [];
+
+const GP = {
+  N2:  { a: 1.4, b: 0.039, cp: 29 },
+  CO2: { a: 3.6, b: 0.043, cp: 37 },
+  He:  { a: 0.034, b: 0.024, cp: 20.8 },
+  H2:  { a: 0.247, b: 0.027, cp: 28.8 }
+};
+
+function muJT(g, t) {
+  const G = GP[g];
+  return (2 * G.a / (8.314 * t) - G.b) / G.cp * 1000;
+}
+
+function Tinv(g) { return 2 * GP[g].a / (GP[g].b * 8.314); }
+
+function update() {
+  if (paused) return;
+  for (let s = 0; s < speed; s++) {
+    T += Math.sin(steps * 0.1) * 0.5;
+    if (T < 50) T = 50; if (T > 950) T = 950;
+    steps++;
+  }
+}
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+
+  const mu = muJT(gas, T), dT = mu * (P2 - P1);
+  const cool = dT < 0, Ti = Tinv(gas);
+
+  hMu.push(mu); hT.push(T); hSt.push(steps);
+  const mL = 200;
+  if (hMu.length > mL) { hMu.shift(); hT.shift(); hSt.shift(); }
+
+  // Throttling apparatus
+  x.strokeStyle = '#111'; x.lineWidth = 1.5;
+  x.fillRect(120, 230, 200, 30);  // left tube (high P)
+  x.fillRect(480, 230, 200, 30);  // right tube (low P)
+  x.fillStyle = '#111'; x.font = '8px monospace'; x.textAlign = 'center';
+  x.fillText(`P₁ = ${P1} bar`, 220, 218);
+  x.fillText(`P₂ = ${P2} bar`, 580, 218);
+
+  // Porous plug
+  x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(350, 225, 30, 40);
+  x.strokeStyle = '#111'; x.lineWidth = 1; x.strokeRect(350, 225, 30, 40);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText('plug', 365, 248);
+
+  // Temperature display
+  x.fillStyle = '#111'; x.font = '9px monospace'; x.textAlign = 'center';
+  x.fillText(`T₁ = ${T.toFixed(0)} K`, 220, 270);
+  x.fillText(`T₂ = ${(T + dT).toFixed(1)} K`, 580, 270);
+  x.fillStyle = cool ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)';
+  x.fillText(cool ? '▼ COOLING' : '▲ HEATING', 580, 288);
+
+  // μ_JT vs T graph
+  const gX = 80, gY = 310, gW = 740, gH = 140;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('μ_JT(T) — Joule–Thomson coefficient vs temperature', gX + 3, gY + 10);
+  x.strokeStyle = 'rgba(0,0,0,0.1)'; x.lineWidth = 0.5;
+  x.beginPath(); x.moveTo(gX, gY + gH / 2); x.lineTo(gX + gW, gY + gH / 2); x.stroke();
+  x.fillStyle = '#111'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText('T (K)', gX + gW / 2, gY + gH + 12);
+  x.save(); x.translate(gX - 14, gY + gH / 2); x.rotate(-Math.PI / 2); x.fillText('μ_JT', 0, 0); x.restore();
+
+  // μ curve
+  x.strokeStyle = '#111'; x.lineWidth = 1.2; x.beginPath();
+  let first = true;
+  for (let px = 0; px <= gW; px++) {
+    const t = 50 + (px / gW) * 900, mu2 = muJT(gas, t);
+    const py = gY + gH / 2 - mu2 * 5;
+    first ? x.moveTo(gX + px, py) : x.lineTo(gX + px, py); first = false;
+  }
+  x.stroke();
+
+  // Current operating point
+  const tpX = gX + ((T - 50) / 900) * gW, muC = muJT(gas, T), tpY = gY + gH / 2 - muC * 5;
+  x.strokeStyle = 'rgba(0,0,0,0.2)'; x.lineWidth = 0.5;
+  x.beginPath(); x.moveTo(tpX, gY + gH + 4); x.lineTo(tpX, tpY); x.lineTo(gX - 4, tpY); x.stroke();
+  x.fillStyle = '#111'; x.beginPath(); x.arc(tpX, tpY, 4, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#111'; x.font = '6px monospace'; x.textAlign = 'center'; x.fillText('OP', tpX, tpY - 8);
+
+  // Inversion temperature line
+  const invX = gX + ((Ti - 50) / 900) * gW;
+  x.fillStyle = 'rgba(0,0,0,0.08)'; x.lineWidth = 0.3; x.setLineDash([3, 3]);
+  x.beginPath(); x.moveTo(invX, gY); x.lineTo(invX, gY + gH); x.stroke(); x.setLineDash([]);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText(`T_inv = ${Ti.toFixed(0)} K`, invX, gY + gH - 2);
+
+  // μ(t) mini graph
+  const g2X = 460, g2Y = 36, g2W = 410, g2H = 75;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g2X, g2Y, g2W, g2H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('μ_JT(t) — recent history', g2X + 3, g2Y + 10);
+  if (hMu.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 0.8; x.beginPath();
+    for (let i = 0; i < hMu.length; i++) {
+      const px = g2X + (i / mL) * g2W, py = g2Y + g2H - ((hMu[i] + 2) / 4) * g2H;
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  // T(t) mini graph
+  const g3X = 460, g3Y = 118, g3W = 410, g3H = 50;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g3X, g3Y, g3W, g3H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('T(t)', g3X + 3, g3Y + 10);
+  if (hT.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 0.8; x.beginPath();
+    for (let i = 0; i < hT.length; i++) {
+      const px = g3X + (i / mL) * g3W, py = g3Y + g3H - (hT[i] / 1000) * g3H;
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  const G = GP[gas];
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="20" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>T (K)</label><input type="range" id="tS" min="50" max="950" step="10" value="${T}"><span class="val" id="tV">${T}</span></div>` +
+    `<div class="ctrl-group"><label>P₁</label><input type="range" id="p1S" min="50" max="500" step="10" value="${P1}"><span class="val" id="p1V">${P1}</span></div>` +
+    `<div class="ctrl-group"><label>P₂</label><input type="range" id="p2S" min="10" max="200" step="10" value="${P2}"><span class="val" id="p2V">${P2}</span></div>` +
+    `<div class="ctrl-group"><label>Gas</label><select id="gS"><option value="N2" ${gas === 'N2' ? 'selected' : ''}>N₂</option><option value="CO2" ${gas === 'CO2' ? 'selected' : ''}>CO₂</option><option value="He" ${gas === 'He' ? 'selected' : ''}>He</option><option value="H2" ${gas === 'H2' ? 'selected' : ''}>H₂</option></select></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button><button id="rB">Reset</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('tS').oninput = function () { T = +this.value; document.getElementById('tV').textContent = T; };
+  document.getElementById('p1S').oninput = function () { P1 = +this.value; document.getElementById('p1V').textContent = P1; };
+  document.getElementById('p2S').oninput = function () { P2 = +this.value; document.getElementById('p2V').textContent = P2; };
+  document.getElementById('gS').onchange = function () { gas = this.value; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = function () { T = 300; steps = 0; hMu = []; hT = []; hSt = []; paused = 0; document.getElementById('pB').textContent = 'Pause'; };
+
+  // Stats
+}
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">μ_JT =</span> <span class="val">${mu.toFixed(4)}</span> K/bar</span>` +
+    `<span><span class="label">ΔT =</span> <span class="val">${dT.toFixed(2)}</span> K</span>` +
+    `<span><span class="label">T_inv =</span> <span class="val">${Ti.toFixed(0)}</span> K</span>` +
+    `<span><span class="label">T =</span> <span class="val">${T.toFixed(0)}</span> K</span>` +
+    `<span><span class="label">P₁ =</span> <span class="val">${P1}</span> bar</span>` +
+    `<span><span class="label">P₂ =</span> <span class="val">${P2}</span> bar</span>` +
+    `<span><span class="label">ΔP =</span> <span class="val">${P1 - P2}</span> bar</span>` +
+    `<span><span class="label">Gas</span> <span class="val">${gas}</span></span>` +
+    `<span><span class="label">a (vdW) =</span> <span class="val">${G.a.toFixed(2)}</span></span>` +
+    `<span><span class="label">b (vdW) =</span> <span class="val">${G.b.toFixed(3)}</span></span>` +
+    `<span><span class="label">c_p =</span> <span class="val">${G.cp}</span> J/mol·K</span>` +
+    `<span><span class="label">Effect</span> <span class="val">${cool ? 'Cooling ↓' : 'Heating ↑'}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

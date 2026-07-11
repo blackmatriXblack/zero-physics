@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parallel Plate · E = V/d</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:6px;letter-spacing:.5px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:940px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:940px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.eq{font-size:0.72em;color:#444;margin-bottom:4px;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<h1>Parallel Plate Capacitor</h1>
+<p class="eq">E = V/d &nbsp;&nbsp; C = ε₀εᵣA/d &nbsp;&nbsp; Q = CV &nbsp;&nbsp; U = ½CV²</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=900,H=480;
+let V=12,d=100,A=0.01,er=1,playing=true,speed=1,time=0;
+let charges=[],qAccum=0; const qCap=[],uCap=[],eCap=[],tCap=[];
+let chargePool=[],paused=false;
+const eps0=8.85e-12,ne=200,eSpacing=6;
+
+function resetSim(){time=0;qAccum=0;charges=[];chargePool=[];qCap.length=0;uCap.length=0;eCap.length=0;tCap.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+
+function step(){
+  if(paused||!playing)return;
+  const dt=0.016*speed,C=eps0*er*A/(d/100),Qtar=C*V,R=1e6,tau=R*C;
+  qAccum+=(Qtar-qAccum)*dt/(tau);
+  const Ue=0.5*qAccum*qAccum/C;
+  qCap.push(qAccum*1e12);uCap.push(Ue*1e12);eCap.push(qAccum);tCap.push(time);
+  if(qCap.length>300){qCap.shift();uCap.shift();eCap.shift();tCap.shift();}
+  time+=dt;
+  const nShow=Math.round(qAccum/Qtar*ne);
+  while(charges.length<nShow&&chargePool.length>0)charges.push(chargePool.pop());
+  while(charges.length>nShow)chargePool.push(charges.pop());
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const cx=W/2,cy=H/2,pW=360,hH=d/2,C=eps0*er*A/(d/100),Qtar=C*V;
+  ctx.fillStyle='#111';ctx.fillRect(cx-pW/2,cy-hH-8,pW,8);
+  ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText(`+${V}V`,cx,cy-hH-16);
+  ctx.fillStyle='#111';ctx.fillRect(cx-pW/2,cy+hH,pW,8);
+  ctx.fillStyle='#fff';ctx.fillText('0V',cx,cy+hH+18);
+  const Ef=V/(d/100),nLines=14,ls=pW/(nLines+1);
+  for(let i=0;i<nLines;i++){
+    const lx=cx-pW/2+(i+1)*ls,fringe=i<2||i>nLines-3;
+    ctx.strokeStyle=`rgba(0,0,0,${0.15+0.5*Math.min(Ef/30,1)})`;ctx.lineWidth=0.8;
+    ctx.beginPath();
+    if(fringe){const off=(i<2?(1-i/2):(1-(nLines-1-i)/2))*25;
+      ctx.moveTo(lx,cy-hH);ctx.quadraticCurveTo(lx+off,cy,lx,cy+hH);
+    }else{ctx.moveTo(lx,cy-hH);ctx.lineTo(lx,cy+hH);}
+    ctx.stroke();
+    if(i%2===0){ctx.beginPath();ctx.moveTo(lx-2,cy-2);ctx.lineTo(lx,cy-6);ctx.lineTo(lx+2,cy-2);ctx.stroke();}
+  }
+  const nRows=Math.ceil(charges.length/13);
+  for(let i=0;i<charges.length;i++){
+    const col=i%13,row=Math.floor(i/13),px=cx-pW/2+(col+0.5)*(pW/13),py=cy+(row-(nRows-1)/2)*eSpacing;
+    ctx.fillStyle=i%2===0?'rgba(0,0,0,0.25)':'rgba(0,0,0,0.15)';
+    ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(i%2===0?'+':'−',px,py+2);
+  }
+  const Ue=0.5*qAccum*qAccum/C;
+  // Mini graph: charge buildup
+  const gx=20,gy=H-100,gw=160,gh=85;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Q(t) [pC]',gx+3,gy+9);
+  if(qCap.length>1){
+    ctx.beginPath();const qMax=Math.max(...qCap,1);
+    for(let i=0;i<qCap.length;i++){const x=gx+(i/(qCap.length-1))*gw,y=gy+gh-8-(qCap[i]/qMax)*(gh-16);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  // Mini graph: energy
+  const gx2=200,gy2=H-100,gw2=160,gh2=85;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('U(t) [pJ]',gx2+3,gy2+9);
+  if(uCap.length>1){
+    ctx.beginPath();const uMax=Math.max(...uCap,1);
+    for(let i=0;i<uCap.length;i++){const x=gx2+(i/(uCap.length-1))*gw2,y=gy2+gh2-8-(uCap[i]/uMax)*(gh2-16);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  // Field profile across center
+  const gx3=400,gy3=H-100,gw3=160,gh3=85;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.strokeRect(gx3,gy3,gw3,gh3);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('E(x) across gap',gx3+3,gy3+9);
+  ctx.beginPath();
+  for(let i=0;i<gw3;i+=2){
+    const frac=i/gw3,y=cy-hH+frac*2*hH,localE=(V/(d/100))*(1+0.3*Math.sin(frac*Math.PI)*Math.exp(-(frac-0.5)*(frac-0.5)*4));
+    const px=gx3+i,py=gy3+gh3-8-(localE/Math.max(Ef*1.3,1))*(gh3-16);
+    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();
+  // Legend
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';
+  ctx.fillText('τ = RC = '+(R*C*1e6).toFixed(1)+' µs',W-10,gy3+gh3+12);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>V</label><input type="range" id="vS" min="1" max="30" step="1" value="${V}"><span class="val" id="vV">${V}</span></div>`+
+    `<div class="ctrl-group"><label>d(mm)</label><input type="range" id="dS" min="20" max="200" step="5" value="${d}"><span class="val" id="dV">${d}</span></div>`+
+    `<div class="ctrl-group"><label>A(m²)</label><input type="range" id="aS" min="0.001" max="0.05" step="0.001" value="${A}"><span class="val" id="aV">${A.toFixed(3)}</span></div>`+
+    `<div class="ctrl-group"><label>εr</label><input type="range" id="eS" min="1" max="10" step="0.5" value="${er}"><span class="val" id="eV">${er.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>speed</label><input type="range" id="spS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('vS').addEventListener('input',function(){V=parseFloat(this.value);document.getElementById('vV').textContent=V;resetSim();});
+  document.getElementById('dS').addEventListener('input',function(){d=parseFloat(this.value);document.getElementById('dV').textContent=d;resetSim();});
+  document.getElementById('aS').addEventListener('input',function(){A=parseFloat(this.value);document.getElementById('aV').textContent=A.toFixed(3);resetSim();});
+  document.getElementById('eS').addEventListener('input',function(){er=parseFloat(this.value);document.getElementById('eV').textContent=er.toFixed(1);resetSim();});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseFloat(this.value);document.getElementById('spV').textContent=speed.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+  const Q=c*V,tarU=0.5*C*V*V,Ef2=V/(d/100),sigma=qAccum/A,D=sigma/eps0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">E =</span> <span class="val">${Ef2.toFixed(2)}</span> V/m</span>`+
+    `<span><span class="label">D =</span> <span class="val">${(D*1e9).toFixed(4)}</span> nC/m²</span>`+
+    `<span><span class="label">C =</span> <span class="val">${(C*1e12).toFixed(3)}</span> pF</span>`+
+    `<span><span class="label">Qₜₐᵣ =</span> <span class="val">${(Q*1e12).toFixed(3)}</span> pC</span>`+
+    `<span><span class="label">Q(t) =</span> <span class="val">${(qAccum*1e12).toFixed(3)}</span> pC</span>`+
+    `<span><span class="label">σ =</span> <span class="val">${(sigma*1e9).toFixed(4)}</span> nC/m²</span>`+
+    `<span><span class="label">Uₑ(t) =</span> <span class="val">${(Ue*1e12).toFixed(3)}</span> pJ</span>`+
+    `<span><span class="label">Uₘₐₓ =</span> <span class="val">${(tarU*1e12).toFixed(3)}</span> pJ</span>`+
+    `<span><span class="label">fill % =</span> <span class="val">${tarU>0?(Ue/tarU*100).toFixed(1):0}</span> %</span>`+
+    `<span><span class="label">RC τ =</span> <span class="val">${(R*C*1e6).toFixed(2)}</span> µs</span>`+
+    `<span><span class="label">V(d) =</span> <span class="val">${(V/(d/100)*V).toFixed(1)}</span> V²/m</span>`+
+    `<span><span class="label">t =</span> <span class="val">${(time*1e6).toFixed(1)}</span> µs</span>`+
+    `<span><span class="label">ε₀ =</span> <span class="val">${eps0.toExponential(2)}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

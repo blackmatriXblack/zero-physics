@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kepler Orbit · M = E − e sin E</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Kepler Orbit</h1>
+<p>M = E − e sin E — Kepler's laws of planetary motion</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const cx=260, cy=230;
+let a=2, e=0.7;
+const sc=Math.min(W,H)*0.17;
+let M=0;
+const dt=0.012;
+let paused=false, speed=1, showAreas=true, showVelocity=true;
+let time=0;
+
+const trail=[];
+const maxTrail=800;
+
+function solveKepler(M,e){
+  let E=M;
+  for(let i=0;i<30;i++){
+    const dE=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
+    E=E-dE;
+    if(Math.abs(dE)<1e-12)break;
+  }
+  return E;
+}
+
+function getPos(M,e,a){
+  const E=solveKepler(M,e);
+  const cosf=(Math.cos(E)-e)/(1-e*Math.cos(E));
+  const sinf=(Math.sqrt(1-e*e)*Math.sin(E))/(1-e*Math.cos(E));
+  const r=a*(1-e*Math.cos(E));
+  const x=r*cosf, y=r*sinf;
+  return{x,y,r,E,cosf,sinf};
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    M+=dt;
+    if(M>Math.PI*2){M-=Math.PI*2;}
+    const p=getPos(M,e,a);
+    trail.push({x:p.x,y:p.y});
+    if(trail.length>maxTrail)trail.shift();
+    time+=dt;
+  }
+}
+
+function resetSim(){
+  M=0;time=0;trail.length=0;
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+// Pre-run
+for(let i=0;i<200;i++){
+  M+=dt;
+  const p=getPos(M,e,a);
+  trail.push({x:p.x,y:p.y});
+}
+M=0;time=0;
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  const b=a*Math.sqrt(1-e*e);
+  const sx=cx, sy=cy;
+  const p=getPos(M,e,a);
+  const px=sx+p.x*sc, py=sy-p.y*sc;
+
+  // Orbit ellipse
+  ctx.beginPath();
+  for(let t=0;t<=Math.PI*2;t+=0.015){
+    const gx=sx-a*e*sc+a*Math.cos(t)*sc;
+    const gy=sy+b*Math.sin(t)*sc;
+    t===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+  }
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.6;ctx.stroke();
+
+  // Semi-major axis line
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([3,5]);
+  ctx.beginPath();ctx.moveTo(sx-a*e*sc-a*sc,sy);ctx.lineTo(sx-a*e*sc+a*sc,sy);ctx.stroke();ctx.setLineDash([]);
+
+  // Focus (Sun)
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(sx,sy,6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.font='9px monospace';
+  ctx.textAlign='left';ctx.fillText('Sun (focus)',sx+10,sy-8);
+
+  // Second focus
+  const sx2=sx+2*a*e*sc;
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.arc(sx2,sy,3,0,Math.PI*2);ctx.stroke();
+
+  // Trail
+  const tlen=trail.length;
+  if(tlen>2){
+    ctx.beginPath();
+    ctx.moveTo(sx+trail[0].x*sc,sy-trail[0].y*sc);
+    for(let i=1;i<tlen;i++){
+      ctx.lineTo(sx+trail[i].x*sc,sy-trail[i].y*sc);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=1.2;ctx.stroke();
+
+    // Fading tail
+    for(let i=Math.max(0,tlen-100);i<tlen;i+=2){
+      const frac=(i-(tlen-100))/100;
+      ctx.fillStyle=`rgba(0,0,0,${0.05*frac})`;
+      ctx.beginPath();ctx.arc(sx+trail[i].x*sc,sy-trail[i].y*sc,1+frac*2,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Planet
+  const grad=ctx.createRadialGradient(px-3,py-3,2,px,py,7);
+  grad.addColorStop(0,'#555');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+
+  // Velocity arrow
+  if(showVelocity){
+    const vScale=0.4;
+    const vth=Math.atan2(p.sinf*e,p.cosf+e)+(Math.PI/2);
+    const vspeed=Math.sqrt(2/p.r-1/a)*vScale;
+    const vx_=px+Math.cos(vth)*vspeed*25;
+    const vy_=py-Math.sin(vth)*vspeed*25;
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(vx_,vy_);ctx.stroke();
+    ctx.fillStyle='#111';
+    ctx.beginPath();ctx.moveTo(vx_,vy_);
+    ctx.lineTo(vx_-5*Math.cos(vth-0.4),vy_+5*Math.sin(vth-0.4));
+    ctx.lineTo(vx_-5*Math.cos(vth+0.4),vy_+5*Math.sin(vth+0.4));
+    ctx.closePath();ctx.fill();
+  }
+
+  // Radius vector
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([]);
+
+  // Equal area sectors
+  if(showAreas){
+    const dM=0.6;
+    for(let s_=0;s_<4;s_++){
+      const M0=s_*1.5+time*0.3;
+      const p0=getPos(M0,e,a);
+      const p1=getPos(M0+dM,e,a);
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.lineTo(sx+p0.x*sc,sy-p0.y*sc);
+      for(let m=M0;m<=M0+dM;m+=0.015){
+        const pm=getPos(m,e,a);
+        ctx.lineTo(sx+pm.x*sc,sy-pm.y*sc);
+      }
+      ctx.closePath();
+      ctx.fillStyle=`rgba(0,0,0,${0.03+0.02*Math.sin(s_*1.5+time*2)})`;
+      ctx.fill();
+    }
+  }
+
+  // Perihelion / Aphelion
+  const perix=sx+a*(1-e)*sc, aphx=sx-a*(1+e)*sc;
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('perihelion',perix,sy+20);
+  ctx.fillText('aphelion',aphx,sy+20);
+  ctx.fillStyle='rgba(0,0,0,0.1)';
+  ctx.beginPath();ctx.arc(perix,sy,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(aphx,sy,3,0,Math.PI*2);ctx.fill();
+
+  // Kepler's 3rd law box
+  const bx=580, by=30;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(bx,by,300,90);
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText('KEPLER\'S LAWS',bx+8,by+16);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='8px monospace';
+  ctx.fillText('1. Elliptical orbit with Sun at focus',bx+8,by+35);
+  ctx.fillText('2. Equal area in equal time (dA/dt = const)',bx+8,by+50);
+  ctx.fillText('3. T² ∝ a³',bx+8,by+65);
+  const T_orb=2*Math.PI*Math.sqrt(a*a*a/1);
+  ctx.fillText(`T = ${T_orb.toFixed(2)} (a=${a.toFixed(2)}, e=${e.toFixed(3)})`,bx+8,by+82);
+
+  // Eccentricity viz
+  const ex=580, ey=145;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ex,ey,300,70);
+  ctx.fillStyle='#111';ctx.font='8px monospace';
+  ctx.fillText('ORBITAL PARAMETERS',ex+8,ey+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`Semi-major a = ${a.toFixed(2)}`,ex+8,ey+30);
+  ctx.fillText(`Semi-minor b = ${b.toFixed(3)}`,ex+8,ey+42);
+  ctx.fillText(`Eccentricity e = ${e.toFixed(4)}`,ex+8,ey+54);
+  ctx.fillText(`r = ${p.r.toFixed(3)} (r_min=${(a*(1-e)).toFixed(3)}, r_max=${(a*(1+e)).toFixed(3)})`,ex+150,ey+30);
+  ctx.fillText(`f = ${(Math.atan2(p.sinf,p.cosf)).toFixed(3)} rad`,ex+150,ey+42);
+  ctx.fillText(`M = ${M.toFixed(3)} rad`,ex+150,ey+54);
+
+  // Energy display
+  const enx=580, ey2=240;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(enx,ey2,300,55);
+  const E_spec=-1/(2*a);
+  ctx.fillStyle='#111';ctx.font='8px monospace';
+  ctx.fillText('ENERGY & VELOCITY',enx+8,ey2+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  const v_=Math.sqrt(2/p.r-1/a);
+  ctx.fillText(`E/m = ${E_spec.toFixed(4)} (specific orbital)`,enx+8,ey2+30);
+  ctx.fillText(`v = ${v_.toFixed(4)} (v_esc=${Math.sqrt(2/p.r).toFixed(4)})`,enx+8,ey2+44);
+  ctx.fillText(`h = r²ḟ = ${(p.r*p.r*Math.sqrt(1/Math.max(p.r,0.001))).toFixed(4)} (specific ang. mom.)`,enx+150,ey2+30);
+  ctx.fillText(`v_peri = ${Math.sqrt(2/(a*(1-e))-1/a).toFixed(4)}`,enx+150,ey2+44);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>e</label><input type="range" id="eS" min="0" max="0.95" step="0.005" value="${e}"><span class="val" id="eV">${e.toFixed(3)}</span></div>`+
+    `<div class="ctrl-group"><label>a</label><input type="range" id="aS" min="0.5" max="4" step="0.05" value="${a}"><span class="val" id="aV">${a.toFixed(2)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('eS').addEventListener('input',function(){
+    e=parseFloat(this.value);
+    if(e<0)e=0;if(e>0.95)e=0.95;
+    document.getElementById('eV').textContent=e.toFixed(3);
+    trail.length=0;M=0;time=0;
+    for(let i=0;i<100;i++){M+=dt;const p_=getPos(M,e,a);trail.push({x:p_.x,y:p_.y});}
+    M=0;time=0;
+  });
+  document.getElementById('aS').addEventListener('input',function(){
+    a=parseFloat(this.value);
+    document.getElementById('aV').textContent=a.toFixed(2);
+    trail.length=0;M=0;time=0;
+    for(let i=0;i<100;i++){M+=dt;const p_=getPos(M,e,a);trail.push({x:p_.x,y:p_.y});}
+    M=0;time=0;
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+}
+
+}
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

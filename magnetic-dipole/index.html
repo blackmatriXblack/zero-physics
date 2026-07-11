@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magnetic Dipole · B = (μ₀/4π)[3(m·r̂)r̂−m]/r³</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:6px;letter-spacing:.5px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:940px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:940px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.eq{font-size:0.72em;color:#444;margin-bottom:4px;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<h1>Magnetic Dipole Field</h1>
+<p class="eq">B = (μ₀/4π)[3(m·r̂)r̂ − m]/r³ &nbsp;&nbsp; |B| ∝ 1/r³</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=900,H=520;
+const cx=350,cy=280; let str=1,mAngle=0,playing=true,speed=1,time=0,paused=false;
+let probeAngle=0,probeDist=150; const bHist=[],rHist=[],tHist=[],bxHist=[],byHist=[];
+const mu0=4*Math.PI*1e-7;
+
+function B(x,y){
+  const dx=x-cx,dy=y-cy,r2=dx*dx+dy*dy;
+  if(r2<400)return {x:0,y:0,mag:0};
+  const r=Math.sqrt(r2),r3=r2*r,ma=Math.cos(mAngle),mb=Math.sin(mAngle);
+  const mDotR=(ma*dx+mb*dy)/r;
+  return {x:(3*mDotR*dx/r-ma)/r3*str*1e-6,y:(3*mDotR*dy/r-mb)/r3*str*1e-6};
+}
+
+function trace(sx,sy){
+  const pts=[];let x=sx,y=sy;
+  for(let i=0;i<600;i++){
+    const f=B(x,y);if(f.mag<0.0001)break;
+    const st=3;x+=st*f.x/f.mag;y+=st*f.y/f.mag;
+    if(x<0||x>W||y<0||y>H)break;
+    if(i%3===0)pts.push({x,y});
+  }
+  return pts;
+}
+
+function resetSim(){time=0;bHist.length=0;rHist.length=0;tHist.length=0;bxHist.length=0;byHist.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+
+function step(){
+  if(paused||!playing)return;
+  const dt=0.02*speed;time+=dt;
+  probeAngle+=dt*0.3;
+  const px=cx+probeDist*Math.cos(probeAngle*0.7),py=cy+probeDist*Math.sin(probeAngle*0.5);
+  const f=B(px,py);
+  bxHist.push(f.x*1e6);byHist.push(f.y*1e6);
+  bHist.push(f.mag*1e6);rHist.push(probeDist);tHist.push(time);
+  if(bHist.length>300){bHist.shift();rHist.shift();tHist.shift();bxHist.shift();byHist.shift();}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  // Magnet
+  const mW=80,mH=32,ma=Math.cos(mAngle),mb=Math.sin(mAngle);
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(mAngle);
+  ctx.fillStyle='#fff';ctx.fillRect(-mW/2,-mH/2,mW/2,mH);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.strokeRect(-mW/2,-mH/2,mW/2,mH);
+  ctx.fillStyle='#111';ctx.fillRect(0,-mH/2,mW/2,mH);
+  ctx.strokeRect(0,-mH/2,mW/2,mH);
+  ctx.fillStyle='#111';ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('N',-mW/4,0);ctx.fillStyle='#fff';ctx.fillText('S',mW/4,0);
+  ctx.restore();
+  // Field lines
+  for(let i=0;i<28;i++){
+    const ang=-Math.PI*0.85+Math.PI*1.7*(i/27),r=20;
+    const sx=cx+r*Math.cos(ang+mAngle),sy=cy+r*Math.sin(ang+mAngle);
+    const pts=trace(sx,sy);
+    if(pts.length<3)continue;
+    ctx.beginPath();
+    for(let j=0;j<pts.length;j++){j===0?ctx.moveTo(pts[j].x,pts[j].y):ctx.lineTo(pts[j].x,pts[j].y);}
+    ctx.strokeStyle=`rgba(0,0,0,${0.06+0.06*i/28})`;ctx.lineWidth=0.4+i/28*0.5;ctx.stroke();
+    if(pts.length>8&&i%3===0){
+      const mid=Math.floor(pts.length/2),mid2=Math.min(mid+1,pts.length-1);
+      const a2=Math.atan2(pts[mid2].y-pts[mid].y,pts[mid2].x-pts[mid].x);
+      ctx.save();ctx.translate(pts[mid].x,pts[mid].y);ctx.rotate(a2);
+      ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(2,-2);ctx.lineTo(2,2);ctx.fill();ctx.restore();
+    }
+  }
+  // Probe dot
+  const px=cx+probeDist*Math.cos(probeAngle*0.7),py=cy+probeDist*Math.sin(probeAngle*0.5);
+  const f=B(px,py);
+  ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);
+  ctx.fillStyle='#111';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('probe',px+6,py+3);
+  // B vector at probe
+  if(f.mag>0.001){
+    const s=Math.min(40,f.mag*8);
+    ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+s*f.x/f.mag,py+s*f.y/f.mag);ctx.stroke();
+    ctx.fillStyle='#111';ctx.font='6px monospace';ctx.fillText('B',px+s*f.x/f.mag+3,py+s*f.y/f.mag);
+  }
+  // Mini: B vs r
+  const gx=W-190,gy=20,gw=170,gh=100;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('|B|(t) [µT]',gx+3,gy+9);
+  if(bHist.length>1){
+    ctx.beginPath();const bMax=Math.max(...bHist,0.001);
+    for(let i=0;i<bHist.length;i++){const x=gx+(i/(bHist.length-1))*gw,y=gy+gh-8-(bHist[i]/bMax)*(gh-16);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  // Mini: Bx, By components
+  const gx2=W-190,gy2=130,gw2=170,gh2=80;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('Bx, By',gx2+3,gy2+9);
+  if(bxHist.length>1){
+    const bCMax=Math.max(...bxHist.map(Math.abs),...byHist.map(Math.abs),0.001);
+    ctx.beginPath();
+    for(let i=0;i<bxHist.length;i++){const x=gx2+(i/(bxHist.length-1))*gw2,y=gy2+gh2/2-(bxHist[i]/bCMax)*(gh2/2-6);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<byHist.length;i++){const x=gx2+(i/(byHist.length-1))*gw2,y=gy2+gh2/2-(byHist[i]/bCMax)*(gh2/2-6);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.7;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>Strength</label><input type="range" id="strS" min="0.2" max="5" step="0.1" value="${str}"><span class="val" id="strV">${str.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Angle°</label><input type="range" id="angS" min="0" max="360" step="5" value="${mAngle*180/Math.PI}"><span class="val" id="angV">${(mAngle*180/Math.PI).toFixed(0)}</span></div>`+
+    `<div class="ctrl-group"><label>probe r</label><input type="range" id="prS" min="50" max="300" step="5" value="${probeDist}"><span class="val" id="prV">${probeDist}</span></div>`+
+    `<div class="ctrl-group"><label>speed</label><input type="range" id="spS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('strS').addEventListener('input',function(){str=parseFloat(this.value);document.getElementById('strV').textContent=str.toFixed(1);});
+  document.getElementById('angS').addEventListener('input',function(){mAngle=parseFloat(this.value)*Math.PI/180;document.getElementById('angV').textContent=this.value;});
+  document.getElementById('prS').addEventListener('input',function(){probeDist=parseFloat(this.value);document.getElementById('prV').textContent=probeDist;});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseFloat(this.value);document.getElementById('spV').textContent=speed.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+  const bMag=Math.hypot(f.x,f.y),bTheta=Math.atan2(f.y,f.x);
+  const f2=B(cx+100,cy+50),b2=Math.hypot(f2.x,f2.y);
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">|B| =</span> <span class="val">${(bMag*1e6).toFixed(4)}</span> µT</span>`+
+    `<span><span class="label">Bx =</span> <span class="val">${(f.x*1e6).toFixed(4)}</span> µT</span>`+
+    `<span><span class="label">By =</span> <span class="val">${(f.y*1e6).toFixed(4)}</span> µT</span>`+
+    `<span><span class="label">θ =</span> <span class="val">${(bTheta*180/Math.PI).toFixed(1)}</span>°</span>`+
+    `<span><span class="label">r =</span> <span class="val">${probeDist}</span> px</span>`+
+    `<span><span class="label">m angle</span> <span class="val">${(mAngle*180/Math.PI).toFixed(1)}°</span></span>`+
+    `<span><span class="label">|B|@(100,50) =</span> <span class="val">${(b2*1e6).toFixed(4)}</span> µT</span>`+
+    `<span><span class="label">μ₀/4π =</span> <span class="val">${(mu0/(4*Math.PI)).toExponential(3)}</span></span>`+
+    `<span><span class="label">dipole m</span> <span class="val">${str.toFixed(2)}</span> A·m²</span>`+
+    `<span><span class="label">|B|∝1/r³</span> <span class="val">yes</span></span>`+
+    `<span><span class="label">lines</span> <span class="val">28</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

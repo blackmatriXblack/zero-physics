@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heat Conduction · ∂T/∂t = α ∇²T</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Heat Conduction</h1>
+<p>∂T/∂t = α ∇²T — 1D rod with fixed temperature boundaries</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+const N = 100;
+
+let T = new Float64Array(N);
+let Tn = new Float64Array(N);
+let alpha = 0.2, paused = 0, speed = 1;
+let TH = 100, TC = 0, steps = 0;
+let hT25 = [], hT50 = [], hT75 = [], hS = [];
+
+function init() {
+  for (let i = 0; i < N; i++) T[i] = TC + (TH - TC) * (i / N);
+  T[0] = TH; T[N - 1] = TC;
+  steps = 0; hT25 = []; hT50 = []; hT75 = []; hS = [];
+}
+init();
+
+function update() {
+  if (paused) return;
+  for (let s = 0; s < speed; s++) {
+    for (let i = 1; i < N - 1; i++) {
+      Tn[i] = T[i] + alpha * (T[i - 1] - 2 * T[i] + T[i + 1]);
+    }
+    Tn[0] = TH; Tn[N - 1] = TC;
+    let tmp = T; T = Tn; Tn = tmp;
+    steps++;
+  }
+}
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+
+  const gX = 80, gY = 50, gW = 700, gH = 200;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('T(x,t) — 1D temperature profile along rod', gX + 3, gY + 10);
+
+  // Hot/cold reservoir markers
+  x.fillStyle = 'rgba(0,0,0,0.02)'; x.fillRect(gX - 25, gY, 18, gH);
+  x.fillRect(gX + gW + 7, gY, 18, gH);
+  x.fillStyle = '#111'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText(`${TH}°C`, gX - 16, gY - 4);
+  x.fillText(`${TC}°C`, gX + gW + 16, gY - 4);
+
+  // Temperature profile
+  x.strokeStyle = '#111'; x.lineWidth = 1.5; x.beginPath();
+  for (let i = 0; i < N; i++) {
+    const px = gX + (i / N) * gW, py = gY + gH - (T[i] / TH) * (gH - 20);
+    i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+  }
+  x.stroke();
+
+  // Steady state reference (dashed)
+  x.strokeStyle = 'rgba(0,0,0,0.06)'; x.lineWidth = 0.3; x.setLineDash([3, 3]); x.beginPath();
+  for (let i = 0; i < N; i++) {
+    const ss = TH - (TH - TC) * i / N;
+    const px = gX + (i / N) * gW, py = gY + gH - (ss / TH) * (gH - 20);
+    i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+  }
+  x.stroke(); x.setLineDash([]);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'right';
+  x.fillText('steady state', gX + gW - 10, gY + 20);
+
+  // Heat flux arrows
+  x.strokeStyle = 'rgba(0,0,0,0.04)'; x.lineWidth = 0.3;
+  for (let i = 5; i < N - 5; i += 10) {
+    const flux = -(T[i + 1] - T[i - 1]) / 2;
+    const len = Math.min(20, Math.abs(flux) * 0.3);
+    const px = gX + (i / N) * gW;
+    x.beginPath(); x.moveTo(px, gY + gH + 6); x.lineTo(px + len, gY + gH + 6); x.stroke();
+    if (Math.abs(flux) > 0.3) {
+      x.fillStyle = 'rgba(0,0,0,0.05)'; x.beginPath();
+      x.moveTo(px + len, gY + gH + 6); x.lineTo(px + len - 3, gY + gH + 3);
+      x.lineTo(px + len - 3, gY + gH + 9); x.fill();
+    }
+  }
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText('heat flux →', gX + 100, gY + gH + 18);
+
+  // T at x = L/4, L/2, 3L/4 history
+  hT25.push(T[25]); hT50.push(T[50]); hT75.push(T[75]); hS.push(steps);
+  const mL = 200;
+  if (hT25.length > mL) { hT25.shift(); hT50.shift(); hT75.shift(); hS.shift(); }
+
+  const g2X = 80, g2Y = 270, g2W = 700, g2H = 90;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g2X, g2Y, g2W, g2H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('T(t) at x = L/4, L/2, 3L/4', g2X + 3, g2Y + 10);
+  if (hT25.length > 1) {
+    const datasets = [hT25, hT50, hT75];
+    const colors = ['#999', '#111', '#bbb'];
+    for (let k = 0; k < 3; k++) {
+      x.strokeStyle = colors[k]; x.lineWidth = 0.8; x.beginPath();
+      for (let i = 0; i < datasets[k].length; i++) {
+        const px = g2X + (i / mL) * g2W, py = g2Y + g2H - (datasets[k][i] / TH) * (g2H - 10);
+        i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+      }
+      x.stroke();
+    }
+  }
+  // Legend
+  x.fillStyle = 'rgba(0,0,0,0.02)'; x.fillRect(g2X + g2W - 60, g2Y + 5, 55, 40);
+  x.fillStyle = '#666'; x.font = '5px monospace'; x.textAlign = 'left';
+  x.fillText('— x=L/4', g2X + g2W - 55, g2Y + 15);
+  x.fillText('— x=L/2', g2X + g2W - 55, g2Y + 25);
+  x.fillText('— x=3L/4', g2X + g2W - 55, g2Y + 35);
+
+  // Derived quantities
+  let energy = 0; for (let i = 0; i < N; i++) energy += T[i];
+  const fluxCenter = -alpha * (T[51] - T[49]) / 2;
+  const gradient = (TH - TC) / N;
+  const laplacian = T[51] - 2 * T[50] + T[49];
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="10" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>α</label><input type="range" id="aS" min=".01" max=".49" step=".01" value="${alpha}"><span class="val" id="aV">${alpha.toFixed(2)}</span></div>` +
+    `<div class="ctrl-group"><label>T_H</label><input type="range" id="hS" min="10" max="300" step="5" value="${TH}"><span class="val" id="hV">${TH}</span></div>` +
+    `<div class="ctrl-group"><label>T_C</label><input type="range" id="cS" min="0" max="100" step="5" value="${TC}"><span class="val" id="cV">${TC}</span></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button><button id="rB">Reset</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('aS').oninput = function () { alpha = +this.value; document.getElementById('aV').textContent = alpha.toFixed(2); };
+  document.getElementById('hS').oninput = function () { TH = +this.value; T[0] = TH; document.getElementById('hV').textContent = TH; };
+  document.getElementById('cS').oninput = function () { TC = +this.value; T[N - 1] = TC; document.getElementById('cV').textContent = TC; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = init;
+
+  // Stats
+}
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">α =</span> <span class="val">${alpha.toFixed(2)}</span></span>` +
+    `<span><span class="label">T_H =</span> <span class="val">${TH}</span>°C</span>` +
+    `<span><span class="label">T_C =</span> <span class="val">${TC}</span>°C</span>` +
+    `<span><span class="label">Energy =</span> <span class="val">${energy.toFixed(1)}</span></span>` +
+    `<span><span class="label">Flux =</span> <span class="val">${fluxCenter.toFixed(3)}</span></span>` +
+    `<span><span class="label">dT/dx ≈</span> <span class="val">${gradient.toFixed(3)}</span></span>` +
+    `<span><span class="label">T(L/4) =</span> <span class="val">${T[25].toFixed(1)}</span>°C</span>` +
+    `<span><span class="label">T(L/2) =</span> <span class="val">${T[50].toFixed(1)}</span>°C</span>` +
+    `<span><span class="label">T(3L/4) =</span> <span class="val">${T[75].toFixed(1)}</span>°C</span>` +
+    `<span><span class="label">Steps =</span> <span class="val">${steps}</span></span>` +
+    `<span><span class="label">τ~L²/α</span> <span class="val">${(N * N / alpha / 1e3).toFixed(1)}s</span></span>` +
+    `<span><span class="label">∇²T ≈</span> <span class="val">${laplacian.toFixed(3)}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

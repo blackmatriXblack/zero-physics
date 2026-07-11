@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photoelectric Effect · E<sub>k</sub> = hf − φ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.2em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;margin:5px 0;max-width:940px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:60px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:0.6em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0;font-size:0.6em;color:#666;max-width:940px;justify-content:center}
+.s sp{white-space:nowrap}
+.s .l{color:#999}
+.s .vl{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Photoelectric Effect</h1>
+<p>E<sub>k</sub> = hf − φ — Photon energy → electron kinetic energy</p>
+<canvas id="c" width="940" height="480"></canvas>
+<div class="c" id="ctrl"></div><div class="s" id="st"></div>
+<script>
+const C=document.getElementById('c'),x=C.getContext('2d'),W=940,H=480;
+const h=4.135667e-15; // eV·s
+let f=1.5e15,phi=2.0,intensity=50,paused=0,speed=1;
+const HL=100;
+let hs={Ek:[],current:[],photons:[]};
+// Photon and electron visual particles
+let photons=[],electrons=[];
+for(let i=0;i<30;i++)photons.push({x:Math.random()*80,y:60+Math.random()*180,phase:Math.random()*6.28});
+function reset(){f=1.5e15;phi=2.0;intensity=50;paused=0;speed=1;
+for(let k in hs)hs[k]=[];electrons=[];for(let p of photons){p.x=Math.random()*80;p.y=60+Math.random()*180;p.phase=Math.random()*6.28;}}
+function step(){if(paused)return;const photonE=h*f;const Ek=Math.max(0,photonE-phi);
+const f0=phi/h;const emit=Ek>0?1:0;
+for(let _=0;_<speed;_++){
+  // Animate photons
+  for(let p of photons){p.x+=0.8;p.phase+=0.15;if(p.x>180){p.x=Math.random()*30;p.y=60+Math.random()*180;}}
+  // Generate emitted electrons
+  if(emit&&Math.random()<intensity/200){electrons.push({x:190,y:200-Math.random()*100,vx:2+Math.random()*2,vy:-1+Math.random()*2,life:1});}
+  for(let e of electrons){e.x+=e.vx;e.y+=e.vy;e.life-=0.01;}
+  electrons=electrons.filter(e=>e.life>0&&e.x<450);
+}
+const photonE_=h*f;const Ek_=Math.max(0,photonE_-phi);
+hs.Ek.push(Ek_);hs.current.push(electrons.length);hs.photons.push(photons.length);
+for(let k in hs)if(hs[k].length>HL)hs[k].shift();}
+function draw(){
+x.fillStyle='#fff';x.fillRect(0,0,W,H);
+const photonE=h*f;const Ek=Math.max(0,photonE-phi);const f0=phi/h;const lambda=3e8/f*1e9;
+// Metal surface
+const mx=200,my=250;
+x.fillStyle='rgba(0,0,0,0.02)';x.fillRect(mx-30,my-120,60,240);
+x.strokeStyle='#111';x.lineWidth=1.5;x.beginPath();x.moveTo(mx-30,my-120);x.lineTo(mx+30,my-120);x.stroke();
+x.fillStyle='#111';x.font='7px monospace';x.textAlign='center';x.fillText('metal cathode',mx,my-134);
+x.fillText('φ='+phi.toFixed(2)+' eV',mx,my+128);
+// Incident photons (animated)
+let photonCount=0;
+for(let p of photons){const px=mx-170+p.x,py=p.y;if(px<mx-30&&px>mx-200){
+x.strokeStyle='rgba(0,0,0,0.3)';x.lineWidth=.5;
+x.beginPath();x.moveTo(px,py);x.lineTo(px+6,py-2+Math.sin(p.phase)*2);x.stroke();
+photonCount++;}}
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';x.fillText('hf = '+photonE.toFixed(2)+' eV',mx-100,my-140);
+x.fillText('I = '+(intensity/100).toFixed(2)+' (rel.)',mx-100,my-128);
+// Ejected electrons
+for(let e of electrons){const ex=Math.min(e.x,400),ey=e.y;x.fillStyle='rgba(0,0,0,'+(0.08*e.life)+')';
+x.beginPath();x.arc(ex,ey,3,0,Math.PI*2);x.fill();}
+if(Ek>0){x.strokeStyle='rgba(0,0,0,0.2)';x.lineWidth=.8;x.setLineDash([4,3]);
+x.beginPath();x.moveTo(mx+30,my-50);x.lineTo(mx+160,my-90+Math.sin(Date.now()*0.01)*5);x.stroke();x.setLineDash([]);
+x.fillStyle='rgba(0,0,0,0.3)';x.font='6px monospace';x.textAlign='center';
+x.fillText('e⁻ Ek = '+Ek.toFixed(2)+' eV',mx+95,my-100);}
+// Graph: Ek vs f
+const gX=350,gY=30,gW=540,gH=180;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(gX,gY,gW,gH);
+x.fillStyle='#999';x.font='7px monospace';x.textAlign='left';x.fillText('E_k = hf − φ',gX+3,gY+8);
+x.textAlign='center';x.fillText('f (Hz)',gX+gW/2,gY+gH+12);
+x.save();x.translate(gX-14,gY+gH/2);x.rotate(-Math.PI/2);x.fillText('E_k (eV)',0,0);x.restore();
+// Threshold
+const f0Px=gX+40+(f0-0.2e15)/(3.5e15-0.2e15)*(gW-40);
+x.strokeStyle='rgba(0,0,0,0.08)';x.lineWidth=.5;x.setLineDash([3,3]);
+x.beginPath();x.moveTo(f0Px,gY);x.lineTo(f0Px,gY+gH-16);x.stroke();x.setLineDash([]);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='center';x.fillText('f₀='+(f0/1e15).toFixed(2)+'e15',f0Px,gY+gH-3);
+// Line
+x.strokeStyle='#111';x.lineWidth=1.2;x.beginPath();let fi=true;
+for(let x0=0;x0<=gW-40;x0++){const ff=0.2e15+x0/(gW-40)*3.3e15;const ek=Math.max(0,h*ff-phi);
+const px=gX+40+x0,py=gY+gH-16-ek/6*(gH-20);fi?x.moveTo(px,py):x.lineTo(px,py);fi=false;}
+x.stroke();
+// Operating point
+if(Ek>0){const opPx=gX+40+(f-0.2e15)/3.3e15*(gW-40);const opPy=gY+gH-16-Ek/6*(gH-20);
+x.fillStyle='#111';x.beginPath();x.arc(opPx,opPy,4,0,Math.PI*2);x.fill();
+x.strokeStyle='rgba(0,0,0,0.08)';x.lineWidth=.3;x.setLineDash([2,2]);x.beginPath();x.moveTo(opPx,opPy);x.lineTo(opPx,gY+gH-16);x.stroke();x.setLineDash([]);}
+// History mini graph
+const mgX=350,mgY=230,mgW=540,mgH=70;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(mgX,mgY,mgW,mgH);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';x.fillText('Kinetic energy history',mgX+3,mgY+8);
+const arr=hs.Ek;if(arr.length>1){x.strokeStyle='rgba(0,0,0,0.25)';x.lineWidth=.7;x.beginPath();let fi2=true;
+const mn=0,mx2=Math.max(...arr,1),rg=mx2-mn||1;
+for(let i=0;i<arr.length;i++){const px=mgX+i*mgW/HL,py=mgY+mgH-3-(arr[i]-mn)/rg*(mgH-6);fi2?x.moveTo(px,py):x.lineTo(px,py);fi2=false;}
+x.stroke();}
+// Data table
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';
+x.fillText('Photon: hf='+photonE.toFixed(3)+'eV  λ='+lambda.toFixed(1)+'nm',500,325);
+x.fillText('Electron: Ek='+Ek.toFixed(3)+'eV  V_stop='+Ek.toFixed(3)+'V',500,340);
+x.fillText('Threshold: f₀='+(f0/1e15).toFixed(3)+'×10¹⁵Hz',500,355);
+x.fillText('h='+h.toExponential(3)+' eV·s  φ='+phi.toFixed(1)+' eV',500,370);
+// Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="cg"><label>f (×10¹⁵Hz)</label><input type="range" id="fS" min="0.2" max="3.5" step="0.05" value="${f/1e15}"><span class="v" id="fV">${(f/1e15).toFixed(2)}</span></div>`+
+`<div class="cg"><label>φ (eV)</label><input type="range" id="pS" min="0.5" max="5" step="0.1" value="${phi}"><span class="v" id="pV">${phi.toFixed(1)}</span></div>`+
+`<div class="cg"><label>I (%)</label><input type="range" id="iS" min="0" max="200" step="5" value="${intensity}"><span class="v" id="iV">${intensity}</span></div>`+
+`<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="v" id="spV">${speed}</span></div>`+
+`<button id="ppBtn">⏸</button><button id="rsBtn">↺</button>`;
+document.getElementById('fS').oninput=function(){f=+this.value*1e15;document.getElementById('fV').textContent=(f/1e15).toFixed(2);};
+document.getElementById('pS').oninput=function(){phi=+this.value;document.getElementById('pV').textContent=phi.toFixed(1);};
+document.getElementById('iS').oninput=function(){intensity=+this.value;document.getElementById('iV').textContent=intensity;};
+document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+document.getElementById('ppBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶':'⏸';};
+document.getElementById('rsBtn').onclick=reset;
+}
+const photocurr=electrons.length;const qe=Ek>0?intensity/200*100:0;
+document.getElementById('st').innerHTML=
+`<sp><span class="l">f =</span> <span class="vl">${(f/1e15).toFixed(2)}×10¹⁵</span> Hz</sp>`+
+`<sp><span class="l">λ =</span> <span class="vl">${lambda.toFixed(1)}</span> nm</sp>`+
+`<sp><span class="l">hf =</span> <span class="vl">${photonE.toFixed(3)}</span> eV</sp>`+
+`<sp><span class="l">φ =</span> <span class="vl">${phi.toFixed(1)}</span> eV</sp>`+
+`<sp><span class="l">E_k =</span> <span class="vl">${Ek.toFixed(3)}</span> eV</sp>`+
+`<sp><span class="l">f₀ =</span> <span class="vl">${(f0/1e15).toFixed(3)}×10¹⁵</span> Hz</sp>`+
+`<sp><span class="l">V_stop =</span> <span class="vl">${Ek.toFixed(3)}</span> V</sp>`+
+`<sp><span class="l">Photo-current</span> <span class="vl">${photocurr}</span> e⁻</sp>`+
+`<sp><span class="l">Intensity</span> <span class="vl">${(intensity/100).toFixed(2)}</span> a.u.</sp>`+
+`<sp><span class="l">Q. efficiency</span> <span class="vl">${qe.toFixed(1)}%</span></sp>`+
+`<sp><span class="l">hf − φ =</span> <span class="vl">${(photonE-phi).toFixed(3)}</span> eV</sp>`+
+`<sp><span class="l">h (slope) =</span> <span class="vl">${h.toExponential(3)}</span> eV·s</sp>`+
+`<sp><span class="l">State</span> <span class="vl">${paused?'Paused':'Active'}</span></sp>`;
+}
+reset();
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

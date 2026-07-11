@@ -1,0 +1,96 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Quantum Double Slit</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Quantum Double Slit</h1>
+<p>I(θ) = I₀·cos²(πd·sinθ/λ) · sinc²(πa·sinθ/λ)</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=500;
+const slitX=200,slit1Y=180,slit2Y=320,slitW=20,screenX=580,wallW=4
+let lambda=20,d=slit2Y-slit1Y,paused=0,spd=1,particles=[],hits=[],firing=1,total=0
+let hx=[],hy=[],ht=0
+function I(y){const r1=Math.hypot(screenX-slitX,y-slit1Y-slitW/2),r2=Math.hypot(screenX-slitX,y-slit2Y-slitW/2)
+const pd=r2-r1,ph=2*Math.PI*pd/lambda,amp=2*Math.cos(ph/2);return amp*amp}
+function sampleY(){const yM=50,yX=450;let mp=0;const ps=[]
+for(let y=yM;y<=yX;y+=1){const p=I(y);ps.push(p);if(p>mp)mp=p}
+if(mp===0)return 250;let r=Math.random(),cum=0
+for(let i=0;i<ps.length;i++){cum+=ps[i]/mp;if(r<cum/ps.length)return yM+i}return 250}
+function mkP(){return{x:30,y:250+(Math.random()-0.5)*30,sp:2+0.5*(spd-1),al:1}}
+function upd(){if(!firing||paused)return
+if(Math.random()<0.4*spd&&particles.length<2000)particles.push(mkP())
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.sp
+if(p.x>slitX-wallW/2&&p.x<slitX+wallW/2){if(p.y<slit1Y||(p.y>slit1Y+slitW&&p.y<slit2Y)||p.y>slit2Y+slitW)p.al=0}
+if(p.x>screenX&&p.al){hits.push(screenX,sampleY());total++;p.al=0}
+if(!p.al||p.x>W)particles.splice(i,1)}
+ht+=0.5*spd;if(!paused&&ht<500){hx.push(ht);hy.push(hits.length);if(hx.length>200){hx.shift();hy.shift()}}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.fillStyle='#000';ctx.fillRect(slitX-wallW/2,50,wallW,slit1Y-50)
+ctx.fillRect(slitX-wallW/2,slit1Y+slitW,wallW,slit2Y-slit1Y-slitW)
+ctx.fillRect(slitX-wallW/2,slit2Y+slitW,wallW,450-slit2Y-slitW)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(screenX,50);ctx.lineTo(screenX,450);ctx.stroke()
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('Source',30,485);ctx.fillText('Double Slit',slitX,485);ctx.fillText('Screen',screenX,485)
+for(let i=0;i<hits.length;i+=2){ctx.fillStyle='#000';ctx.fillRect(hits[i]-1,hits[i+1]-1,2,2)}
+for(const p of particles){ctx.fillStyle='#888';ctx.beginPath();ctx.arc(p.x,p.y,2,0,Math.PI*2);ctx.fill()}
+ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='left';ctx.fillText('Particles: '+particles.length+' | Hits: '+total,20,30)
+if(total>5){const bins=40,bA=new Array(bins).fill(0),yM=50,yX=450
+for(let i=0;i<hits.length;i+=2){const idx=Math.floor((hits[i+1]-yM)/(yX-yM)*bins);if(idx>=0&&idx<bins)bA[idx]++}
+const mB=Math.max(...bA)||1,bW=(W-40)/bins
+ctx.fillStyle='rgba(0,0,0,0.15)'
+for(let i=0;i<bins;i++){const bH=(bA[i]/mB)*120;ctx.fillRect(20+i*bW,H-30-bH,Math.max(bW-1,1),bH)}}
+if(hx.length>1){const mgX=620,mgY=420,mgW=250,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Hits∝t',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/500)*mgW,yy=mgY+mgH-(hy[i]/Math.max(...hy,1))*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const bins=40,bA=new Array(bins).fill(0),yM=50,yX=450
+for(let i=0;i<hits.length;i+=2){const idx=Math.floor((hits[i+1]-yM)/(yX-yM)*bins);if(idx>=0&&idx<bins)bA[idx]++}
+const mB=Math.max(...bA)||1,maxI=I(0)
+let fringe=0,contrast=0
+for(let y=yM;y<=yX;y+=1){const ii=I(y);fringe+=ii;if(ii>contrast)contrast=ii}
+contrast=contrast/(maxI||1)
+document.getElementById('st').innerHTML=
+`<span><span class="l">λ =</span> <span class="v">${lambda.toFixed(0)}</span> px</span>`+
+`<span><span class="l">d =</span> <span class="v">${d}</span> px</span>`+
+`<span><span class="l">Hits =</span> <span class="v">${total}</span></span>`+
+`<span><span class="l">In flight =</span> <span class="v">${particles.length}</span></span>`+
+`<span><span class="l">Fringe spacing =</span> <span class="v">${(lambda*screenX/d).toFixed(1)}</span> px</span>`+
+`<span><span class="l">Max I / I₀ =</span> <span class="v">${maxI.toFixed(2)}</span></span>`+
+`<span><span class="l">Visibility =</span> <span class="v">${((maxI-0)/(maxI+0.001)).toFixed(2)}</span></span>`+
+`<span><span class="l">Path diff =</span> <span class="v">${(d*Math.sin(0.1)).toFixed(2)}</span></span>`+
+`<span><span class="l">k·d =</span> <span class="v">${(2*Math.PI*d/lambda).toFixed(2)}</span></span>`+
+`<span><span class="l">d/λ =</span> <span class="v">${(d/lambda).toFixed(2)}</span></span>`+
+`<span><span class="l">Bin max =</span> <span class="v">${mB}</span></span>`+
+`<span><span class="l">Fill frac =</span> <span class="v">${(total/20000*100).toFixed(1)}%</span></span>`
+}
+function anim(){upd();drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>λ</label><input type="range" id="lS" min="5" max="60" step="1" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="fireB">${firing?'❚❚ STOP':'▶ FIRE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('lS').oninput=function(){lambda=+this.value;document.getElementById('lV').textContent=lambda;hits=[];total=0}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('fireB').onclick=function(){firing=!firing;this.textContent=firing?'❚❚ STOP':'▶ FIRE'}
+document.getElementById('rstB').onclick=function(){hits=[];particles=[];total=0;hx=[];hy=[];ht=0}
+}
+anim()
+</script></body></html>

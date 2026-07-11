@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Detector · p = qBr · Tracking</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;right:10px;pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;align-items:center}
+.panel{background:rgba(255,255,255,0.85);border:1px solid rgba(0,0,0,0.15);padding:5px 10px;font-size:11px;line-height:1.5}
+.panel .eq{font-size:13px;margin-bottom:3px}
+button{background:#fff;border:1px solid #111;padding:4px 10px;font:11px/1.4 'Courier New',monospace;cursor:pointer;color:#111;pointer-events:auto;letter-spacing:1px;text-transform:uppercase}
+button:hover{background:#111;color:#fff}
+input[type=range]{accent-color:#111;width:72px;vertical-align:middle;pointer-events:auto}
+select{font:11px 'Courier New',monospace;border:1px solid #111;background:#fff;pointer-events:auto}
+label{font-size:11px;pointer-events:auto;white-space:nowrap}
+#data{position:absolute;bottom:8px;left:8px;right:8px;pointer-events:none;display:flex;gap:4px;flex-wrap:wrap}
+.dbox{border:1px solid rgba(0,0,0,0.12);padding:2px 5px;font-size:9px;line-height:1.4;background:rgba(255,255,255,0.8);min-width:55px}
+.dbox b{font-size:10px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="row">
+<div class="panel"><div class="eq">p = qBr &nbsp; r = p_T/(qB) &nbsp; σ_p/p = σ_r/r &nbsp; E² = p²c² + m²c⁴</div></div>
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<button id="playBtn">⏸</button>
+<button id="resetBtn">↺</button>
+<button id="emitBtn">EMIT</button>
+<label>Speed <input type="range" id="speed" min="0" max="4" step="0.5" value="1"></label>
+</div>
+</div>
+<div class="row">
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<label>B(T) <input type="range" id="bSl" min="0.5" max="4" step="0.1" value="2"></label>
+<label>E(MeV) <input type="range" id="eSl" min="10" max="200" step="5" value="80"></label>
+<label>type <select id="ptype"><option value="e-">e⁻</option><option value="e+">e⁺</option><option value="p">p</option><option value="pi">π⁺</option></select></label>
+<label>layers <input type="range" id="laySl" min="4" max="12" step="1" value="7"></label>
+<label>res(μm) <input type="range" id="resSl" min="10" max="200" step="10" value="50"></label>
+</div>
+</div>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;recalcLayers()}
+window.addEventListener('resize',resize);resize();
+const CX=W*0.3,CY=H*0.5;
+let particles=[],paused=false,speed=1,bField=2,beamEnergy=80,partType='e-',nLayers=7,resolution=50;
+let layers=[],pTag=0,autoMode=true;
+const pData={'e-':{m:0.511,q:-1,l:'e⁻'},'e+':{m:0.511,q:1,l:'e⁺'},'p':{m:938,q:1,l:'p'},'pi':{m:140,q:1,l:'π⁺'}};
+const momHist=[],layHists=[];
+function recalcLayers(){layers=[];for(let i=0;i<nLayers;i++)layers.push(25+(i+1)*Math.min(W,H)*0.06);layers=layers.slice(0,nLayers)}
+function emitParticle(){
+  const d=pData[partType],E=beamEnergy+(Math.random()-0.5)*20,m=d.m;
+  const p=Math.sqrt(Math.max(0,E*E-m*m)),curv=d.q*bField/(p*0.003+0.001)*800;
+  const ang=(Math.random()-0.5)*0.6,spd=1.5+Math.random()*1.5;
+  particles.push({x:50,y:CY+(Math.random()-0.5)*50,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,curv,charge:d.q,label:d.l,trail:[],hits:[],active:true,id:pTag++,radius:d.m<1?2:3.5,mass:m,energy:E,mom:p,Etot:Math.sqrt(p*p+m*m),beta:p/Math.sqrt(p*p+m*m),gamma:Math.sqrt(p*p+m*m)/m,angle:ang});
+  if(p>0)momHist.push(p);
+}
+function reset(){particles=[];momHist.length=0;layHists.length=0}
+function step(){
+  if(paused)return;
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];if(!p.active)continue;
+    const sp=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+    if(sp>0){const px=-p.vy/sp,py=p.vx/sp,fc=p.curv*sp*p.charge*0.5*speed;p.vx+=px*fc;p.vy+=py*fc}
+    p.x+=p.vx*0.8*speed;p.y+=p.vy*0.8*speed;
+    p.trail.push({x:p.x,y:p.y});if(p.trail.length>120)p.trail.shift();
+    for(const lr of layers){const d=Math.sqrt((p.x-CX)**2+(p.y-CY)**2);if(Math.abs(d-lr)<5&&!p.hits.includes(lr)){p.hits.push(lr);p.hits.sort((a,b)=>a-b)}}
+    if(p.x<-60||p.x>W+60||p.y<-60||p.y>H+60)p.active=false;
+  }
+  if(autoMode&&particles.filter(p=>p.active).length<3&&Math.random()<0.04){emitParticle()}
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  for(const lr of layers){ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.8;ctx.beginPath();ctx.arc(CX,CY,lr,0,6.28);ctx.stroke();ctx.fillStyle='rgba(0,0,0,0.12)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(lr+'mm',CX+lr+10,CY)}
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(0,CY);ctx.lineTo(W,CY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('B = '+bField.toFixed(1)+' T',CX,30);
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('F = qv × B | r = p/qB | layers for tracking',10,H-10);
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='8px monospace';ctx.fillText('+→CCW −→CW | σ_p/p ∝ σ_r/r · p | sagitta: s = qBL²/8p_T',10,H-24);
+  ctx.fillStyle='rgba(0,0,0,0.12)';ctx.font='8px monospace';ctx.fillText('concentric circles = detector layers at radii 25–'+(25+(nLayers)*Math.min(W,H)*0.06).toFixed(0)+' mm',10,H-38);
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='8px monospace';ctx.fillText('auto-emit maintains ≥3 tracks | p(GeV/c)=0.3·B(T)·r(m) | helix projection in r−φ',10,H-52);
+  ctx.fillStyle='rgba(0,0,0,0.06)';ctx.font='7px monospace';ctx.fillText('track seed from 3-point circle fit | Kalman filter for precision',10,H-66);
+  ctx.fillStyle='rgba(0,0,0,0.12)';ctx.font='7px monospace';ctx.fillText('mₑ=0.511 m_μ=105.7 m_π=139.6 m_p=938.3 MeV/c²',10,H-80);
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='7px monospace';ctx.fillText('e⁻/e⁺:thin curve | p:thick curve | π⁺:medium curve',10,H-94);
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.font='7px monospace';ctx.fillText('curvature sign → charge | magnitude → momentum | hits → track quality',10,H-108);
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.font='7px monospace';ctx.fillText('sagitta: s = qBL²/8p_T | p_T resolution: σ_p/p_T = σ_s/s ∝ p_T/(BL²)',10,H-122);
+  for(const p of particles){
+    if(!p.active)continue;
+    if(p.trail.length>1){const cs=['#111','#444','#777','#aaa','#555','#333','#999'];const ci=p.id%cs.length;ctx.strokeStyle=cs[ci];ctx.lineWidth=p.label==='p'?3:p.label==='π⁺'?2.5:1.5;ctx.beginPath();for(let i=0;i<p.trail.length;i++){i===0?ctx.moveTo(p.trail[i].x,p.trail[i].y):ctx.lineTo(p.trail[i].x,p.trail[i].y)}ctx.stroke()}
+    for(const h of p.hits){const idx=layers.indexOf(h);if(idx>-1){const ang=Math.atan2(p.y-CY,p.x-CX);ctx.fillStyle='#111';ctx.beginPath();ctx.arc(CX+Math.cos(ang)*h,CY+Math.sin(ang)*h,2.5,0,6.28);ctx.fill()}}
+    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,6.28);ctx.fill();
+    ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText(p.label,p.x+5,p.y+3);
+  }
+  const gx=W*0.65,gw=W*0.32,gy=H*0.05,gh=H*0.28;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('momentum p (MeV/c)',gx+4,gy+12);
+  const allMom=particles.filter(p=>p.active).map(p=>p.mom);
+  if(allMom.length>0){const maxMom=Math.max(...allMom,50),bins=20,bw=gw/bins;const hB=new Array(bins).fill(0);for(const m of allMom){const idx=Math.min(bins-1,Math.floor(m/maxMom*bins));hB[idx]++};const maxC=Math.max(...hB,1);for(let i=0;i<bins;i++){const bh=hB[i]/maxC*gh*0.8;ctx.fillStyle='rgba(0,0,0,'+(0.2+0.4*hB[i]/maxC)+')';ctx.fillRect(gx+i*bw+1,gy+gh-bh,bw-2,bh)}}
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.font='8px monospace';ctx.fillText('p(MeV/c)',gx+4,gy+gh-4);
+  const gx2=gx,gy2=H*0.37,gw2=gw,gh2=H*0.2;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('hits per layer',gx2+4,gy2+12);
+  const layData=Array.from({length:layers.length},()=>0);
+  for(const p of particles)if(p.active)for(const h of p.hits){const idx=layers.indexOf(h);if(idx>-1)layData[idx]++}
+  if(layData.some(v=>v>0)){const maxL=Math.max(...layData,1),bwL=gw2/layers.length;for(let i=0;i<layers.length;i++){const bh=layData[i]/maxL*gh2*0.7;ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(gx2+i*bwL+1,gy2+gh2-bh,bwL-2,bh);ctx.fillStyle='rgba(0,0,0,0.25)';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(layers[i]+'',gx2+(i+0.5)*bwL,gy2+gh2-3)}}
+  const dataEl=document.getElementById('data');
+  let html='';
+  const act=particles.filter(p=>p.active),nAct=act.length;
+  let mom=0,curvR=0,hits=0,E=0,mass=0,beta=0,gamma=0,pT=0,Etot=0;
+  if(act.length>0){const p=act[act.length-1];mom=p.mom;curvR=Math.abs(1/(p.curv/800+0.001));hits=p.hits.length;E=p.energy;mass=p.mass;Etot=p.Etot;beta=p.beta;gamma=p.gamma;pT=mom}
+  const momRes=mom>0?resolution/curvR*mom:0;
+  const allP=particles.filter(p=>p.active);const avgMom=allP.length>0?allP.reduce((s,p)=>s+p.mom,0)/allP.length:0;
+  const maxMom=allP.length>0?Math.max(...allP.map(p=>p.mom)):0;const minMom=allP.length>0?Math.min(...allP.map(p=>p.mom)):0;
+  const totalHits=allP.reduce((s,p)=>s+p.hits.length,0);const hitEff=nLayers>0?totalHits/(allP.length*nLayers)*100:0;
+  const totalEmitted=pTag;const avgBeta=allP.length>0?allP.reduce((s,p)=>s+p.beta,0)/allP.length:0;
+  const avgGamma=allP.length>0?allP.reduce((s,p)=>s+p.gamma,0)/allP.length:0;
+  const disp=[
+    {k:'tracks',v:nAct},{k:'p(MeV/c)',v:mom.toFixed(1)},{k:'<p>(MeV/c)',v:avgMom.toFixed(1)},{k:'p_max',v:maxMom.toFixed(1)},{k:'p_min',v:minMom.toFixed(1)},{k:'E_kin',v:E.toFixed(1)},{k:'E_tot',v:Etot.toFixed(1)},{k:'m(MeV)',v:mass.toFixed(3)},{k:'β',v:beta.toFixed(4)},{k:'γ',v:gamma.toFixed(2)},{k:'r_curv',v:curvR.toFixed(1)},{k:'σ_p/p(%)',v: mom>0?(momRes/mom*100).toFixed(2):'—'},{k:'hits',v:hits+'/'+nLayers},{k:'Σhits',v:totalHits},{k:'B(T)',v:bField.toFixed(1)},{k:'p_T',v:pT.toFixed(1)},    {k:'hit eff%',v:hitEff.toFixed(1)},{k:'<β>',v:avgBeta.toFixed(3)},{k:'<γ>',v:avgGamma.toFixed(2)},{k:'tot emit',v:totalEmitted},{k:'type',v:act.length>0?act[act.length-1].label:'—'},{k:'q',v:act.length>0?act[act.length-1].charge:'—'},{k:'lay_{res}',v:resolution+ 'μm'}];
+  for(const kv of disp)html+=`<div class="dbox"><b>${kv.k}</b><br>${kv.v}</div>`;
+  dataEl.innerHTML=html;
+}
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'▶':'⏸'}
+document.getElementById('resetBtn').onclick=reset;
+document.getElementById('emitBtn').onclick=emitParticle;
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('bSl').oninput=function(){bField=parseFloat(this.value)};
+document.getElementById('eSl').oninput=function(){beamEnergy=parseFloat(this.value)};
+document.getElementById('ptype').onchange=function(){partType=this.value};
+document.getElementById('laySl').oninput=function(){nLayers=parseInt(this.value);recalcLayers()};
+document.getElementById('resSl').oninput=function(){resolution=parseInt(this.value)};
+recalcLayers();
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

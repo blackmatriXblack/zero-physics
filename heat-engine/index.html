@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heat Engine · η = W/Q<sub>H</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Heat Engine</h1>
+<p>η = W/Q<sub>H</sub> = 1 − Q<sub>C</sub>/Q<sub>H</sub> — Carnot cycle</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+const n = 1, R = 8.314;
+const V1 = 1e-3, V4 = 3e-3;
+
+let TH = 500, TC = 300, phase = 0;
+let V = V1, Tv = TC, Wk = 0, Qh = 0, Qc = 0;
+let speed = 1, paused = 0, steps = 0, cycles = 0;
+let hPV = [], hW = [], hS = [];
+
+function init() {
+  V = V1; Tv = TC; phase = 0;
+  Wk = 0; Qh = 0; Qc = 0; steps = 0; cycles = 0;
+  hPV = []; hW = []; hS = [];
+  paused = 0; document.getElementById('pB') && (document.getElementById('pB').textContent = 'Pause');
+}
+init();
+
+function update() {
+  if (paused) return;
+  const dt = 0.005 * speed;
+  const oV = V;
+  switch (phase) {
+    case 0: // Isochoric heating
+      Tv += dt * 12; Qh += n * 2.5 * R * dt * 12;
+      if (Tv >= TH) { Tv = TH; phase = 1; }
+      break;
+    case 1: // Isothermal expansion
+      V += dt * 2e-5; Wk += n * R * Tv * Math.log(V / oV); Qh += n * R * Tv * Math.log(V / oV);
+      if (V >= V4) { phase = 2; }
+      break;
+    case 2: // Isochoric cooling
+      Tv -= dt * 12; Qc += n * 2.5 * R * dt * 12;
+      if (Tv <= TC) { Tv = TC; phase = 3; }
+      break;
+    case 3: // Isothermal compression
+      V -= dt * 2e-5; Wk += n * R * Tv * Math.log(V / oV); Qc -= n * R * Tv * Math.log(V / oV);
+      if (V <= V1) { V = V1; phase = 0; cycles++; }
+      break;
+  }
+  steps++;
+  if (steps % 5 === 0) {
+    hPV.push({ P: n * R * Tv / V / 1e5, V });
+    hW.push(Wk); hS.push(steps);
+    if (hPV.length > 300) { hPV.shift(); hW.shift(); hS.shift(); }
+  }
+}
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  const P = n * R * Tv / V / 1e5;
+  const eta = 1 - TC / TH;
+  const eff = Wk / (Qh || 1);
+
+  // PV diagram
+  const gX = 60, gY = 35, gW = 380, gH = 280;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('PV diagram — Carnot cycle', gX + 3, gY + 10);
+
+  const vx = v => gX + 10 + ((v - V1) / (V4 - V1)) * (gW - 20);
+  const py = p => gY + gH - (p / 12) * (gH - 20);
+
+  // Isochoric lines (dashed)
+  x.strokeStyle = 'rgba(0,0,0,0.03)'; x.lineWidth = 0.3; x.setLineDash([3, 3]);
+  x.beginPath(); x.moveTo(vx(V1), py(n * R * TC / V1 / 1e5)); x.lineTo(vx(V1), py(n * R * TH / V1 / 1e5)); x.stroke();
+  x.beginPath(); x.moveTo(vx(V4), py(n * R * TH / V4 / 1e5)); x.lineTo(vx(V4), py(n * R * TC / V4 / 1e5)); x.stroke();
+  x.setLineDash([]);
+
+  // Isothermal curves
+  x.strokeStyle = '#111'; x.lineWidth = 0.6;
+  for (let t = 0; t < 2; t++) {
+    const Tiso = t ? TC : TH;
+    x.beginPath(); let first = true;
+    for (let v = V1; v <= V4; v += 1e-5) {
+      const pv = n * R * Tiso / v / 1e5;
+      first ? x.moveTo(vx(v), py(pv)) : x.lineTo(vx(v), py(pv)); first = false;
+    }
+    x.stroke();
+  }
+
+  // Current operating point
+  x.fillStyle = '#111'; x.beginPath(); x.arc(vx(V), py(P), 4, 0, Math.PI * 2); x.fill();
+
+  // Axes labels
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText('V (L)', gX + gW / 2, gY + gH + 14);
+  x.save(); x.translate(gX - 18, gY + gH / 2); x.rotate(-Math.PI / 2); x.fillText('P (bar)', 0, 0); x.restore();
+
+  // Work mini graph
+  const g2X = 60, g2Y = 325, g2W = 380, g2H = 85;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g2X, g2Y, g2W, g2H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('W(t) — cumulative work output', g2X + 3, g2Y + 10);
+  if (hW.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 0.8; x.beginPath();
+    for (let i = 0; i < hW.length; i++) {
+      const px = g2X + (i / hPV.length) * g2W, py = g2Y + g2H - (Math.abs(hW[i]) / (Math.abs(Wk) + 1)) * (g2H - 10);
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  // Energy flow diagram
+  const eX = 470, eY = 35;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(eX, eY, 390, 160);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText('Energy flow', eX + 195, eY - 4);
+  x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(eX + 120, eY + 15, 150, 25);
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.fillText(`Q_H (${TH}K) = ${Qh.toFixed(0)} J`, eX + 195, eY + 31);
+  x.fillStyle = 'rgba(0,0,0,0.02)'; x.strokeStyle = '#111'; x.lineWidth = 0.3;
+  x.fillRect(eX + 120, eY + 55, 150, 35); x.strokeRect(eX + 120, eY + 55, 150, 35);
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.fillText('Engine', eX + 195, eY + 75);
+  x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(eX + 120, eY + 110, 150, 25);
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.fillText(`Q_C (${TC}K) = ${Qc.toFixed(0)} J`, eX + 195, eY + 126);
+  x.strokeStyle = '#111'; x.lineWidth = 0.3;
+  x.beginPath(); x.moveTo(eX + 270, eY + 72); x.lineTo(eX + 340, eY + 72); x.stroke();
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText(`W = ${Wk.toFixed(0)} J`, eX + 342, eY + 76);
+
+  // Efficiency display
+  x.fillStyle = '#111'; x.font = '9px monospace'; x.textAlign = 'center';
+  x.fillText(`η = ${(eff * 100).toFixed(1)}%  (Carnot: ${(eta * 100).toFixed(1)}%)  Cycles: ${cycles}`, 450, 245);
+  x.fillStyle = '#999'; x.font = '6px monospace';
+  x.fillText(`Q_H − Q_C = W  |  η_Carnot = 1 − T_C/T_H  |  ${['Heating (V const)', 'Expansion (T const)', 'Cooling (V const)', 'Compression (T const)'][phase]}`, 450, 262);
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="10" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>T_H</label><input type="range" id="hS" min="350" max="800" step="10" value="${TH}"><span class="val" id="hV">${TH}</span></div>` +
+    `<div class="ctrl-group"><label>T_C</label><input type="range" id="cS" min="200" max="450" step="10" value="${TC}"><span class="val" id="cV">${TC}</span></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button><button id="rB">Reset</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('hS').oninput = function () { TH = +this.value; document.getElementById('hV').textContent = TH; };
+  document.getElementById('cS').oninput = function () { TC = +this.value; document.getElementById('cV').textContent = TC; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = init;
+
+  // Stats
+}
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">T_H =</span> <span class="val">${TH}</span> K</span>` +
+    `<span><span class="label">T_C =</span> <span class="val">${TC}</span> K</span>` +
+    `<span><span class="label">η =</span> <span class="val">${(eff * 100).toFixed(1)}%</span></span>` +
+    `<span><span class="label">η_Carnot =</span> <span class="val">${(eta * 100).toFixed(1)}%</span></span>` +
+    `<span><span class="label">W =</span> <span class="val">${Wk.toFixed(1)}</span> J</span>` +
+    `<span><span class="label">Q_H =</span> <span class="val">${Qh.toFixed(1)}</span> J</span>` +
+    `<span><span class="label">Q_C =</span> <span class="val">${Qc.toFixed(1)}</span> J</span>` +
+    `<span><span class="label">P =</span> <span class="val">${P.toFixed(2)}</span> bar</span>` +
+    `<span><span class="label">V =</span> <span class="val">${(V * 1e3).toFixed(2)}</span> L</span>` +
+    `<span><span class="label">Cycles =</span> <span class="val">${cycles}</span></span>` +
+    `<span><span class="label">nR =</span> <span class="val">${(n * R).toFixed(2)}</span></span>` +
+    `<span><span class="label">Phase</span> <span class="val">${['Heat', 'Expand', 'Cool', 'Compress'][phase]}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

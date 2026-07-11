@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Joule Expansion</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Joule Expansion — Free expansion of gas into vacuum</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <button id="expB">EXPAND</button>
+  <label>N <input type="range" id="nS" min="20" max="300" step="5" value="120"><span class="v" id="nV">120</span></label>
+  <label>Spd <input type="range" id="spS" min="1" max="10" value="3"><span class="v" id="spV">3</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let N = 120, speed = 3, running = true;
+let expanded = false, expandTime = 0, initSpeed = 2.5;
+
+const HIST_LEN = 150;
+let histTemp = [];
+
+let particles = [];
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    const gap = 40;
+    this.x = gap + Math.random() * (W / 2 - gap - 10);
+    this.y = gap + Math.random() * (H - 2 * gap);
+    this.vx = (Math.random() - 0.5) * initSpeed * 2;
+    this.vy = (Math.random() - 0.5) * initSpeed * 2;
+    this.r = 4;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    const limit = expanded ? W : W / 2;
+    if (this.x < 5 || this.x > limit - 5) {
+      this.vx *= -1;
+      this.x = Math.max(5, Math.min(limit - 5, this.x));
+    }
+    if (this.y < 5 || this.y > H - 5) {
+      this.vy *= -1;
+      this.y = Math.max(5, Math.min(H - 5, this.y));
+    }
+  }
+  draw() {
+    cx.beginPath();
+    cx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    cx.fillStyle = '#000';
+    cx.fill();
+  }
+}
+
+function init() {
+  particles = [];
+  for (let i = 0; i < N; i++) particles.push(new Particle());
+  expanded = false;
+  expandTime = 0;
+}
+
+function toggleExpand() {
+  expanded = !expanded;
+  if (expanded) expandTime = performance.now();
+}
+
+function draw() {
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  cx.strokeStyle = '#000'; cx.lineWidth = 1.5;
+  if (!expanded) {
+    cx.strokeRect(0, 0, W / 2, H);
+    cx.strokeRect(W / 2, 0, W / 2, H);
+    cx.setLineDash([5, 5]);
+    cx.beginPath(); cx.moveTo(W / 2, 0); cx.lineTo(W / 2, H); cx.stroke();
+    cx.setLineDash([]);
+    cx.font = '9px monospace'; cx.fillStyle = '#999'; cx.textAlign = 'center';
+    cx.fillText('GAS', W / 4, 16);
+    cx.fillText('VACUUM', W * 3 / 4, 16);
+  } else {
+    cx.strokeRect(0, 0, W, H);
+  }
+
+  for (const p of particles) p.draw();
+
+  let totalV = 0, maxV = 0, minV = 1e9, ke = 0;
+  for (const p of particles) {
+    const s = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    totalV += s; ke += s * s;
+    if (s > maxV) maxV = s;
+    if (s < minV) minV = s;
+  }
+  const avgSpeed = totalV / N;
+  const temperature = avgSpeed * avgSpeed * 0.5;
+  const area = expanded ? W * H : (W / 2) * H;
+  const density = N / area;
+
+  // Mini temp graph
+  const mgx = W * 0.72, mgy = H * 0.08;
+  const mgw = Math.min(W * 0.24, 180), mgh = Math.min(H * 0.2, 100);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(mgx, mgy, mgw, mgh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.font = '7px monospace';
+  cx.fillText('Temp (v\u00B2)', mgx + 4, mgy + 10);
+  if (histTemp.length > 1) {
+    const tMin = Math.min(...histTemp), tMax = Math.max(...histTemp), tR = tMax - tMin || 1;
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histTemp.length; i++) {
+      const x = mgx + (i / (HIST_LEN - 1)) * mgw;
+      const y = mgy + mgh - (histTemp[i] - tMin) / tR * mgh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  document.getElementById('d').innerHTML =
+    'N=' + N +
+    '<br>Avg v=' + avgSpeed.toFixed(3) +
+    '<br>T\u221d v\u00B2=' + temperature.toFixed(3) +
+    '<br>Expanded=' + (expanded ? 'YES' : 'NO') +
+    '<br>Time=' + ((expanded ? (performance.now() - expandTime) / 1000 : 0)).toFixed(1) + 's' +
+    '<br>Density=' + (density * 1e3).toFixed(3) + 'e-3' +
+    '<br>Area=' + (area / 1e4).toFixed(2) + ' cm\u00B2' +
+    '<br>KE=' + ke.toFixed(1) +
+    '<br>v<sub>max</sub>=' + maxV.toFixed(2) +
+    '<br>v<sub>min</sub>=' + (minV < 1e8 ? minV.toFixed(2) : '0') +
+    '<br>v<sub>init</sub>=' + initSpeed.toFixed(1) +
+    '<br>Coll est=' + (avgSpeed * N / area * 10).toFixed(2);
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+document.getElementById('rb').onclick = () => { init(); histTemp = []; };
+document.getElementById('expB').onclick = toggleExpand;
+document.getElementById('nS').oninput = function () { N = parseInt(this.value); document.getElementById('nV').textContent = N; init(); };
+document.getElementById('spS').oninput = function () { speed = parseFloat(this.value); document.getElementById('spV').textContent = speed; };
+
+init();
+
+function loop() {
+  cx.clearRect(0, 0, W, H);
+  if (running) {
+    for (let s = 0; s < speed; s++) {
+      for (const p of particles) p.update();
+    }
+    let tv = 0;
+    for (const p of particles) tv += Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    histTemp.push(tv / N * tv / N * 0.5);
+    if (histTemp.length > HIST_LEN) histTemp.shift();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resizeCanvas();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

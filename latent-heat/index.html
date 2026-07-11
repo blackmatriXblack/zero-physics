@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Latent Heat · Q = mL</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Latent Heat</h1>
+<p>Q = mL — Phase change energy for water (1 atm)</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+
+let T = -20, Q = 0;
+const c_ice = 2.09, c_water = 4.18, c_steam = 2.01;
+const Lf = 334, Lv = 2260;
+let mass = 100, paused = 0, speed = 1, steps = 0, rate = 40;
+let hT = [], hQ = [], hSt = [];
+
+function getTemp(q) {
+  const m = mass;
+  const Q1 = m * c_ice * 20;
+  const Q2 = Q1 + m * Lf;
+  const Q3 = Q2 + m * c_water * 100;
+  const Q4 = Q3 + m * Lv;
+  const Q5 = Q4 + m * c_steam * 100;
+  if (q <= Q1) return -20 + q / (m * c_ice);
+  if (q <= Q2) return 0;
+  if (q <= Q3) return (q - Q2) / (m * c_water);
+  if (q <= Q4) return 100;
+  if (q <= Q5) return 100 + (q - Q4) / (m * c_steam);
+  return 200;
+}
+
+function getPhase(t) {
+  if (t < 0) return 'ICE (solid)';
+  if (t < 1) return 'MELTING (solid → liquid)';
+  if (t < 99) return 'WATER (liquid)';
+  if (t < 101) return 'BOILING (liquid → gas)';
+  return 'STEAM (gas)';
+}
+
+function update() {
+  if (paused) return;
+  for (let s = 0; s < speed; s++) {
+    Q += rate;
+    steps++;
+    if (Q > 550e3) { Q = 0; T = -20; }
+  }
+}
+
+function resetSim() {
+  Q = 0; T = -20; steps = 0;
+  hT = []; hQ = []; hSt = [];
+  paused = 0;
+  document.getElementById('pB') && (document.getElementById('pB').textContent = 'Pause');
+}
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+
+  const Tcur = getTemp(Q);
+  const phase = getPhase(Tcur);
+
+  hT.push(Tcur); hQ.push(Q); hSt.push(steps);
+  const mL = 400;
+  if (hT.length > mL) { hT.shift(); hQ.shift(); hSt.shift(); }
+
+  // T vs Q main graph
+  const gX = 80, gY = 40, gW = 700, gH = 240;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('T vs Q — Heating curve for H₂O', gX + 3, gY + 10);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText('Q (kJ)', gX + gW / 2, gY + gH + 14);
+  x.save(); x.translate(gX - 18, gY + gH / 2); x.rotate(-Math.PI / 2); x.fillText('T (°C)', 0, 0); x.restore();
+
+  // Theoretical full curve (faint)
+  const Qmax = 550e3;
+  x.strokeStyle = 'rgba(0,0,0,0.06)'; x.lineWidth = 0.3; x.beginPath();
+  for (let px = 0; px <= gW; px++) {
+    const qq = (px / gW) * Qmax, tt = getTemp(qq);
+    const py = gY + gH - (tt + 20) / 220 * (gH - 20);
+    px === 0 ? x.moveTo(gX + px, py) : x.lineTo(gX + px, py);
+  }
+  x.stroke();
+
+  // Actual path taken
+  if (hT.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 1.2; x.beginPath();
+    for (let i = 0; i < hT.length; i++) {
+      const px = gX + (hQ[i] / Qmax) * gW, py = gY + gH - (hT[i] + 20) / 220 * (gH - 20);
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  // Current position
+  const curX = gX + (Q / Qmax) * gW, curY = gY + gH - (Tcur + 20) / 220 * (gH - 20);
+  x.fillStyle = '#111'; x.beginPath(); x.arc(curX, curY, 5, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#111'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText(`${Tcur.toFixed(1)}°C`, curX, curY - 10);
+
+  // Phase labels
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('ice', gX + 20, gY + gH - 15);
+  x.fillText('melting', gX + 100, gY + gH - 80);
+  x.fillText('water', gX + 240, gY + gH - 40);
+  x.fillText('boiling', gX + 400, gY + gH - 100);
+  x.fillText('steam', gX + 550, gY + gH - 20);
+
+  // T(t) mini graph
+  const g2X = 80, g2Y = 290, g2W = 700, g2H = 70;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g2X, g2Y, g2W, g2H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('T(t) — temperature evolution over time', g2X + 3, g2Y + 10);
+  if (hT.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 0.8; x.beginPath();
+    for (let i = 0; i < hT.length; i++) {
+      const px = g2X + (i / mL) * g2W, py = g2Y + g2H - (hT[i] + 20) / 220 * g2H;
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  // Energy bar
+  const bX = 80, bY = 370, bW = 700, bH = 16;
+  x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(bX, bY, bW, bH);
+  const frac = Math.min(1, Q / Qmax);
+  x.fillStyle = '#111'; x.fillRect(bX, bY, frac * bW, bH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText(`Q = ${(Q / 1e3).toFixed(1)} / ${(Qmax / 1e3).toFixed(0)} kJ`, bX + bW / 2, bY - 5);
+
+  // Phase and equation display
+  x.fillStyle = '#111'; x.font = '8px monospace'; x.textAlign = 'center';
+  x.fillText(phase, 450, 415);
+  x.fillStyle = '#999'; x.font = '6px monospace';
+  x.fillText(`c_ice = ${c_ice}  c_water = ${c_water}  c_steam = ${c_steam}  L_f = ${Lf} J/g  L_v = ${Lv} J/g  m = ${mass} g`, 450, 435);
+  x.fillStyle = '#111'; x.font = '7px monospace';
+  x.fillText('Q = mcΔT (sensible heat)  ·  Q = mL (latent heat)  ·  Isothermal phase changes', 450, 455);
+
+  // Phase change energy thresholds
+  const Q1 = mass * c_ice * 20, Q2 = Q1 + mass * Lf, Q3 = Q2 + mass * c_water * 100, Q4 = Q3 + mass * Lv;
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="20" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>Mass (g)</label><input type="range" id="mS" min="10" max="500" step="10" value="${mass}"><span class="val" id="mV">${mass}</span></div>` +
+    `<div class="ctrl-group"><label>Rate (J/s)</label><input type="range" id="rS" min="5" max="200" step="5" value="${rate}"><span class="val" id="rV">${rate}</span></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button><button id="rB">Reset</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('mS').oninput = function () { mass = +this.value; resetSim(); document.getElementById('mV').textContent = mass; };
+  document.getElementById('rS').oninput = function () { rate = +this.value; document.getElementById('rV').textContent = rate; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = resetSim;
+
+  // Stats
+}
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">T =</span> <span class="val">${Tcur.toFixed(1)}</span> °C</span>` +
+    `<span><span class="label">Q =</span> <span class="val">${(Q / 1e3).toFixed(2)}</span> kJ</span>` +
+    `<span><span class="label">m =</span> <span class="val">${mass}</span> g</span>` +
+    `<span><span class="label">Phase</span> <span class="val">${phase}</span></span>` +
+    `<span><span class="label">Q_melt =</span> <span class="val">${(Q1 / 1e3).toFixed(1)}</span> kJ</span>` +
+    `<span><span class="label">Q_boil =</span> <span class="val">${(Q3 / 1e3).toFixed(1)}</span> kJ</span>` +
+    `<span><span class="label">L_f =</span> <span class="val">${Lf}</span> J/g</span>` +
+    `<span><span class="label">L_v =</span> <span class="val">${Lv}</span> J/g</span>` +
+    `<span><span class="label">c_ice =</span> <span class="val">${c_ice}</span> J/g·K</span>` +
+    `<span><span class="label">c_water =</span> <span class="val">${c_water}</span> J/g·K</span>` +
+    `<span><span class="label">c_steam =</span> <span class="val">${c_steam}</span> J/g·K</span>` +
+    `<span><span class="label">Steps =</span> <span class="val">${steps}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

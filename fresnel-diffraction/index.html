@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fresnel Diffraction · Near-field Fresnel number F = a²/(λL)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Fresnel Diffraction</h1>
+<p>Near-field diffraction — Fresnel number F = a²/(λL)</p>
+<canvas id="c" width="920" height="580"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=580;
+let a=80,lambda=10,L=200,paused=false,speed=1,time=0;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const F=a*a/(lambda*L);
+ const screenX=650;
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(250,250-a);ctx.lineTo(250,250+a);ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('aperture 2a',250,250+a+20);ctx.fillText(`a = ${a}`,250,250+a+34);
+ const sW=60,sH=420;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(screenX,30,sW,sH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Screen',screenX+sW/2,25);
+ let maxI=0;const screenI=[];
+ for(let y=0;y<sH;y++){
+  const dy=y-sH/2;let intensity=0;
+  for(let rho=0;rho<=a;rho+=0.5){const dr=dy*rho/L;const phase=2*Math.PI*dr*dr/(lambda*L);intensity+=Math.cos(phase)*rho*0.01;}
+  intensity=intensity*intensity;screenI.push(intensity);if(intensity>maxI)maxI=intensity;
+ }
+ for(let y=0;y<sH;y++){
+  const I=screenI[y]/(maxI||1);const gray=Math.round(255-I*200);
+  ctx.fillStyle=`rgb(${gray},${gray},${gray})`;ctx.fillRect(screenX+2,30+y,sW-4,1);
+ }
+ hist.push(F);if(hist.length>hMax)hist.shift();
+ ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(`Fresnel number F = a²/(λL) = ${F.toFixed(2)}`,450,H-80);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`F ≫ 1: near-field  |  F ≪ 1: far-field`,450,H-96);
+ const gX=40,gY=320,gW=560,gH=120;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('I(y) on screen',gX+3,gY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();let first=true;
+ for(let y=0;y<=gH;y++){const dy=(y-gH/2)*2;let intensity=0;for(let rho=0;rho<=a;rho+=0.5){const phase=2*Math.PI*dy*dy*rho/(lambda*L)/(dy+a+0.1);intensity+=Math.cos(phase)*rho*0.01;}intensity=intensity*intensity*100/(maxI||1);const px=gX+(y/gH)*gW;const py=gY+gH-intensity;first?ctx.moveTo(px,py):ctx.lineTo(px,py);first=false;}
+ ctx.stroke();
+ const hX=620,hY=320,hW=270,hH=120;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Fresnel # F(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-Math.min(hist[i]/20,1)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`F = a²/(λL) = ${F.toFixed(3)}`,10,H-40);
+ const regime=F>1?'Fresnel (near-field)':'Fraunhofer (far-field)';
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(`Regime: ${regime}  |  Fresnel zones ≈ ${Math.round(F)}`,10,H-56);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>a</label><input type="range" id="aS" min="10" max="150" step="2" value="${a}"><span class="val" id="aV">${a}</span></div>`+
+ `<div class="ctrl-group"><label>λ</label><input type="range" id="lS" min="2" max="40" step="1" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+ `<div class="ctrl-group"><label>L</label><input type="range" id="LS" min="30" max="600" step="10" value="${L}"><span class="val" id="LV">${L}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('aS').oninput=function(){a=+this.value;aV.textContent=a;};
+ document.getElementById('lS').oninput=function(){lambda=+this.value;lV.textContent=lambda;};
+ document.getElementById('LS').oninput=function(){L=+this.value;LV.textContent=L;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">a =</span> <span class="val">${a}</span></span>`+
+ `<span><span class="label">λ =</span> <span class="val">${lambda}</span></span>`+
+ `<span><span class="label">L =</span> <span class="val">${L}</span></span>`+
+ `<span><span class="label">F = a²/(λL) =</span> <span class="val">${F.toFixed(3)}</span></span>`+
+ `<span><span class="label">Regime</span> <span class="val">${regime}</span></span>`+
+ `<span><span class="label">Fresnel zones</span> <span class="val">~${Math.round(F)}</span></span>`+
+ `<span><span class="label">a² =</span> <span class="val">${a*a}</span></span>`+
+ `<span><span class="label">λL =</span> <span class="val">${lambda*L}</span></span>`+
+ `<span><span class="label">Screen dist</span> <span class="val">${L}</span></span>`+
+ `<span><span class="label">Max I(y)</span> <span class="val">${(maxI*100).toFixed(1)}</span></span>`+
+ `<span><span class="label">Aperture size</span> <span class="val">2a = ${2*a}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

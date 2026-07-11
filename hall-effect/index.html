@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hall Effect · Vₕ = IB/(nqt)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:6px;letter-spacing:.5px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:940px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:940px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.eq{font-size:0.72em;color:#444;margin-bottom:4px;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<h1>Hall Effect</h1>
+<p class="eq">Vₕ = IB/(nqt) &nbsp;&nbsp; F = q(v×B) &nbsp;&nbsp; Eₕ = Vₕ/w</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=900,H=500;
+let I=5,B=0.5,t=0.001,n=1e29,playing=true,speed=1,time=0,paused=false;
+const q=1.6e-19,slabW=280,slabH=180,cx=450,cy=250;
+let nCharge=80; const vhHist=[],bHist2=[],iHist2=[],tHist2=[];
+
+class Charge{
+  constructor(){this.reset();}
+  reset(){
+    this.x=cx-slabW/2+Math.random()*slabW;
+    this.y=cy-slabH/2+Math.random()*slabH;
+    const sign=-1;
+    this.vx=sign*I/(n*q*t*slabH)*3e4;
+    this.vy=0;this.alive=true;
+  }
+  update(){
+    if(!this.alive)return;
+    const Fy=-q*this.vx*B;
+    this.vy+=Fy*2e-11*speed;
+    this.x+=this.vx*0.2*speed;this.y+=this.vy*0.2*speed;
+    if(this.x>cx+slabW/2){this.x=cx-slabW/2;this.y=cy-slabH/2+Math.random()*slabH;this.vy=0;}
+    if(this.y<cy-slabH/2||this.y>cy+slabH/2){this.alive=false;}
+  }
+  draw(){
+    if(!this.alive)return;
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(this.x,this.y,2,0,Math.PI*2);ctx.fill();
+  }
+}
+let charges=[];
+for(let i=0;i<nCharge;i++)charges.push(new Charge());
+
+function resetSim(){
+  time=0;charges=[];for(let i=0;i<nCharge;i++)charges.push(new Charge());
+  vhHist.length=0;bHist2.length=0;iHist2.length=0;tHist2.length=0;
+  paused=false;document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function step(){
+  if(paused||!playing)return;
+  time+=0.016*speed;
+  const Vh=I*B/(n*q*t);
+  charges.forEach(c=>c.update());
+  charges.forEach(c=>{if(!c.alive){c.reset();}});
+  vhHist.push(Vh*1e3);bHist2.push(B);iHist2.push(I);tHist2.push(time);
+  if(vhHist.length>300){vhHist.shift();bHist2.shift();iHist2.shift();tHist2.shift();}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.strokeRect(cx-slabW/2,cy-slabH/2,slabW,slabH);
+  const Vh=I*B/(n*q*t);
+  // Hall voltmeter
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(cx-slabW/2-12,cy-slabH/2+20);ctx.lineTo(cx-slabW/2-12,cy+slabH/2-20);
+  ctx.lineTo(cx-slabW/2-24,cy+slabH/2-20);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+slabW/2+12,cy-slabH/2+20);ctx.lineTo(cx+slabW/2+12,cy+slabH/2-20);
+  ctx.lineTo(cx+slabW/2+24,cy+slabH/2-20);ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText('+',cx-slabW/2-12,cy-slabH/2+16);
+  ctx.fillText('−',cx+slabW/2+12,cy-slabH/2+16);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Vₕ='+(Vh*1e3).toFixed(2)+'mV',cx+slabW/2+12,cy+slabH/2-24);
+  // Charges
+  charges.forEach(c=>c.draw());
+  // Current arrow
+  ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.fillStyle='#111';
+  const ax=cx+slabW/2+40,ay=cy;
+  ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax-14,ay-6);ctx.lineTo(ax-14,ay+6);ctx.fill();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('I='+I.toFixed(1)+'A',ax-18,ay-14);
+  // B field
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='14px monospace';ctx.textAlign='center';ctx.fillText('⊗ B='+B.toFixed(2)+'T',cx,cy-slabH/2-12);
+  // Hall field arrow inside slab
+  if(B>0.01){
+    const eh=Vh/(slabW/100);
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(cx-30,cy);ctx.lineTo(cx+30,cy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('Eₕ',cx,cy-8);
+  }
+  // Mini: Vh(t)
+  const gx=20,gy=H-100,gw=200,gh=85;
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('Vₕ(t) [mV]',gx+3,gy+9);
+  if(vhHist.length>1){
+    ctx.beginPath();const vMax=Math.max(...vhHist,0.001);
+    for(let i=0;i<vhHist.length;i++){const x=gx+(i/(vhHist.length-1))*gw,y=gy+gh-8-(vhHist[i]/vMax)*(gh-16);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  // Mini: charge distribution histogram (y-projection)
+  const gx2=250,gy2=H-100,gw2=140,gh2=85;
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('charge y-dist',gx2+3,gy2+9);
+  const bins=20;const hist=new Array(bins).fill(0);
+  charges.forEach(c=>{if(c.alive){const bi=Math.floor((c.y-(cy-slabH/2))/slabH*bins);if(bi>=0&&bi<bins)hist[bi]++;}});
+  const hMax=Math.max(...hist,1);
+  for(let i=0;i<bins;i++){
+    const bw=gw2/bins;ctx.fillStyle='rgba(0,0,0,0.25)';
+    ctx.fillRect(gx2+i*bw,gy2+gh2-6-(hist[i]/hMax)*(gh2-14),bw-1,(hist[i]/hMax)*(gh2-14));
+  }
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>I(A)</label><input type="range" id="iS" min="0.5" max="10" step="0.5" value="${I}"><span class="val" id="iV">${I.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>B(T)</label><input type="range" id="bS" min="0" max="2" step="0.05" value="${B}"><span class="val" id="bV">${B.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>t(mm)</label><input type="range" id="tS" min="0.1" max="5" step="0.1" value="${t*1e3}"><span class="val" id="tV">${(t*1e3).toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>n(×10²⁹)</label><input type="range" id="nS" min="0.1" max="10" step="0.1" value="${n/1e29}"><span class="val" id="nV">${(n/1e29).toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>speed</label><input type="range" id="spS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('iS').addEventListener('input',function(){I=parseFloat(this.value);document.getElementById('iV').textContent=I.toFixed(1);});
+  document.getElementById('bS').addEventListener('input',function(){B=parseFloat(this.value);document.getElementById('bV').textContent=B.toFixed(2);});
+  document.getElementById('tS').addEventListener('input',function(){t=parseFloat(this.value)/1000;document.getElementById('tV').textContent=(t*1e3).toFixed(1);resetSim();});
+  document.getElementById('nS').addEventListener('input',function(){n=parseFloat(this.value)*1e29;document.getElementById('nV').textContent=(n/1e29).toFixed(1);resetSim();});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseFloat(this.value);document.getElementById('spV').textContent=speed.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+  const Eh=Vh/(slabW/100),RH=1/(n*q),sigma=n*q*q*1e-4/(1),vd=I/(n*q*t*slabH);
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">Vₕ =</span> <span class="val">${(Vh*1e3).toFixed(4)}</span> mV</span>`+
+    `<span><span class="label">Eₕ =</span> <span class="val">${Eh.toFixed(4)}</span> V/m</span>`+
+    `<span><span class="label">I =</span> <span class="val">${I.toFixed(1)}</span> A</span>`+
+    `<span><span class="label">B =</span> <span class="val">${B.toFixed(3)}</span> T</span>`+
+    `<span><span class="label">n =</span> <span class="val">${n.toExponential(1)}</span> m⁻³</span>`+
+    `<span><span class="label">Rₕ =</span> <span class="val">${RH.toExponential(3)}</span> m³/C</span>`+
+    `<span><span class="label">t =</span> <span class="val">${(t*1e3).toFixed(1)}</span> mm</span>`+
+    `<span><span class="label">w =</span> <span class="val">${(slabW/100).toFixed(3)}</span> m</span>`+
+    `<span><span class="label">v<sub>d</sub> =</span> <span class="val">${(vd*1e3).toFixed(4)}</span> mm/s</span>`+
+    `<span><span class="label">σ =</span> <span class="val">${sigma.toExponential(2)}</span> S/m</span>`+
+    `<span><span class="label">active</span> <span class="val">${charges.filter(c=>c.alive).length}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span> s</span>`+
+    `<span><span class="label">q =</span> <span class="val">${q.toExponential(0)}</span> C</span>`;
+}
+setInterval(()=>{step();draw();},30);
+</script>
+</body>
+</html>

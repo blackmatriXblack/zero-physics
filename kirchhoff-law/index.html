@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kirchhoff's Laws · ΣI = 0, ΣV = 0</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Kirchhoff's Laws</h1>
+<p>Σ I<sub>in</sub> = Σ I<sub>out</sub> — Σ ΔV = 0 — two-loop circuit solver</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=900,H=500;
+let V1=12,V2=9,R1=100,R2=200,R3=150,paused=false,spd=1,time=0;
+const i1H=[],i2H=[],i3H=[],tH=[],kclH=[],kvl1H=[],kvl2H=[];const maxH=300;
+function solve(){
+  const d=R1*R2+R1*R3+R2*R3,I1=(V1*(R2+R3)-V2*R3)/d,I2=(V2*(R1+R3)-V1*R3)/d,I3=I1-I2;
+  return{I1,I2,I3};
+}
+function step(){
+  if(paused)return;
+  time+=0.05*spd;
+  const{I1,I2,I3}=solve();
+  i1H.push(I1);i2H.push(I2);i3H.push(I3);tH.push(time);
+  kclH.push(I1-I2-I3);kvl1H.push(V1-I1*R1-I3*R3);kvl2H.push(V2-I2*R2+I3*R3);
+  if(i1H.length>maxH){i1H.shift();i2H.shift();i3H.shift();tH.shift();kclH.shift();kvl1H.shift();kvl2H.shift();}
+}
+function reset(){time=0;i1H.length=0;i2H.length=0;i3H.length=0;tH.length=0;kclH.length=0;kvl1H.length=0;kvl2H.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const{I1,I2,I3}=solve();
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.strokeRect(80,100,300,300);ctx.strokeRect(220,100,500,300);
+  const v1x=80+300,v1y=100;
+  ctx.beginPath();ctx.moveTo(v1x-10,v1y-15);ctx.lineTo(v1x-10,v1y+15);ctx.moveTo(v1x+10,v1y-15);ctx.lineTo(v1x+10,v1y+15);ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('V₁='+V1+'V',v1x,v1y-24);
+  const v2x=220+500,v2y=400;
+  ctx.beginPath();ctx.moveTo(v2x-10,v2y-15);ctx.lineTo(v2x-10,v2y+15);ctx.moveTo(v2x+10,v2y-15);ctx.lineTo(v2x+10,v2y+15);ctx.stroke();
+  ctx.fillStyle='#111';ctx.fillText('V₂='+V2+'V',v2x,v2y+30);
+  function drawR(x,y,label){ctx.beginPath();ctx.moveTo(x,y);for(let i=0;i<5;i++){ctx.lineTo(x+i*10+5,y-10);ctx.lineTo(x+i*10+10,y+10);}ctx.stroke();ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(label,x+25,y-16);}
+  drawR(200,250,'R₁');drawR(500,250,'R₂');drawR(300,370,'R₃');
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('R₁='+R1+'Ω',82,117);ctx.fillText('R₂='+R2+'Ω',82,131);ctx.fillText('R₃='+R3+'Ω',82,145);
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='8px monospace';
+  const blink=Math.sin(time*8)*0.3+0.7;
+  ctx.fillStyle='rgba(0,0,0,'+blink+')';
+  ctx.save();ctx.translate(250,250);ctx.rotate(0);ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(6,-5);ctx.lineTo(6,5);ctx.closePath();ctx.fill();ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('I₁='+(I1*1000).toFixed(1)+'mA',22,0);ctx.restore();
+  ctx.save();ctx.translate(550,250);ctx.rotate(0);ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(6,-5);ctx.lineTo(6,5);ctx.closePath();ctx.fill();ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('I₂='+(I2*1000).toFixed(1)+'mA',22,0);ctx.restore();
+  ctx.save();ctx.translate(300,385);ctx.rotate(Math.PI/2);ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(4,-4);ctx.lineTo(4,4);ctx.closePath();ctx.fill();ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('I₃='+(I3*1000).toFixed(1)+'mA',18,0);ctx.restore();
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(230,250,4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText('A',225,248);
+  ctx.beginPath();ctx.arc(580,250,4,0,Math.PI*2);ctx.fill();
+  ctx.textAlign='left';ctx.fillText('B',587,248);
+  const gX=15,gY=440,gW=870,gH=50;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('KCL@A:',gX+3,gY+10);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  if(tH.length>2){
+    ctx.beginPath();
+    for(let i=0;i<kclH.length;i++){const px=gX+40+(i/kclH.length)*(gW-40),py=gY+gH/2-kclH[i]*1e3*(gH/2-5)/Math.max(...kclH.map(Math.abs),1);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  ctx.fillStyle='rgba(0,0,0,0.04)';ctx.font='6px monospace';ctx.textAlign='right';
+  ctx.fillText('I₁ - I₂ - I₃ = '+(I1-I2-I3).toExponential(4)+' ≈ 0',gX+gW-5,gY+gH-4);
+  const P1=I1*I1*R1,P2=I2*I2*R2,P3=I3*I3*R3,Ptot=P1+P2+P3,Psrc=V1*I1+V2*I2;
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>V₁</label><input type="range" id="v1S" min="3" max="24" step="1" value="'+V1+'"><span class="val" id="v1V">'+V1+'</span></div>'+
+    '<div class="ctrl-group"><label>V₂</label><input type="range" id="v2S" min="3" max="24" step="1" value="'+V2+'"><span class="val" id="v2V">'+V2+'</span></div>'+
+    '<div class="ctrl-group"><label>R₁</label><input type="range" id="r1S" min="10" max="500" step="10" value="'+R1+'"><span class="val" id="r1V">'+R1+'</span></div>'+
+    '<div class="ctrl-group"><label>R₂</label><input type="range" id="r2S" min="10" max="500" step="10" value="'+R2+'"><span class="val" id="r2V">'+R2+'</span></div>'+
+    '<div class="ctrl-group"><label>R₃</label><input type="range" id="r3S" min="10" max="500" step="10" value="'+R3+'"><span class="val" id="r3V">'+R3+'</span></div>'+
+    '<div class="ctrl-group"><label>spd</label><input type="range" id="spS" min="0" max="5" step="0.5" value="'+spd+'"><span class="val" id="spV">'+spd.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>';
+  document.getElementById('v1S').oninput=function(){V1=+this.value;document.getElementById('v1V').textContent=V1;};
+  document.getElementById('v2S').oninput=function(){V2=+this.value;document.getElementById('v2V').textContent=V2;};
+  document.getElementById('r1S').oninput=function(){R1=+this.value;document.getElementById('r1V').textContent=R1;};
+  document.getElementById('r2S').oninput=function(){R2=+this.value;document.getElementById('r2V').textContent=R2;};
+  document.getElementById('r3S').oninput=function(){R3=+this.value;document.getElementById('r3V').textContent=R3;};
+  document.getElementById('spS').oninput=function(){spd=+this.value;document.getElementById('spV').textContent=spd.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=reset;
+}
+  const kclErr=Math.abs(I1-I2-I3);
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">I₁ =</span> <span class="val">'+(I1*1000).toFixed(3)+'</span> mA</span>'+
+    '<span><span class="label">I₂ =</span> <span class="val">'+(I2*1000).toFixed(3)+'</span> mA</span>'+
+    '<span><span class="label">I₃ =</span> <span class="val">'+(I3*1000).toFixed(3)+'</span> mA</span>'+
+    '<span><span class="label">I₁²R₁ =</span> <span class="val">'+(P1*1e3).toFixed(3)+'</span> mW</span>'+
+    '<span><span class="label">I₂²R₂ =</span> <span class="val">'+(P2*1e3).toFixed(3)+'</span> mW</span>'+
+    '<span><span class="label">I₃²R₃ =</span> <span class="val">'+(P3*1e3).toFixed(3)+'</span> mW</span>'+
+    '<span><span class="label">ΣP<sub>R</sub> =</span> <span class="val">'+(Ptot*1e3).toFixed(3)+'</span> mW</span>'+
+    '<span><span class="label">ΣP<sub>src</sub> =</span> <span class="val">'+(Psrc*1e3).toFixed(3)+'</span> mW</span>'+
+    '<span><span class="label">KCL err =</span> <span class="val">'+(kclErr*1e6).toFixed(4)+'</span> µA</span>'+
+    '<span><span class="label">KVL₁ =</span> <span class="val">'+(V1-I1*R1-I3*R3).toExponential(4)+'</span></span>'+
+    '<span><span class="label">KVL₂ =</span> <span class="val">'+(V2-I2*R2+I3*R3).toExponential(4)+'</span></span>'+
+    '<span><span class="label">t =</span> <span class="val">'+time.toFixed(1)+'</span> s</span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

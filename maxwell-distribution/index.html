@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Maxwell-Boltzmann · f(v) ∝ v²e^{−mv²/2kT}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:4px;font-size:0.62em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Maxwell-Boltzmann Distribution</h1>
+<p>f(v) = 4π (m/2πkT)^(3/2) v² exp(−mv²/2kT)</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const W=900,H=520;
+let T=300,m=1,N=500,paused=false,speed=1;
+let parts=[],histKE=[];
+
+function gauss(){let u,v,s=0;while(s===0||s>=1){u=Math.random()*2-1;v=Math.random()*2-1;s=u*u+v*v;}return Math.sqrt(-2*Math.log(s)/s)*u;}
+function init(){
+  parts=[];histKE=[];
+  const sg=Math.sqrt(T/(300*m));
+  for(let i=0;i<N;i++){const vx=gauss()*sg,vy=gauss()*sg,vz=gauss()*sg;const s=Math.sqrt(vx*vx+vy*vy+vz*vz);parts.push({vx,vy,vz,speed:s});}
+}
+init();
+function fM(v){const a=m/(T/300);return 4*Math.PI*v*v*Math.pow(a/Math.PI,1.5)*Math.exp(-a*v*v);}
+function step(){
+  if(paused)return;
+  const ns=Math.max(1,Math.floor(N*0.05*speed)),sg=Math.sqrt(T/(300*m));
+  for(let i=0;i<ns;i++){const idx=Math.floor(Math.random()*N),vx=gauss()*sg,vy=gauss()*sg,vz=gauss()*sg,sp=Math.sqrt(vx*vx+vy*vy+vz*vz);parts[idx]={vx,vy,vz,speed:sp};}
+  let ke=0;for(const p of parts)ke+=0.5*m*p.speed*p.speed;
+  histKE.push(ke/N);if(histKE.length>200)histKE.shift();
+}
+function resetSim(){
+  T=parseFloat(document.getElementById('tS')?.value)||300;
+  m=parseFloat(document.getElementById('mS')?.value)||1;
+  N=parseInt(document.getElementById('nS')?.value)||500;
+  init();paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const vcX=200,vcY=200,vScale=50,gX=440,gY=30,gW=430,gH=270,hX=440,hY=320,hW=200,hH=120,eX=660,eY=320,eW=210,eH=120;
+  let sumV=0,sumV2=0,sumV4=0,sumVx=0,sumVy=0;
+  for(const p of parts){const s=p.speed;sumV+=s;sumV2+=s*s;sumV4+=s*s*s*s;sumVx+=p.vx;sumVy+=p.vy;}
+  const avgV=sumV/N,avgV2=sumV2/N,avgV4=sumV4/N,vRms=Math.sqrt(avgV2);
+  const a=m/(T/300),vp=Math.sqrt(2/a),vMean=Math.sqrt(8/(Math.PI*a));
+  const stdV=Math.sqrt(avgV2-avgV*avgV),skew=histKE.length>10?((sumV/N-avgV)/stdV):0;
+  const kurt=avgV4/(avgV2*avgV2),avgVx=sumVx/N,avgVy=sumVy/N;
+
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+  for(let r=1;r<=6;r++){ctx.beginPath();ctx.arc(vcX,vcY,r*15*Math.sqrt(T/(300*m)),0,Math.PI*2);ctx.stroke();}
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(vcX-150,vcY);ctx.lineTo(vcX+150,vcY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(vcX,vcY-150);ctx.lineTo(vcX,vcY+150);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';
+  ctx.fillText('v_x',vcX+130,vcY+8);ctx.fillText('v_y',vcX+4,vcY-130);
+
+  const sc=vScale*Math.sqrt(T/(300*m));
+  for(const p of parts){ctx.fillStyle='rgba(0,0,0,0.06)';ctx.beginPath();ctx.arc(vcX+p.vx*sc,vcY-p.vy*sc,1.5,0,Math.PI*2);ctx.fill();}
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.font='6px monospace';
+  ctx.fillText(`T=${T}K m=${m.toFixed(1)} N=${N}`,vcX-50,vcY-145);
+
+  // f(v) curve
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('SPEED DISTRIBUTION f(v)',gX+3,gY+10);
+  let maxF=0;for(let v=0;v<=10;v+=0.05){const fv=fM(v);if(fv>maxF)maxF=fv;}
+  ctx.beginPath();
+  for(let i=0;i<=200;i++){const v=i/200*10,fv=fM(v),sx=gX+v/10*gW,sy=gY+gH-fv/maxF*gH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();
+
+  ctx.setLineDash([3,3]);ctx.lineWidth=0.5;
+  const markers=[{l:'v_p',val:vp,c:'#000'},{l:'⟨v⟩',val:vMean,c:'#666'},{l:'v_rms',val:vRms,c:'#999'}];
+  for(const m of markers){const sx=gX+m.val/10*gW;ctx.strokeStyle=m.c;ctx.beginPath();ctx.moveTo(sx,gY);ctx.lineTo(sx,gY+gH);ctx.stroke();ctx.fillStyle=m.c;ctx.font='5px monospace';ctx.fillText(m.l,sx+1,gY+gH-2);}
+  ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('v',gX+gW-8,gY+gH-3);ctx.fillText('f(v)',gX+3,gY+12);
+
+  // Histogram
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+  ctx.fillStyle='#111';ctx.font='6px monospace';ctx.fillText('HISTOGRAM',hX+3,hY+8);
+  const bins=16;const hist=new Array(bins).fill(0);let maxSp=0;
+  for(const p of parts)if(p.speed>maxSp)maxSp=p.speed;maxSp=Math.max(maxSp,0.1);
+  for(const p of parts){hist[Math.min(bins-1,Math.floor(p.speed/(maxSp*1.2)*bins))]++;}
+  const mxCnt=Math.max(...hist,1);
+  for(let b=0;b<bins;b++){const bh=hist[b]/mxCnt*hH;ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(hX+b/bins*hW+1,hY+hH-bh,hW/bins-2,bh);}
+  // Theoretical over histogram
+  ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.6;
+  ctx.beginPath();
+  for(let i=0;i<=bins;i++){const v=i/bins*(maxSp*1.2),fv=fM(v)*maxSp*1.2/maxF*hH/10;const sx=hX+i/bins*hW,sy=hY+hH-fv;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+  ctx.stroke();
+
+  // KE history
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(eX,eY,eW,eH);
+  ctx.fillStyle='#111';ctx.font='6px monospace';ctx.fillText('⟨KE⟩ HISTORY',eX+3,eY+8);
+  if(histKE.length>2){const kMn=Math.min(...histKE),kMx=Math.max(...histKE),kR=kMx-kMn||1;
+    ctx.beginPath();for(let i=0;i<histKE.length;i++){const sx=eX+(i/histKE.length)*eW,sy=eY+eH-(histKE[i]-kMn)/kR*eH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='5px monospace';ctx.fillText(kMx.toFixed(3),eX+eW-28,eY+8);ctx.fillText(kMn.toFixed(3),eX+eW-28,eY+eH-2);
+  }
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>T (K)</label><input type="range" id="tS" min="50" max="1000" step="10" value="${T}"><span class="val" id="tV">${T}</span></div>`+
+    `<div class="ctrl-group"><label>m</label><input type="range" id="mS" min="0.1" max="5" step="0.1" value="${m.toFixed(1)}"><span class="val" id="mV">${m.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>N</label><input type="range" id="nS" min="50" max="1000" step="50" value="${N}"><span class="val" id="nV">${N}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="20" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('tS')?.addEventListener('input',function(){T=parseFloat(this.value);document.getElementById('tV').textContent=T;});
+  document.getElementById('mS')?.addEventListener('input',function(){m=parseFloat(this.value);document.getElementById('mV').textContent=m.toFixed(1);});
+  document.getElementById('nS')?.addEventListener('input',function(){N=parseInt(this.value);document.getElementById('nV').textContent=N;});
+  document.getElementById('pauseBtn')?.addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn')?.addEventListener('click',resetSim);
+  document.getElementById('speedS')?.addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">v<sub>p</sub> =</span> <span class="val">${vp.toFixed(3)}</span></span>`+
+    `<span><span class="label">⟨v⟩ =</span> <span class="val">${vMean.toFixed(3)}</span></span>`+
+    `<span><span class="label">v<sub>rms</sub> =</span> <span class="val">${vRms.toFixed(3)}</span></span>`+
+    `<span><span class="label">⟨KE⟩ =</span> <span class="val">${(0.5*m*avgV2).toFixed(4)}</span></span>`+
+    `<span><span class="label">T =</span> <span class="val">${T}</span> K</span>`+
+    `<span><span class="label">m =</span> <span class="val">${m.toFixed(1)}</span></span>`+
+    `<span><span class="label">N =</span> <span class="val">${N}</span></span>`+
+    `<span><span class="label">σ<sub>v</sub> =</span> <span class="val">${stdV.toFixed(3)}</span></span>`+
+    `<span><span class="label">⟨v<sub>x</sub>⟩ =</span> <span class="val">${avgVx.toFixed(3)}</span></span>`+
+    `<span><span class="label">⟨v<sub>y</sub>⟩ =</span> <span class="val">${avgVy.toFixed(3)}</span></span>`+
+    `<span><span class="label">γ<sub>1</sub>(skew) =</span> <span class="val">${skew.toFixed(3)}</span></span>`+
+    `<span><span class="label">γ<sub>2</sub>(kurt) =</span> <span class="val">${kurt.toFixed(3)}</span></span>`+
+    `<span><span class="label">⟨KE⟩<sub>theory</sub> =</span> <span class="val">${(1.5*(T/300)).toFixed(4)}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

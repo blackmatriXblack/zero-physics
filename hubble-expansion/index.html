@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hubble Expansion</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Hubble Expansion</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480;
+let t=0, paused=false, speed=1, H0=0.3;
+const galaxies=[], N=140;
+const cx=W/2, cy=200;
+
+for(let i=0;i<N;i++){
+  const angle=Math.random()*2*Math.PI;
+  const r=15+Math.random()*140;
+  galaxies.push({angle,r0:r,r:r,vel:H0*r,z:Math.random()*0.5});
+}
+galaxies.sort((a,b)=>a.r0-b.r0);
+
+let historyA=[], historyH0=[], historyT=[];
+
+function resetSim(){
+  t=0;for(const g of galaxies)g.r=g.r0;
+  historyA=[];historyH0=[];historyT=[];
+}
+
+function update(){
+  if(paused)return;
+  const d=0.008*speed;
+  t+=d;
+  const a=Math.exp(H0*t);
+  for(const g of galaxies){g.r=g.r0*a;g.vel=H0*g.r}
+  historyA.push({t,val:a});historyH0.push({t,val:H0});historyT.push({t,val:t});
+  if(historyA.length>400){historyA.shift();historyH0.shift();historyT.shift()}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const a=Math.exp(H0*t);
+
+  // grid circles
+  ctx.strokeStyle='#eee';ctx.lineWidth=.5;
+  for(let r=30;r<=180;r+=30){
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  }
+
+  // galaxies
+  let maxDist=0, maxVel=0;
+  for(const g of galaxies){
+    const x=cx+g.r*Math.cos(g.angle), y=cy+g.r*Math.sin(g.angle);
+    if(x<0||x>W||y<0||y>H)continue;
+    if(g.r>maxDist)maxDist=g.r;
+    if(g.vel>maxVel)maxVel=g.vel;
+    const brightness=Math.max(0,Math.min(255,200-g.r));
+    const sz=1.5+g.z*2.5;
+    ctx.fillStyle=`rgb(${brightness},${brightness},${brightness})`;
+    ctx.beginPath();ctx.arc(x,y,sz,0,Math.PI*2);ctx.fill();
+  }
+
+  // observer
+  ctx.fillStyle='#000';ctx.fillRect(cx-4,cy-4,8,8);
+  ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('Observer',cx+10,cy+4);
+
+  // scale marker
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=1;
+  const markerR=50*a;
+  ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(cx,cy,markerR,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText(`a(t)=e^{H₀t}=${a.toFixed(3)}`,cx,cy+markerR+15);
+
+  // Hubble's law data
+  ctx.fillStyle='#000';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText(`v = H₀ × d`,20,30);
+  ctx.fillText(`H₀ = ${H0.toFixed(3)}`,20,46);
+  ctx.fillText(`t = ${t.toFixed(2)}`,20,62);
+  ctx.fillText(`Scale a = ${a.toFixed(3)}`,20,78);
+  ctx.fillText(`R_max = ${maxDist.toFixed(0)}`,20,94);
+  ctx.fillText(`v_max = ${maxVel.toFixed(1)}`,20,110);
+
+  // Hubble diagram (v vs d)
+  const gx=20,gy=280,gw=220,gh=160;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='8px monospace';ctx.fillText('Hubble Diagram v(d)',gx+5,gy+12);
+  if(galaxies.length>0){
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=.3;
+    for(const g of galaxies){
+      const px=gx+(g.r/maxDist)*gw,py=gy+gh-(g.vel/maxVel)*gh;
+      ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.arc(px,py,1.5,0,Math.PI*2);ctx.fill();
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(gx,gy+gh);ctx.lineTo(gx+gw,gy);ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('v ∝ d (Hubble\'s law)',gx+5,gy+gh-4);
+  }
+
+  // scale factor history
+  const gx2=W-200,gy2=280,gw2=180,gh2=160;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='8px monospace';ctx.fillText('Scale Factor a(t)',gx2+5,gy2+12);
+  if(historyA.length>3){
+    const minA=Math.min(...historyA.map(d=>d.val)), maxA=Math.max(...historyA.map(d=>d.val));const rngA=Math.max(maxA-minA,.01);
+    ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=1;ctx.beginPath();
+    for(let i=0;i<historyA.length;i++){
+      const px=gx2+i/historyA.length*gw2,py=gy2+gh2-(historyA[i].val-minA)/rngA*gh2;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText('Galaxies recede: farther = faster',375,465);
+
+  data.innerHTML=
+    `t = ${t.toFixed(2)} | H₀ = ${H0.toFixed(3)} | a(t) = exp(H₀t) = ${a.toFixed(4)}`+
+    ` | Galaxies: ${galaxies.length} | max distance = ${maxDist.toFixed(0)} | max velocity = ${maxVel.toFixed(1)}`+
+    ` | Lookback: d/c = ${(maxDist/100).toFixed(2)} | Scale factor history points: ${historyA.length}`;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>H₀ <input type="range" id="h0S" min="0" max="1" step="0.01" value="${H0}"><span id="h0D">${H0.toFixed(2)}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>`;
+
+document.getElementById('h0S').oninput=function(){H0=parseFloat(this.value);document.getElementById('h0D').textContent=H0.toFixed(2);resetSim()};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=resetSim;
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lorenz Attractor · ẋ=σ(y−x) ẏ=x(ρ−z)−y ż=xy−βz</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Lorenz Attractor</h1>
+<p>Chaotic solution to the Lorenz system — σ, ρ, β parameters</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+let sigma=10, rho=28, beta=8/3;
+let lx=0.1, ly=0, lz=0;
+const dt=0.005;
+let paused=false, speed=1;
+let simTime=0;
+let viewAngle=0.5;
+
+const trail=[];
+const maxTrail=8000;
+const trail2=[]; // secondary trajectory (slightly different IC)
+
+let lx2=0.1001, ly2=0, lz2=0;
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    // Main
+    const dx=sigma*(ly-lx);
+    const dy=lx*(rho-lz)-ly;
+    const dz=lx*ly-beta*lz;
+    lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;
+    trail.push({x:lx,y:ly,z:lz});
+    if(trail.length>maxTrail)trail.shift();
+    // Secondary (for sensitivity)
+    const dx2=sigma*(ly2-lx2);
+    const dy2=lx2*(rho-lz2)-ly2;
+    const dz2=lx2*ly2-beta*lz2;
+    lx2+=dx2*dt;ly2+=dy2*dt;lz2+=dz2*dt;
+    trail2.push({x:lx2,y:ly2,z:lz2});
+    if(trail2.length>maxTrail)trail2.shift();
+    simTime+=dt;
+  }
+}
+
+function resetSim(){
+  lx=0.1;ly=0;lz=0;
+  lx2=0.1001;ly2=0;lz2=0;
+  trail.length=0;trail2.length=0;simTime=0;
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+function project(x,y,z,ang){
+  const ca=Math.cos(ang), sa=Math.sin(ang);
+  const cb=Math.cos(0.35), sb=Math.sin(0.35);
+  const rx=x*ca-y*sa;
+  const ry=x*sa+y*ca;
+  return[rx*8, ry*cb-z*sb*0.7];
+}
+
+// Pre-run
+for(let i=0;i<1000;i++){
+  const dx=sigma*(ly-lx);const dy=lx*(rho-lz)-ly;const dz=lx*ly-beta*lz;
+  lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;
+  trail.push({x:lx,y:ly,z:lz});
+  const dx2=sigma*(ly2-lx2);const dy2=lx2*(rho-lz2)-ly2;const dz2=lx2*ly2-beta*lz2;
+  lx2+=dx2*dt;ly2+=dy2*dt;lz2+=dz2*dt;
+  trail2.push({x:lx2,y:ly2,z:lz2});
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  const cx_=W/2, cy_=H/2+20;
+
+  // Main attractor
+  if(trail.length>2){
+    ctx.beginPath();
+    const [sx0,sy0]=project(trail[0].x,trail[0].y,trail[0].z,viewAngle);
+    ctx.moveTo(cx_+sx0,cy_-sy0);
+    for(let i=1;i<trail.length;i++){
+      const [sx,sy]=project(trail[i].x,trail[i].y,trail[i].z,viewAngle);
+      ctx.lineTo(cx_+sx,cy_-sy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.3;ctx.stroke();
+
+    // Color gradient version
+    ctx.beginPath();
+    for(let i=Math.max(0,trail.length-1500);i<trail.length;i++){
+      const [sx,sy]=project(trail[i].x,trail[i].y,trail[i].z,viewAngle);
+      if(i===Math.max(0,trail.length-1500))ctx.moveTo(cx_+sx,cy_-sy);else ctx.lineTo(cx_+sx,cy_-sy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+
+    // Secondary (sensitivity)
+    ctx.beginPath();
+    const [sx02,sy02]=project(trail2[0].x,trail2[0].y,trail2[0].z,viewAngle);
+    ctx.moveTo(cx_+sx02,cy_-sy02);
+    for(let i=1;i<trail2.length;i++){
+      const [sx2,sy2]=project(trail2[i].x,trail2[i].y,trail2[i].z,viewAngle);
+      ctx.lineTo(cx_+sx2,cy_-sy2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.2;ctx.stroke();
+  }
+
+  // Current position
+  const [cx_p,cy_p]=project(lx,ly,lz,viewAngle);
+  const grad=ctx.createRadialGradient(cx_+cx_p-2,cy_-cy_p-2,1,cx_+cx_p,cy_-cy_p,5);
+  grad.addColorStop(0,'#000');grad.addColorStop(1,'#444');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(cx_+cx_p,cy_-cy_p,4,0,Math.PI*2);ctx.fill();
+
+  // Sensitivity label
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('Δ(0)=0.0001 → Δ(t) huge',cx_+120,cy_-200);
+
+  // x-z plane projection (small)
+  const pzx=W-150, pzy=H-120;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(pzx,pzy,130,100);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+  ctx.fillText('x-z',pzx+3,pzy+8);
+  if(trail.length>2){
+    ctx.beginPath();
+    for(let i=0;i<trail.length;i++){
+      const gx=pzx+65+(trail[i].x/25)*60;
+      const gy=pzy+50-(trail[i].z/45)*45;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.4;ctx.stroke();
+  }
+
+  // Info boxes
+  const ex=20, ey=H-100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ex,ey,260,85);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('LORENZ SYSTEM',ex+6,ey+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText('dx/dt = σ(y−x)',ex+6,ey+30);
+  ctx.fillText('dy/dt = x(ρ−z) − y',ex+6,ey+42);
+  ctx.fillText('dz/dt = xy − βz',ex+6,ey+54);
+  ctx.fillText(`σ=${sigma.toFixed(1)}  ρ=${rho.toFixed(1)}  β=${beta.toFixed(4)}`,ex+6,ey+70);
+
+  // State box
+  const sx_=300, sy_=H-100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(sx_,sy_,200,85);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  ctx.fillText('STATE',sx_+6,sy_+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText(`x = ${lx.toFixed(3)}`,sx_+6,sy_+30);
+  ctx.fillText(`y = ${ly.toFixed(3)}`,sx_+6,sy_+44);
+  ctx.fillText(`z = ${lz.toFixed(3)}`,sx_+6,sy_+58);
+  ctx.fillText(`t = ${simTime.toFixed(2)}`,sx_+6,sy_+72);
+
+  // Distance between trajectories
+  const d=Math.sqrt((lx-lx2)**2+(ly-ly2)**2+(lz-lz2)**2);
+  // Lyapunov estimate
+  const lyapEst=simTime>0.1?Math.log(Math.max(d,1e-10))/(simTime*10):0;
+
+  const dx_=520, dy_=H-100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(dx_,dy_,180,85);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  ctx.fillText('CHAOS METRICS',dx_+6,dy_+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText(`|Δ(t)| = ${d.toFixed(6)}`,dx_+6,dy_+30);
+  ctx.fillText(`λ₁ (est.) = ${lyapEst.toFixed(4)}`,dx_+6,dy_+44);
+  ctx.fillText(`max |Δ| = ${Math.max(...trail.map((_,i)=>Math.sqrt((trail[i].x-trail2[i]?.x||0)**2+(trail[i].y-trail2[i]?.y||0)**2+(trail[i].z-trail2[i]?.z||0)**2))).toFixed(4)}`,dx_+6,dy_+58);
+  ctx.fillText(`λ₁>0 → CHAOTIC ${lyapEst>0.1?'✓':'⟳'}`,dx_+6,dy_+72);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>σ</label><input type="range" id="sigmaS" min="1" max="20" step="0.5" value="${sigma}"><span class="val" id="sigmaV">${sigma.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>ρ</label><input type="range" id="rhoS" min="5" max="50" step="0.5" value="${rho}"><span class="val" id="rhoV">${rho.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>β</label><input type="range" id="betaS" min="0.5" max="6" step="0.05" value="${beta}"><span class="val" id="betaV">${beta.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>Angle</label><input type="range" id="angS" min="0" max="3.14" step="0.02" value="${viewAngle}"><span class="val" id="angV">${viewAngle.toFixed(2)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="10" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('sigmaS').addEventListener('input',function(){
+    sigma=parseFloat(this.value);document.getElementById('sigmaV').textContent=sigma.toFixed(1);
+    resetSim();for(let i=0;i<500;i++){const dx=sigma*(ly-lx);const dy=lx*(rho-lz)-ly;const dz=lx*ly-beta*lz;lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;trail.push({x:lx,y:ly,z:lz});const dx2=sigma*(ly2-lx2);const dy2=lx2*(rho-lz2)-ly2;const dz2=lx2*ly2-beta*lz2;lx2+=dx2*dt;ly2+=dy2*dt;lz2+=dz2*dt;trail2.push({x:lx2,y:ly2,z:lz2});}
+  });
+  document.getElementById('rhoS').addEventListener('input',function(){
+    rho=parseFloat(this.value);document.getElementById('rhoV').textContent=rho.toFixed(1);
+    resetSim();for(let i=0;i<500;i++){const dx=sigma*(ly-lx);const dy=lx*(rho-lz)-ly;const dz=lx*ly-beta*lz;lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;trail.push({x:lx,y:ly,z:lz});const dx2=sigma*(ly2-lx2);const dy2=lx2*(rho-lz2)-ly2;const dz2=lx2*ly2-beta*lz2;lx2+=dx2*dt;ly2+=dy2*dt;lz2+=dz2*dt;trail2.push({x:lx2,y:ly2,z:lz2});}
+  });
+  document.getElementById('betaS').addEventListener('input',function(){
+    beta=parseFloat(this.value);document.getElementById('betaV').textContent=beta.toFixed(2);
+    resetSim();for(let i=0;i<500;i++){const dx=sigma*(ly-lx);const dy=lx*(rho-lz)-ly;const dz=lx*ly-beta*lz;lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;trail.push({x:lx,y:ly,z:lz});const dx2=sigma*(ly2-lx2);const dy2=lx2*(rho-lz2)-ly2;const dz2=lx2*ly2-beta*lz2;lx2+=dx2*dt;ly2+=dy2*dt;lz2+=dz2*dt;trail2.push({x:lx2,y:ly2,z:lz2});}
+  });
+  document.getElementById('angS').addEventListener('input',function(){
+    viewAngle=parseFloat(this.value);document.getElementById('angV').textContent=viewAngle.toFixed(2);
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+}
+
+}
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

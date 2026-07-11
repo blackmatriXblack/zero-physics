@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nuclear Decay Chain · N(t) = N₀e^{−λt}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;right:10px;pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;align-items:center}
+.panel{background:rgba(255,255,255,0.85);border:1px solid rgba(0,0,0,0.15);padding:5px 10px;font-size:11px;line-height:1.5}
+.panel .eq{font-size:13px;margin-bottom:3px}
+button{background:#fff;border:1px solid #111;padding:4px 10px;font:11px/1.4 'Courier New',monospace;cursor:pointer;color:#111;pointer-events:auto;letter-spacing:1px;text-transform:uppercase}
+button:hover{background:#111;color:#fff}
+input[type=range]{accent-color:#111;width:72px;vertical-align:middle;pointer-events:auto}
+label{font-size:11px;pointer-events:auto;white-space:nowrap}
+#data{position:absolute;bottom:8px;left:8px;right:8px;pointer-events:none;display:flex;gap:4px;flex-wrap:wrap}
+.dbox{border:1px solid rgba(0,0,0,0.12);padding:2px 6px;font-size:10px;line-height:1.4;background:rgba(255,255,255,0.8);min-width:65px}
+.dbox b{font-size:11px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="row">
+<div class="panel"><div class="eq">dNᵢ/dt = −λᵢNᵢ + λᵢ₋₁Nᵢ₋₁ &nbsp; Aᵢ = λᵢNᵢ &nbsp; N(t)=N₀e^{−λt}</div></div>
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<button id="playBtn">⏸</button>
+<button id="resetBtn">↺</button>
+<label>Speed <input type="range" id="speed" min="0" max="5" step="0.5" value="1"></label>
+</div>
+</div>
+<div class="row">
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<label>²³⁸U T½×10⁹ <input type="range" id="hl0" min="1" max="9" step="0.1" value="4.47"></label>
+<label>²³⁴Th T½×10⁻⁵ <input type="range" id="hl1" min="0" max="5" step="0.1" value="2.4"></label>
+<label>²³⁴Pa T½×10⁻⁵ <input type="range" id="hl2" min="0" max="3" step="0.1" value="1.2"></label>
+<label>²³⁴U T½×10⁵ <input type="range" id="hl3" min="0" max="8" step="0.1" value="4.0"></label>
+</div>
+</div>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+const Ns=5,names=['²³⁸U','²³⁴Th','²³⁴Pa','²³⁴U','²³⁰Th'];
+const decayModes=['α (4.27MeV)','β⁻ (0.27MeV)','β⁻ (0.51MeV)','α (4.86MeV)','stable'];
+let hlScale=[4.47e9,2.4e-5,1.2e-5,4.0e5,0.1];
+let hlMult=[1,1,1,1,1];
+function getHL(i){const h=hlScale[i]*hlMult[i];return h>0?h:1e-10}
+function getLambda(i){return Math.log(2)/getHL(i)}
+let pops=[1,0,0,0,0],t=0,paused=false,speed=1;
+const hist=Array.from({length:Ns},()=>[]),actHist=Array.from({length:Ns},()=>[]),maxHist=800;
+function step(){
+  const dt=0.005*speed;
+  const dN=new Array(Ns).fill(0);
+  for(let i=0;i<Ns;i++){
+    const lam=getLambda(i);if(lam<=0)continue;
+    dN[i]-=lam*pops[i]*dt;
+    if(i<Ns-1)dN[i+1]+=lam*pops[i]*dt;
+  }
+  for(let i=0;i<Ns;i++)pops[i]=Math.max(0,pops[i]+dN[i]);
+  t+=dt;
+  if(hist[0].length===0||t-hist[0][hist[0].length-1].t>0.002){
+    for(let i=0;i<Ns;i++){hist[i].push({t,val:pops[i]});actHist[i].push({t,val:getLambda(i)*pops[i]})}
+    while(hist[0].length>maxHist){for(let i=0;i<Ns;i++){hist[i].shift();actHist[i].shift()}}
+  }
+}
+function reset(){
+  pops=[1,0,0,0,0];t=0;
+  for(let i=0;i<Ns;i++){hist[i]=[];actHist[i]=[]}
+  for(let i=0;i<10;i++)step();
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const gx=W*0.04,gw=W*0.58,gy=H*0.12,gh=H*0.62;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.6;
+  ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(gx,gy+gh);ctx.moveTo(gx,gy+gh);ctx.lineTo(gx+gw,gy+gh);ctx.stroke();
+  const tmax=Math.max(t,0.1),styles=['#111','rgba(0,0,0,0.6)','rgba(0,0,0,0.45)','rgba(0,0,0,0.3)','rgba(0,0,0,0.18)'];
+  for(let s=0;s<Ns;s++){
+    const h=hist[s];if(h.length<2)continue;
+    ctx.beginPath();
+    for(let i=0;i<h.length;i++){const sx=gx+h[i].t/tmax*gw,sy=gy+gh-h[i].val*gh;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)}
+    ctx.strokeStyle=styles[s];ctx.lineWidth=s===0?1.6:1.2-0.2*s;ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.5;ctx.setLineDash([2,3]);
+  ctx.beginPath();ctx.moveTo(gx,gy+gh*0.368);ctx.lineTo(gx+gw,gy+gh*0.368);
+  ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';ctx.fillText('1/e',gx+gw+2,gy+gh*0.368+3);
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='10px monospace';ctx.fillText('N(t)',gx+4,gy-5);ctx.fillText('t →',gx+gw-24,gy+gh-4);
+  for(let s=0;s<Ns;s++){
+    const ly=H*0.05+s*14;ctx.fillStyle=styles[s];ctx.font='9px monospace';ctx.fillText(names[s],W*0.65,ly);
+    const val=hist[s].length>0?hist[s][hist[s].length-1].val:0;
+    ctx.fillText(val.toFixed(5),W*0.65+48,ly);
+    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='7px monospace';ctx.fillText(decayModes[s],W*0.65+95,ly);
+  }
+  const ly2=H*0.05+Ns*14+2;ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';
+  ctx.fillText('t = '+t.toFixed(3)+' sim',W*0.65,ly2);
+  ctx.fillText('1/e line = '+(-Math.log(0.368)/getLambda(0)).toFixed(3),W*0.65,ly2+12);
+  const gx2=W*0.65,gw2=W*0.32,gy2=H*0.42,gh2=H*0.42;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('activity A(t) = λN(t)',gx2+4,gy2+12);
+  const maxA=actHist.reduce((mx,h)=>Math.max(mx,h.length>0?h[h.length-1].val:0),0.001);
+  for(let s=0;s<Ns;s++){
+    const h=actHist[s];if(h.length<2)continue;
+    ctx.beginPath();
+    for(let i=0;i<h.length;i++){const sx=gx2+h[i].t/tmax*gw2,sy=gy2+gh2-h[i].val/maxA*gh2;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)}
+    ctx.strokeStyle=styles[s];ctx.lineWidth=0.8;ctx.stroke();
+  }
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';ctx.fillText('A(t)',gx2+4,gy2+gh2-4);
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.font='8px monospace';ctx.fillText('²³⁸U →(α) ²³⁴Th →(β⁻) ²³⁴Pa →(β⁻) ²³⁴U →(α) ²³⁰Th (stable, T½=7.5×10⁴ yr)',W*0.04,H*0.93);
+  ctx.fillStyle='rgba(0,0,0,0.07)';ctx.font='7px monospace';ctx.fillText('Bateman: N_n(t)=N₁₀·(Πλᵢ)·Σexp(−λⱼt)/Π(λₖ−λⱼ) | secular equilibrium: λ₀N₀=λ₁N₁ when λ₀<<λ₁',W*0.04,H*0.96);
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.font='7px monospace';ctx.fillText('Uranium series: ²³⁸U (4.47×10⁹ yr) → ²³⁴Th (24.1 d) → ²³⁴Pa (1.17 min) → ²³⁴U (2.46×10⁵ yr) → ²³⁰Th (7.5×10⁴ yr)',W*0.04,H*0.99);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('Solid: N(t) | Dashed: A(t)',gx2+4,gy2+gh2-12);
+  ctx.fillStyle='rgba(0,0,0,0.12)';ctx.font='8px monospace';ctx.fillText('1/e line: time after which N(t)=N₀/e ≈ 0.368N₀',W*0.04,H*0.90);
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='7px monospace';ctx.fillText('For n-species chain: Nᵢ(t) = N₁₀ · Πⱼ₌₀ⁱ⁻¹λⱼ · Σⱼ₌₀ⁱ exp(−λⱼt) / Πₖ≠ⱼ(λₖ−λⱼ)',W*0.04,H*0.86);
+  const eqRatio=activePops[0]>0?(activePops[1]/activePops[0]):0;
+  const dataEl=document.getElementById('data');
+  let html='';
+  const activePops=hist.map(h=>h.length>0?h[h.length-1].val:0);
+  const total=activePops.reduce((a,b)=>a+b,0);
+  const sumAct=actHist.map(h=>h.length>0?h[h.length-1].val:0).reduce((a,b)=>a+b,0);
+  const A0=getLambda(0)*activePops[0];const A1=getLambda(1)*activePops[1];const A2=getLambda(2)*activePops[2];
+  const T05=Math.log(2)/getLambda(0);const T15=Math.log(2)/getLambda(1);const T25=Math.log(2)/getLambda(2);
+  const A3=getLambda(3)*activePops[3];const T35=Math.log(2)/getLambda(3);const T45=Math.log(2)/getLambda(4);
+  const maxIdx=activePops.indexOf(Math.max(...activePops));const domIsotope=names[maxIdx];
+  const A4=getLambda(4)*activePops[4];const domActIdx=sumAct>0?[A0,A1,A2,A3,A4].indexOf(Math.max(A0,A1,A2,A3,A4)):-1;
+  const seqEq=activePops[0]>0?(getLambda(0)/getLambda(1)).toExponential(3):'0';
+  const totA=A0+A1+A2+A3+A4;const halflives=[T05,T15,T25,T35,T45].map(h=>h.toExponential(3));
+  const d=[{k:'t',v:t.toFixed(3)},{k:'ΣN',v:total.toFixed(5)},{k:'ΣA',v:sumAct.toExponential(3)},{k:'²³⁸U',v:activePops[0].toFixed(5)},{k:'²³⁴Th',v:activePops[1].toFixed(5)},{k:'²³⁴Pa',v:activePops[2].toFixed(5)},{k:'²³⁴U',v:activePops[3].toFixed(5)},{k:'²³⁰Th',v:activePops[4].toFixed(5)},{k:'λ₀',v:getLambda(0).toExponential(3)},{k:'λ₁',v:getLambda(1).toExponential(3)},{k:'λ₂',v:getLambda(2).toExponential(3)},{k:'λ₃',v:getLambda(3).toExponential(3)},{k:'T½₀',v:T05.toExponential(3)},{k:'T½₁',v:T15.toExponential(3)},{k:'T½₂',v:T25.toExponential(3)},{k:'T½₃',v:T35.toExponential(3)},{k:'T½₄',v:T45.toExponential(3)},{k:'A₀',v:A0.toExponential(3)},{k:'A₁',v:A1.toExponential(3)},{k:'A₂',v:A2.toExponential(3)},{k:'A₃',v:A3.toExponential(3)},{k:'A₄',v:A4.toExponential(3)},{k:'A_total',v:totA.toExponential(3)},{k:'N₁/N₀',v:eqRatio.toExponential(3)},{k:'λ₀/λ₁',v:seqEq},{k:'maxN',v:domIsotope},{k:'maxA',v:domActIdx>=0?names[domActIdx]:'—'},{k:'N₀',v:'1 (norm)'}];
+  for(const kv of d)html+=`<div class="dbox"><b>${kv.k}</b><br><span class="val">${kv.v}</span></div>`;
+  dataEl.innerHTML=html;
+}
+let ac=0;
+function loop(){if(!paused)for(let i=0;i<3;i++)step();ac++;if(ac%2===0)draw();requestAnimationFrame(loop)}
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'▶':'⏸'}
+document.getElementById('resetBtn').onclick=reset;
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+['hl0','hl1','hl2','hl3'].forEach((id,i)=>{document.getElementById(id).oninput=function(){hlMult[i]=Math.pow(10,parseFloat(this.value)-4.5);reset()}});
+reset();loop();
+</script>
+</body>
+</html>

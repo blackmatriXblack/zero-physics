@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pauli Exclusion · No two fermions share same state</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.2em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;margin:5px 0;max-width:940px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:60px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:0.6em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0;font-size:0.6em;color:#666;max-width:940px;justify-content:center}
+.s sp{white-space:nowrap}
+.s .l{color:#999}
+.s .vl{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Pauli Exclusion Principle</h1>
+<p>No two fermions occupy identical quantum state — Aufbau filling</p>
+<canvas id="c" width="940" height="480"></canvas>
+<div class="c" id="ctrl"></div><div class="s" id="st"></div>
+<script>
+const C=document.getElementById('c'),x=C.getContext('2d'),W=940,H=480;
+const shells=[{n:1,l:0,lab:'1s',max:2},{n:2,l:0,lab:'2s',max:2},{n:2,l:1,lab:'2p',max:6},{n:3,l:0,lab:'3s',max:2},{n:3,l:1,lab:'3p',max:6},{n:3,l:2,lab:'3d',max:10},{n:4,l:0,lab:'4s',max:2},{n:4,l:1,lab:'4p',max:6},{n:4,l:2,lab:'4d',max:10},{n:4,l:3,lab:'4f',max:14}];
+const elements=['H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn'];
+let Z=6,paused=0,speed=1;
+const HL=100;
+let hs={fill:[],cap:[],valence:[]};
+let animFrame=0;
+function reset(){Z=6;paused=0;speed=1;animFrame=0;for(let k in hs)hs[k]=[];}
+function step(){if(paused)return;animFrame++;const totalCap=shells.reduce((s,sh)=>s+sh.max,0);
+let fillCount=0,rem=Z;for(let sh of shells){const f=Math.min(rem,sh.max);fillCount+=f;rem-=f;if(rem<=0)break;}
+const val=Z<=2?Z:Z%8;if(Z>2&&Z<=10)hs.fill.push((Z-2)/8);else if(Z>10&&Z<=18)hs.fill.push((Z-10)/8);else hs.fill.push(fillCount/totalCap);
+hs.cap.push(totalCap);hs.valence.push(val>=0?val:0);
+for(let k in hs)if(hs[k].length>HL)hs[k].shift();}
+function draw(){
+x.fillStyle='#fff';x.fillRect(0,0,W,H);
+const cx=200,cy=250;const shellR=[55,90,125,160];
+// Fixed: draw each shell arc correctly
+for(let r of shellR){x.strokeStyle='rgba(0,0,0,0.04)';x.lineWidth=.3;x.beginPath();x.arc(cx,cy,r,0,Math.PI*2);x.stroke();}
+x.fillStyle='#111';x.font='6px monospace';x.textAlign='center';x.fillText('nucleus',cx,cy+14);
+let remaining=Z,eCount=0;let maxN=0;
+for(let sh of shells){if(remaining<=0)break;
+const r=sh.n*48;const fill=Math.min(remaining,sh.max);maxN=Math.max(maxN,sh.n);
+for(let i=0;i<fill;i++){const ang=((i+0.5)/sh.max)*2*Math.PI+animFrame*0.003;
+const ex=cx+r*Math.cos(ang),ey=cy+r*Math.sin(ang);
+x.fillStyle='#111';x.beginPath();x.arc(ex,ey,4,0,Math.PI*2);x.fill();eCount++;}
+const frac=fill+'/'+sh.max;
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='center';const angL=(0.25)*2*Math.PI;x.fillText(sh.lab+' ('+frac+')',cx+(r+16)*Math.cos(angL),cy+(r+16)*Math.sin(angL));
+remaining-=fill;}
+// Energy level diagram
+const lx=440,ly=30,lw=230,lh=420;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(lx,ly,lw,lh);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='center';x.fillText('Energy levels (Aufbau)',lx+lw/2,ly-3);
+let confStr='',rem=Z;
+for(let sh of shells){const f=Math.min(rem,sh.max);confStr+=sh.lab+'^'+f+' ';rem-=f;if(rem<=0)break;}
+x.fillStyle='#111';x.font='6px monospace';x.textAlign='left';x.fillText('Z='+Z+' → '+confStr,lx+8,ly+14);
+x.fillStyle='#999';x.font='5px monospace';x.fillText('e⁻='+eCount+'  shells:'+maxN,lx+8,ly+28);
+let eLeft=Z;let lvlIdx=0;
+for(let i=0;i<shells.length;i++){if(eLeft<=0)break;
+const sh=shells[i];const ey=ly+50+i*28;
+x.strokeStyle='rgba(0,0,0,0.06)';x.lineWidth=.3;x.beginPath();x.moveTo(lx+25,ey);x.lineTo(lx+lw-25,ey);x.stroke();
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='right';x.fillText(sh.lab,lx+22,ey+2);
+const fill=Math.min(eLeft,sh.max);
+for(let j=0;j<fill;j++){const ex=lx+32+j*16;x.fillStyle='#111';x.beginPath();x.arc(ex,ey-1,3,0,Math.PI*2);x.fill();}
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText(fill+'/'+sh.max,lx+lw-24,ey+2);
+eLeft-=fill;lvlIdx++;}
+// History mini-graph
+const mgX=700,mgY=30,mgW=210,mgH=80;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(mgX,mgY,mgW,mgH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('Filling fraction history',mgX+3,mgY+8);
+const arr=hs.fill;if(arr.length>1){x.strokeStyle='rgba(0,0,0,0.2)';x.lineWidth=.7;x.beginPath();let fi=true;
+for(let i=0;i<arr.length;i++){const px=mgX+i*mgW/HL,py=mgY+mgH-3-arr[i]*(mgH-6);fi?x.moveTo(px,py):x.lineTo(px,py);fi=false;}
+x.stroke();}
+// Periodic table info
+x.fillStyle='#111';x.font='18px monospace';x.textAlign='center';
+const el=Z<=elements.length?elements[Z-1]:'?';
+x.fillText(el,700,150);
+x.fillStyle='#999';x.font='6px monospace';x.fillText('Z='+Z,700,166);
+// Orbital filling table
+const oX=700,oY=190,oW=210,oH=120;
+x.strokeStyle='#eee';x.lineWidth=.5;x.strokeRect(oX,oY,oW,oH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';x.fillText('Orbital filling (spin ↑↓)',oX+3,oY+8);
+let row=0;let eL=Z;
+for(let sh of shells){if(eL<=0)break;const f=Math.min(eL,sh.max);
+x.fillStyle='#666';x.font='5px monospace';x.fillText(sh.lab+': '+f+'e⁻',oX+8,oY+22+row*12);
+const pairs=Math.floor(f/2);const singles=f%2;
+for(let p=0;p<pairs;p++){x.fillStyle='#111';x.fillRect(oX+70+p*14,oY+18+row*12,3,3);x.fillRect(oX+70+p*14,oY+22+row*12,3,3);}
+if(singles){x.fillStyle='#111';x.fillRect(oX+70+pairs*14,oY+18+row*12,3,3);x.fillStyle='#999';x.fillRect(oX+70+pairs*14,oY+22+row*12,3,3);}
+eL-=f;row++;}
+// Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="cg"><label>Z</label><input type="range" id="zS" min="1" max="30" step="1" value="${Z}"><span class="v" id="zV">${Z}</span></div>`+
+`<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="v" id="spV">${speed}</span></div>`+
+`<button id="ppBtn">⏸</button><button id="rsBtn">↺</button>`;
+document.getElementById('zS').oninput=function(){Z=+this.value;document.getElementById('zV').textContent=Z;};
+document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+document.getElementById('ppBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶':'⏸';};
+document.getElementById('rsBtn').onclick=reset;
+}
+let rem2=Z;let totalCap=0,usedCap=0,valence=Z-((Z<=2?0:Z<=10?2:Z<=18?10:18)),lastShell='',lastSubshell='';
+for(let sh of shells){const f=Math.min(rem2,sh.max);totalCap+=sh.max;usedCap+=f;if(f>0){lastSubshell=sh.lab;lastShell=sh.lab;}rem2-=f;if(rem2<=0)break;}
+document.getElementById('st').innerHTML=
+`<sp><span class="l">Element</span> <span class="vl">${el}</span> (Z=${Z})</sp>`+
+`<sp><span class="l">e⁻ =</span> <span class="vl">${Z}</span></sp>`+
+`<sp><span class="l">Config</span> <span class="vl">${confStr.trim()}</span></sp>`+
+`<sp><span class="l">Last orbital</span> <span class="vl">${lastSubshell}</span></sp>`+
+`<sp><span class="l">Valence e⁻</span> <span class="vl">${valence<0?0:valence}</span></sp>`+
+`<sp><span class="l">Filled</span> <span class="vl">${usedCap}/${totalCap}</span> states</sp>`+
+`<sp><span class="l">Shells used</span> <span class="vl">${maxN}</span></sp>`+
+`<sp><span class="l">Unpaired</span> <span class="vl">${Z%2===0?0:1}</span></sp>`+
+`<sp><span class="l">Occ. subshells</span> <span class="vl">${Math.min(lvlIdx,shells.length)}</span></sp>`+
+`<sp><span class="l">Rule</span> <span class="vl">Pauli exclusion</span></sp>`+
+`<sp><span class="l">Filling frac</span> <span class="vl">${hs.fill.length>0?hs.fill[hs.fill.length-1].toFixed(3):0}</span></sp>`+
+`<sp><span class="l">State</span> <span class="vl">${paused?'Paused':'Running'}</span></sp>`;
+}
+reset();
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

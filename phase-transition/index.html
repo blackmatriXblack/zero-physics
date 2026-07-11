@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase Transition · 1st order, liquid↔gas coexistence</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.2em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;margin:5px 0;max-width:940px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:60px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:22px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:0.6em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0;font-size:0.6em;color:#666;max-width:940px;justify-content:center}
+.s sp{white-space:nowrap}
+.s .l{color:#999}
+.s .vl{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Phase Transition</h1>
+<p>1st-order transition — Liquid↔Gas coexistence (Clausius–Clapeyron)</p>
+<canvas id="c" width="940" height="490"></canvas>
+<div class="c" id="ctrl"></div><div class="s" id="st"></div>
+<script>
+const C=document.getElementById('c'),x=C.getContext('2d'),W=940,H=490;
+const Tc=647,Pc=221;
+let T=400,p=50,paused=0,speed=1;
+let order=0.5;
+const HL=100;
+let hs={order:[],liq:[],gas:[]};
+function reset(){T=400;p=50;paused=0;speed=1;order=0.5;for(let k in hs)hs[k]=[];}
+// Saturation pressure (Clausius-Clapeyron: P_sat = Pc * exp(-6.5 * Tc/T))
+function satP(t){return Pc*Math.exp(-Tc/t*6.5);}
+function step(){if(paused)return;for(let _=0;_<speed;_++){
+  const pSat=satP(T);const ratio=p/pSat;
+  order=Math.min(1,Math.max(0,1-ratio));
+  if(order<0.01)order=0;if(order>0.99)order=1;
+  // Add small thermal fluctuation to molecules
+}}let mols=[];
+for(let i=0;i<80;i++)mols.push({x:Math.random(),y:Math.random(),vx:(Math.random()-.5)*.02,vy:(Math.random()-.5)*.02});
+function draw(){
+x.fillStyle='#fff';x.fillRect(0,0,W,H);
+const pSat=satP(T);const ratio=p/pSat;const reducedT=T/Tc;const reducedP=p/Pc;
+// Phase diagram
+const gX=60,gY=30,gW=380,gH=320;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(gX,gY,gW,gH);
+x.fillStyle='#999';x.font='7px monospace';x.textAlign='left';x.fillText('P–T Phase diagram',gX+3,gY+8);
+x.textAlign='center';x.fillText('T (K)',gX+gW/2,gY+gH+12);
+x.save();x.translate(gX-14,gY+gH/2);x.rotate(-Math.PI/2);x.fillText('P (bar)',0,0);x.restore();
+// Coexistence curve
+x.strokeStyle='#111';x.lineWidth=1.5;x.beginPath();let fi=true;
+for(let x0=0;x0<=gW;x0++){const t=273+x0/gW*(Tc-1);const pS=Pc*Math.exp(-Tc/t*6.5);
+const px=gX+x0,py=gY+gH-pS/(Pc*1.5)*(gH-20);
+if(pS>0&&pS<Pc*1.5&&py>gY&&py<gY+gH){fi?x.moveTo(px,py):x.lineTo(px,py);fi=false;}else fi=true;}
+x.stroke();
+// Critical point
+const cPx=gX+gW,cpY=gY+gH-Pc/(Pc*1.5)*(gH-20);
+x.fillStyle='#111';x.beginPath();x.arc(cPx,cpY,4,0,Math.PI*2);x.fill();
+x.fillStyle='#111';x.font='6px monospace';x.textAlign='right';x.fillText('C (Tc='+Tc+'K, Pc='+Pc+'bar)',cPx-6,cpY+3);
+// Current state
+const sPx=gX+Math.max(0,(T-273)/(Tc-273))*gW;
+const sPy=gY+gH-p/(Pc*1.5)*(gH-20);
+x.strokeStyle='rgba(0,0,0,0.15)';x.lineWidth=.5;
+x.beginPath();x.moveTo(sPx,gY+gH+4);x.lineTo(sPx,sPy);x.lineTo(gX-4,sPy);x.stroke();
+x.fillStyle='#111';x.beginPath();x.arc(sPx,sPy,5,0,Math.PI*2);x.fill();
+const phase=order<0.05?'Liquid':order>0.95?'Gas':'Two-phase';
+x.fillStyle='#111';x.font='6px monospace';x.textAlign='right';x.fillText(phase,sPx-8,sPy-8);
+// Phase labels
+x.fillStyle='rgba(0,0,0,0.02)';x.font='7px monospace';x.fillText('LIQUID',gX+60,gY+80);
+x.fillText('GAS',gX+gW-60,gY+40);
+x.fillText('TWO-PHASE',gX+gW/2-25,gY+gH/2);
+// Box visualization with animated molecules
+const bx=500,by=170,bw=310,bh=250;
+x.strokeStyle='#111';x.lineWidth=1.5;x.strokeRect(bx,by,bw,bh);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='center';x.fillText('Phase coexistence',bx+bw/2,by-4);
+// Move molecules
+for(let m of mols){const liqH=(1-order)*bh;
+if(m.y*bh>bh-liqH){// in liquid
+  m.x+=m.vx*2;m.y+=m.vy*2;
+}else{// in gas
+  m.x+=m.vx*6+Math.random()*0.005-0.0025;m.y+=m.vy*6+Math.random()*0.005-0.0025;
+}if(m.x>1)m.x-=1;if(m.x<0)m.x+=1;if(m.y>1)m.y-=1;if(m.y<0)m.y+=1;}
+const liqH=(1-order)*bh;
+for(let m of mols){const mx=bx+10+m.x*(bw-20),my=by+10+m.y*(bh-20);
+const inLiquid=(my>by+bh-liqH);
+x.fillStyle=inLiquid?'rgba(0,0,0,0.15)':'rgba(0,0,0,0.04)';
+x.beginPath();x.arc(mx,my,inLiquid?2.5:1.5,0,Math.PI*2);x.fill();}
+x.fillStyle='rgba(0,0,0,0.06)';x.fillRect(bx+2,by+bh-liqH,bw-4,liqH);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='center';
+x.fillText('Liquid ('+(liqH/bh*100).toFixed(0)+'%)',bx+bw/2,by+bh-6);
+x.fillText('Gas ('+((1-liqH/bh)*100).toFixed(0)+'%)',bx+bw/2,by+12);
+x.fillStyle='#111';x.font='6px monospace';x.textAlign='center';x.fillText(phase+'  φ='+order.toFixed(2),bx+bw/2,by-16);
+// History mini graph
+const mgX=500,mgY=30,mgW=370,mgH=80;
+x.strokeStyle='#ddd';x.lineWidth=.5;x.strokeRect(mgX,mgY,mgW,mgH);
+x.fillStyle='#999';x.font='6px monospace';x.textAlign='left';x.fillText('Order parameter history (0=liq, 1=gas)',mgX+3,mgY+8);
+const arr=hs.order;if(arr.length>1){x.strokeStyle='rgba(0,0,0,0.25)';x.lineWidth=.8;x.beginPath();let fi2=true;
+for(let i=0;i<arr.length;i++){const px=mgX+i*mgW/HL,py=mgY+mgH-3-arr[i]*(mgH-6);fi2?x.moveTo(px,py):x.lineTo(px,py);fi2=false;}
+x.stroke();}
+// Energy/fraction bars
+const eX=500,eY=120,eW=370,eH=16;
+x.fillStyle='rgba(0,0,0,0.05)';x.fillRect(eX,eY,eW,eH);
+x.fillStyle='rgba(0,0,0,0.1)';x.fillRect(eX,eY,eW*(1-order),eH);
+x.fillStyle='#999';x.font='5px monospace';x.textAlign='left';
+x.fillText('liquid fraction = '+(1-order).toFixed(3),eX+3,eY-2);
+// Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="cg"><label>T (K)</label><input type="range" id="tS" min="273" max="646" step="1" value="${T}"><span class="v" id="tV">${T}</span></div>`+
+`<div class="cg"><label>P (bar)</label><input type="range" id="pS" min="1" max="300" step="1" value="${p}"><span class="v" id="pV">${p}</span></div>`+
+`<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="v" id="spV">${speed}</span></div>`+
+`<button id="ppBtn">⏸</button><button id="rsBtn">↺</button>`;
+document.getElementById('tS').oninput=function(){T=+this.value;document.getElementById('tV').textContent=T;};
+document.getElementById('pS').oninput=function(){p=+this.value;document.getElementById('pV').textContent=p;};
+document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+document.getElementById('ppBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶':'⏸';};
+document.getElementById('rsBtn').onclick=reset;
+// Store history
+hs.order.push(order);hs.liq.push(1-order);hs.gas.push(order);
+for(let k in hs)if(hs[k].length>HL)hs[k].shift();
+}
+document.getElementById('st').innerHTML=
+`<sp><span class="l">T =</span> <span class="vl">${T}</span> K</sp>`+
+`<sp><span class="l">P =</span> <span class="vl">${p}</span> bar</sp>`+
+`<sp><span class="l">Phase</span> <span class="vl">${phase}</span></sp>`+
+`<sp><span class="l">Order φ =</span> <span class="vl">${order.toFixed(3)}</span></sp>`+
+`<sp><span class="l">P_sat =</span> <span class="vl">${pSat.toFixed(1)}</span> bar</sp>`+
+`<sp><span class="l">P/P_sat =</span> <span class="vl">${ratio.toFixed(3)}</span></sp>`+
+`<sp><span class="l">T/T_c =</span> <span class="vl">${reducedT.toFixed(3)}</span></sp>`+
+`<sp><span class="l">P/P_c =</span> <span class="vl">${reducedP.toFixed(3)}</span></sp>`+
+`<sp><span class="l">Liquid %</span> <span class="vl">${((1-order)*100).toFixed(1)}%</span></sp>`+
+`<sp><span class="l">Gas %</span> <span class="vl">${(order*100).toFixed(1)}%</span></sp>`+
+`<sp><span class="l">T_c =</span> <span class="vl">${Tc}</span> K</sp>`+
+`<sp><span class="l">P_c =</span> <span class="vl">${Pc}</span> bar</sp>`+
+`<sp><span class="l">Molecules</span> <span class="vl">${mols.length}</span></sp>`;
+}
+reset();hs.order=[];hs.liq=[];hs.gas=[];
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gyroscope · Ω<sub>p</sub> = mgd / Iω<sub>s</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Gyroscope Precession</h1>
+<p>Ω<sub>p</sub> = mgd / Iω<sub>s</sub> — Euler's equations for a spinning top</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=500,cx=280,cy=280;
+let spin=10,tilt=.4,phi=0,psi=0,theta=tilt,I=1,mgd=2;
+let nutA=0,nutV=0,precRate=0,paused=false,speed=1,simTime=0;
+const hist={t:[],prec:[],theta:[],spin:[],phi:[],ek:[],ep:[]};
+function reset(){theta=tilt;phi=0;psi=0;nutA=0;nutV=0;simTime=0;for(let k in hist)hist[k]=[];paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause'}
+function project(x,y,z){const sc=160,d=5,cp=Math.cos(.25),sp=Math.sin(.25),rx=x,ry=y*cp-z*sp,rz=y*sp+z*cp,f=d/(d+rz/sc);return{sx:cx+rx*f,sy:cy-ry*f,sz:rz}}
+function step(){if(paused)return;const n=Math.ceil(speed);for(let s=0;s<n;s++){
+  const dt=.006;psi+=spin*dt;
+  if(Math.abs(theta)>0.001)precRate=mgd/(I*spin);else precRate=0;
+  phi+=precRate*dt;
+  const nf=I*spin/I;nutA+=nutV*dt;nutV+=-nf*nf*nutA*dt;nutV*=.998;
+  theta=tilt+nutA*.03;if(theta<.05)theta=.05;if(theta>1.3)theta=1.3;
+  simTime+=dt;hist.t.push(simTime);hist.prec.push(precRate);hist.theta.push(theta);hist.spin.push(spin);hist.phi.push(phi);
+  const ek=.5*I*spin*spin,ep=mgd*(1-Math.cos(theta));hist.ek.push(ek);hist.ep.push(ep);
+  if(hist.t.length>500)for(let k in hist)hist[k].shift()
+}}
+function drawTop(){
+  const l=1.8,R=.6,h=.3,cP=Math.cos(phi),sP=Math.sin(phi),cT=Math.cos(theta),sT=Math.sin(theta),cS=Math.cos(psi),sS=Math.sin(psi);
+  function rot(x,y,z){let x1=x*cP-y*sP,y1=x*sP+y*cP,z1=z;let x2=x1*cT+z1*sT,y2=y1,z2=-x1*sT+z1*cT;let x3=x2*cS-y2*sS,y3=x2*sS+y2*cS,z3=z2;return{x:x3,y:y3,z:z3}}
+  const tip=rot(0,0,-l),tp=rot(0,0,.1),tipP=project(tip.x,tip.y,tip.z),tpP=project(tp.x,tp.y,tp.z);
+  ctx.strokeStyle='rgba(0,0,0,.15)';ctx.lineWidth=.8;ctx.setLineDash([4,4]);const axP=project(0,0,l+.6);ctx.beginPath();ctx.moveTo(tipP.sx,tipP.sy);ctx.lineTo(axP.sx,axP.sy);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(tipP.sx,tipP.sy);ctx.lineTo(tpP.sx,tpP.sy);ctx.stroke();
+  const pts=20;ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();
+  for(let i=0;i<=pts;i++){const a=i/pts*Math.PI*2,p=rot(R*Math.cos(a),R*Math.sin(a),h),pp=project(p.x,p.y,p.z);i===0?ctx.moveTo(pp.sx,pp.sy):ctx.lineTo(pp.sx,pp.sy)}ctx.closePath();ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=.8;ctx.beginPath();
+  for(let i=0;i<=pts;i++){const a=i/pts*Math.PI*2,p=rot(.25*Math.cos(a),.25*Math.sin(a),h),pp=project(p.x,p.y,p.z);i===0?ctx.moveTo(pp.sx,pp.sy):ctx.lineTo(pp.sx,pp.sy)}ctx.closePath();ctx.stroke();
+  for(let i=0;i<pts;i+=4){const a=i/pts*Math.PI*2,p=rot(R*Math.cos(a),R*Math.sin(a),h),ip=rot(.25*Math.cos(a),.25*Math.sin(a),h),pp=project(p.x,p.y,p.z),ipp=project(ip.x,ip.y,ip.z);ctx.beginPath();ctx.moveTo(pp.sx,pp.sy);ctx.lineTo(ipp.sx,ipp.sy);ctx.stroke()}
+  const gr=ctx.createRadialGradient(tipP.sx-2,tipP.sy-2,1,tipP.sx,tipP.sy,5);gr.addColorStop(0,'#555');gr.addColorStop(1,'#000');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(tipP.sx,tipP.sy,4,0,Math.PI*2);ctx.fill()
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,.03)';ctx.fillRect(0,H-60,W,60);ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,H-60);ctx.lineTo(W,H-60);ctx.stroke();
+  const pp=project(0,0,1.8);
+  if(hist.t.length>2){const r=Math.hypot(pp.sx-cx,pp.sy-cy);for(let i=1;i<hist.t.length;i+=2){const a=i/hist.t.length*phi;ctx.fillStyle=`rgba(0,0,0,${.02+.06*(i/hist.t.length)})`;ctx.beginPath();ctx.arc(cx+r*Math.cos(a),cy+r*Math.sin(a),1.5+.5*(i/hist.t.length),0,Math.PI*2);ctx.fill()}}
+  drawTop();
+  ctx.fillStyle='#111';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText(`ω<sub>s</sub> = ${spin.toFixed(1)} rad/s`,480,24);
+  ctx.fillText(`Ω<sub>p</sub> = ${(precRate*180/Math.PI).toFixed(2)}°/s`,480,40);
+  ctx.fillText(`θ = ${(theta*180/Math.PI).toFixed(2)}°`,480,56);
+  ctx.fillText(`T<sub>p</sub> = ${(2*Math.PI/(precRate||.001)).toFixed(2)}s`,480,72);
+  ctx.fillText(`Ω<sub>p</sub> = mgd/(Iω<sub>s</sub>)`,480,96);
+  // Precession rate graph
+  const pgX=480,pgY=120,pgW=390,pgH=70;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(pgX,pgY,pgW,pgH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Ω<sub>p</sub> vs time',pgX+3,pgY+10);
+  if(hist.prec.length>2){const pm=Math.max(...hist.prec)*1.1||1;ctx.beginPath();for(let i=0;i<hist.prec.length;i++){const px=pgX+(i/hist.prec.length)*pgW,py=pgY+pgH-(hist.prec[i]/pm)*pgH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=.8;ctx.stroke()}
+  // Theta graph
+  const tgX=480,tgY=200,tgW=390,tgH=55;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(tgX,tgY,tgW,tgH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('θ vs time',tgX+3,tgY+10);
+  if(hist.theta.length>2){const tmin=Math.min(...hist.theta),tmax=Math.max(...hist.theta),tr=(tmax-tmin)*1.2||1;ctx.beginPath();for(let i=0;i<hist.theta.length;i++){const px=tgX+(i/hist.theta.length)*tgW,py=tgY+tgH-(hist.theta[i]-tmin)/tr*tgH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.7;ctx.stroke()}
+  // Energy graph
+  const egX=480,egY=265,egW=390,egH=45;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(egX,egY,egW,egH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('spin KE vs time',egX+3,egY+10);
+  if(hist.ek.length>2){const eM=Math.max(...hist.ek)*1.1||1;ctx.beginPath();for(let i=0;i<hist.ek.length;i++){const px=egX+(i/hist.ek.length)*egW,py=egY+egH-(hist.ek[i]/eM)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=.7;ctx.stroke()}
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>ω<sub>s</sub></label><input type="range" id="spinS" min="2" max="25" step=".5" value="${spin}"><span class="val" id="spinV">${spin.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>θ₀</label><input type="range" id="tiltS" min=".05" max="1.2" step=".01" value="${tilt}"><span class="val" id="tiltV">${tilt.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>I</label><input type="range" id="iS" min=".3" max="3" step=".1" value="${I}"><span class="val" id="iV">${I.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>mgd</label><input type="range" id="mgdS" min=".2" max="5" step=".1" value="${mgd}"><span class="val" id="mgdV">${mgd.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+  document.getElementById('spinS').addEventListener('input',function(){spin=parseFloat(this.value);document.getElementById('spinV').textContent=spin.toFixed(1)});
+  document.getElementById('tiltS').addEventListener('input',function(){tilt=parseFloat(this.value);document.getElementById('tiltV').textContent=tilt.toFixed(2);reset()});
+  document.getElementById('iS').addEventListener('input',function(){I=parseFloat(this.value);document.getElementById('iV').textContent=I.toFixed(1)});
+  document.getElementById('mgdS').addEventListener('input',function(){mgd=parseFloat(this.value);document.getElementById('mgdV').textContent=mgd.toFixed(1)});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause'});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x'});
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">ω<sub>s</sub> =</span> <span class="val">${spin.toFixed(1)}</span> rad/s</span>`+
+    `<span><span class="label">Ω<sub>p</sub> =</span> <span class="val">${(precRate*180/Math.PI).toFixed(3)}</span>°/s</span>`+
+    `<span><span class="label">θ =</span> <span class="val">${(theta*180/Math.PI).toFixed(2)}</span>°</span>`+
+    `<span><span class="label">ϕ =</span> <span class="val">${(phi*180/Math.PI).toFixed(2)}</span>°</span>`+
+    `<span><span class="label">ψ =</span> <span class="val">${(psi*180/Math.PI).toFixed(2)}</span>°</span>`+
+    `<span><span class="label">T<sub>p</sub> =</span> <span class="val">${(2*Math.PI/(precRate||.001)).toFixed(2)}</span> s</span>`+
+    `<span><span class="label">KE<sub>spin</sub> =</span> <span class="val">${(.5*I*spin*spin).toFixed(2)}</span></span>`+
+    `<span><span class="label">mgd(1-cosθ) =</span> <span class="val">${(mgd*(1-Math.cos(theta))).toFixed(3)}</span></span>`+
+    `<span><span class="label">L<sub>s</sub> =</span> <span class="val">${(I*spin).toFixed(2)}</span></span>`+
+    `<span><span class="label">nutA =</span> <span class="val">${(nutA*.03*180/Math.PI).toFixed(3)}</span>°</span>`+
+    `<span><span class="label">mgd/I =</span> <span class="val">${(mgd/I).toFixed(3)}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+reset();
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

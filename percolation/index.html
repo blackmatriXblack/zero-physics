@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Percolation Theory</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Percolation Theory — Fluid flow through random porous medium</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <label>p <input type="range" id="pS" min="20" max="85" step="1" value="58"><span class="v" id="pV">0.58</span></label>
+  <label>Spd <input type="range" id="sS" min="1" max="10" value="3"><span class="v" id="sV">3</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let prob = 0.58;
+let speed = 3;
+let running = true;
+let trials = 0;
+
+const HIST_LEN = 120;
+let histPerc = [];
+let histProb = [];
+
+const COLS = 60;
+const ROWS = Math.floor(H / (W / COLS));
+const CELL = W / COLS;
+const THRESH = 0.5927;
+
+let grid = [];
+let filled = [];
+let percolates = false;
+
+function init() {
+  grid = [];
+  filled = [];
+  percolates = false;
+  for (let y = 0; y < ROWS; y++) {
+    grid[y] = [];
+    filled[y] = [];
+    for (let x = 0; x < COLS; x++) {
+      grid[y][x] = Math.random() < prob;
+      filled[y][x] = 0;
+    }
+  }
+  const stack = [];
+  for (let x = 0; x < COLS; x++) {
+    if (grid[0][x]) {
+      stack.push({ x, y: 0 });
+      filled[0][x] = 1;
+    }
+  }
+  while (stack.length > 0) {
+    const { x, y } = stack.pop();
+    if (y === ROWS - 1) percolates = true;
+    const neighbors = [
+      { x: x - 1, y }, { x: x + 1, y },
+      { x, y: y - 1 }, { x, y: y + 1 }
+    ];
+    for (const n of neighbors) {
+      if (n.x >= 0 && n.x < COLS && n.y >= 0 && n.y < ROWS) {
+        if (grid[n.y][n.x] && !filled[n.y][n.x]) {
+          filled[n.y][n.x] = 1;
+          stack.push(n);
+        }
+      }
+    }
+  }
+}
+
+function draw() {
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  let openCount = 0, filledCount = 0;
+  let runLen = 0, maxRun = 0;
+  const total = ROWS * COLS;
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x]) openCount++;
+      if (filled[y][x]) {
+        filledCount++;
+        runLen++;
+      } else {
+        runLen = 0;
+      }
+      if (runLen > maxRun) maxRun = runLen;
+      cx.fillStyle = filled[y][x] ? '#888' : grid[y][x] ? '#fff' : '#000';
+      cx.fillRect(x * CELL, y * CELL, CELL - 0.5, CELL - 0.5);
+    }
+  }
+  const pActual = openCount / total;
+  cx.strokeStyle = 'rgba(0,0,0,0.2)';
+  cx.lineWidth = 0.5;
+  cx.strokeRect(0, 0, COLS * CELL, ROWS * CELL);
+
+  // Side panel: mini graph
+  const gx = COLS * CELL + 30;
+  const gy = 20;
+  const gw = Math.min(W - gx - 20, 200);
+  const gh = Math.min(H / 2 - 40, 150);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)';
+  cx.lineWidth = 0.5;
+  cx.strokeRect(gx, gy, gw, gh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)';
+  cx.font = '7px monospace';
+  cx.fillText('Percolation rate', gx + 4, gy + 10);
+
+  if (histPerc.length > 1) {
+    cx.strokeStyle = 'rgba(0,0,0,0.4)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histPerc.length; i++) {
+      const x = gx + (i / (HIST_LEN - 1)) * gw;
+      const y = gy + gh - (histPerc[i] / 1) * gh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+  if (histProb.length > 1) {
+    cx.strokeStyle = 'rgba(0,0,0,0.2)'; cx.lineWidth = 0.5;
+    cx.setLineDash([2, 2]); cx.beginPath();
+    for (let i = 0; i < histProb.length; i++) {
+      const x = gx + (i / (HIST_LEN - 1)) * gw;
+      const y = gy + gh - (histProb[i] / 1) * gh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke(); cx.setLineDash([]);
+  }
+
+  // Count clusters
+  let clusters = 0;
+  const seen = [];
+  for (let y = 0; y < ROWS; y++) seen[y] = [];
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (grid[y][x] && !filled[y][x] && !seen[y][x]) {
+        clusters++;
+        const stack = [{ x, y }];
+        seen[y][x] = 1;
+        while (stack.length) {
+          const p = stack.pop();
+          for (const d of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            const nx = p.x + d[0], ny = p.y + d[1];
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+              if (grid[ny][nx] && !filled[ny][nx] && !seen[ny][nx]) {
+                seen[ny][nx] = 1;
+                stack.push({ x: nx, y: ny });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  document.getElementById('d').innerHTML =
+    'p=' + prob.toFixed(3) +
+    '<br>p<sub>act</sub>=' + pActual.toFixed(4) +
+    '<br>p−p<sub>c</sub>=' + (prob - THRESH).toFixed(4) +
+    '<br>Open=' + openCount + '/' + total +
+    '<br>Filled=' + filledCount +
+    '<br>Perc=' + (percolates ? 'YES' : 'NO') +
+    '<br>Fill%=' + (filledCount / total * 100).toFixed(1) +
+    '%<br>Open%=' + (pActual * 100).toFixed(1) +
+    '%<br>p<sub>c</sub>=' + THRESH.toFixed(4) +
+    '<br>Trials=' + trials +
+    '<br>Clusters=' + clusters +
+    '<br>Max chain=' + maxRun;
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+
+document.getElementById('rb').onclick = () => {
+  trials = 0; histPerc = []; histProb = []; init();
+};
+
+document.getElementById('pS').oninput = function () {
+  prob = parseFloat(this.value) / 100;
+  document.getElementById('pV').textContent = prob.toFixed(2);
+  init(); histPerc = []; histProb = [];
+};
+
+document.getElementById('sS').oninput = function () {
+  speed = parseFloat(this.value);
+  document.getElementById('sV').textContent = speed;
+};
+
+function loop() {
+  if (running) {
+    trials++;
+    init();
+    histPerc.push(percolates ? 1 : 0);
+    histProb.push(prob);
+    if (histPerc.length > HIST_LEN) {
+      histPerc.shift();
+      histProb.shift();
+    }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resizeCanvas();
+init();
+loop();
+</script>
+</body>
+</html>

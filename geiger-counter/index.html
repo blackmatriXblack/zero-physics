@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geiger Counter · P(k)=λᵏe^{−λ}/k!</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;right:10px;pointer-events:none;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;align-items:center}
+.panel{background:rgba(255,255,255,0.85);border:1px solid rgba(0,0,0,0.15);padding:6px 10px;font-size:11px;line-height:1.5}
+.panel .eq{font-size:13px;margin-bottom:3px}
+button{background:#fff;border:1px solid #111;padding:4px 10px;font:11px/1.4 'Courier New',monospace;cursor:pointer;color:#111;pointer-events:auto;letter-spacing:1px;text-transform:uppercase}
+button:hover{background:#111;color:#fff}
+input[type=range]{accent-color:#111;width:72px;vertical-align:middle;pointer-events:auto}
+label{font-size:11px;pointer-events:auto;white-space:nowrap}
+#data{position:absolute;bottom:10px;left:10px;right:10px;pointer-events:none;display:flex;gap:6px;flex-wrap:wrap}
+.dbox{border:1px solid rgba(0,0,0,0.12);padding:3px 7px;font-size:10px;line-height:1.5;background:rgba(255,255,255,0.8);min-width:70px}
+.dbox b{font-size:11px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="row">
+<div class="panel"><div class="eq">dN/dt = −λN &nbsp; P(k)=λᵏe^{−λ}/k!</div></div>
+<div class="panel" style="display:flex;gap:8px;align-items:center">
+<button id="playBtn">⏸</button>
+<button id="resetBtn">↺</button>
+<label>Speed <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1"></label>
+</div>
+</div>
+<div class="row">
+<div class="panel" style="display:flex;gap:8px;align-items:center">
+<label>T½ <input type="range" id="hlSlider" min="2" max="30" step="0.5" value="8"></label>
+<label>N₀ <input type="range" id="n0Slider" min="500" max="20000" step="500" value="5000"></label>
+<label>Dead τ <input type="range" id="deadSlider" min="0.02" max="0.5" step="0.01" value="0.1"></label>
+</div>
+</div>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+let halfLife=8,N0=5000,N=N0,deadTime=0.1,t=0,paused=false,speed=1;
+let counts=0,binTimer=0,totalCounts=0,dtBin=1;
+const countHistory=[],maxHist=200;
+let isDead=false,deadTimer=0,missedCounts=0;
+let atoms=[],atomsValid=false;
+function initAtoms(){
+  atoms=[];const cx=W*0.28,cy=H*0.5,sR=Math.min(W*0.18,H*0.4);
+  for(let i=0;i<N0;i++){const r=Math.sqrt(Math.random())*sR,a=Math.random()*Math.PI*2;atoms.push({alive:true,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a),phase:Math.random()*6.28})}
+  atomsValid=true;
+}
+function step(){
+  if(paused)return;
+  const dt=0.05*speed,lambda=Math.log(2)/halfLife;
+  const decayProb=lambda*N*dt;
+  const decays=Math.floor(decayProb)+(Math.random()<decayProb%1?1:0);
+  const actualDecays=Math.min(decays,N);
+  let killed=0;
+  for(let d=0;d<actualDecays&&killed<N;d++){
+    let idx;
+    do{idx=Math.floor(Math.random()*N0)}while(!atoms[idx].alive);
+    atoms[idx].alive=false;killed++;
+  }
+  N-=killed;
+  for(let d=0;d<killed;d++){
+    if(!isDead){counts++;totalCounts++;isDead=true;deadTimer=0}
+    else missedCounts++;
+  }
+  if(isDead){deadTimer+=dt;if(deadTimer>=deadTime)isDead=false}
+  t+=dt;binTimer+=dt;
+  if(binTimer>=dtBin){
+    countHistory.push(counts);
+    if(countHistory.length>maxHist)countHistory.shift();
+    counts=0;binTimer-=dtBin;
+  }
+}
+function reset(){
+  N=N0;t=0;counts=0;binTimer=0;totalCounts=0;countHistory.length=0;isDead=false;deadTimer=0;missedCounts=0;
+  initAtoms();
+  for(let i=0;i<60;i++)step();
+}
+function poisson(k,lam){if(k<0||lam<=0)return 0;let lp=-lam+k*Math.log(lam);for(let i=2;i<=k;i++)lp-=Math.log(i);return Math.exp(lp)}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  if(!atomsValid)initAtoms();
+  const cx=W*0.28,cy=H*0.5;
+  for(const a of atoms){
+    if(a.alive){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.arc(a.x,a.y,1,0,6.28);ctx.fill()}
+    else{ctx.fillStyle='rgba(0,0,0,0.05)';ctx.beginPath();ctx.arc(a.x+Math.sin(a.phase*t*0.5)*a.phase*3,a.y+Math.cos(a.phase*t*0.5)*a.phase*3,0.6,0,6.28);ctx.fill()}
+  }
+  const gx=W*0.5,gw=W*0.46,gy=H*0.05,gh=H*0.38;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('counts / bin',gx+4,gy+12);
+  if(countHistory.length>1){
+    const maxC=Math.max(...countHistory,1);
+    ctx.beginPath();
+    for(let i=0;i<countHistory.length;i++){const sx=gx+i/countHistory.length*gw,sy=gy+gh-countHistory[i]/maxC*gh;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)}
+    ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+  }
+  const px=gx,py=H*0.48,pw=gw,ph=H*0.44;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(px,py,pw,ph);
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('Poisson (λ='+(countHistory.slice(-40).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(40,countHistory.length))).toFixed(1)+')',px+4,py+12);
+  if(countHistory.length>10){
+    const avgL=countHistory.slice(-60).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(60,countHistory.length));
+    const maxK=Math.max(...countHistory,Math.ceil(avgL*2.5+2));
+    const bins=new Array(maxK+2).fill(0);
+    for(const c of countHistory.slice(-80))bins[Math.min(c,maxK+1)]++;
+    const maxB=Math.max(...bins,1),bw=pw/(maxK+2);
+    for(let k=0;k<=maxK+1;k++){const bh=bins[k]/maxB*ph;ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(px+k*bw+1,py+ph-bh,bw-2,bh)}
+    ctx.beginPath();
+    for(let k=0;k<=maxK+1;k++){const p=poisson(k,avgL),sy=py+ph-p/(poisson(Math.floor(avgL),avgL))*ph;k===0?ctx.moveTo(px+(k+0.5)*bw,sy):ctx.lineTo(px+(k+0.5)*bw,sy)}
+    ctx.strokeStyle='rgba(0,0,0,0.7)';ctx.lineWidth=1.2;ctx.setLineDash([3,2]);ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.font='9px monospace';ctx.fillText('N(k)',px+4,py+ph-4);
+  const gx2=W*0.05,gy2=H*0.05,gw2=W*0.17,gh2=H*0.88;
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#111';ctx.font='9px monospace';
+  const dcx=W*0.28,cy2=H*0.5;
+  ctx.fillText('GM tube',W*0.28-24,cy2-70);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.strokeRect(dcx-22,cy2-65,44,130);
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(dcx,cy2-55);ctx.lineTo(dcx,cy2+55);ctx.stroke();
+  if(isDead){ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(dcx-22,cy2-65,44,130)}
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.font='9px monospace';ctx.fillText('anode',dcx-16,cy2+3);
+  const rate=N*Math.log(2)/halfLife;
+  const recent=countHistory.slice(-40),meanC=recent.length>0?recent.reduce((a,b)=>a+b,0)/recent.length:0;
+  const varC=recent.length>1?recent.reduce((s,v)=>s+(v-meanC)**2,0)/(recent.length-1):0;
+  const detEff=N0>0?totalCounts/(N0-N+totalCounts)*100:0;
+  const dataEl=document.getElementById('data');
+  let html='';
+  const disp=[
+    {k:'N₀',v:N0},{k:'N(t)',v:N},{k:'t(s)',v:t.toFixed(1)},{k:'A(Bq)',v:rate.toFixed(1)},{k:'T½(s)',v:halfLife.toFixed(1)},{k:'τ_dead',v:deadTime.toFixed(3)},{k:'tot cnt',v:totalCounts},{k:'missed',v:missedCounts},{k:'<k>',v:meanC.toFixed(2)},{k:'σ²',v:varC.toFixed(2)},{k:'S/N',v:(meanC>0?(meanC/Math.sqrt(varC)):0).toFixed(2)},{k:'ε(%)',v:detEff.toFixed(1)},{k:'cnt/bin',v:countHistory.length>0?countHistory[countHistory.length-1]:0},{k:'live%',v:deadTime>0?((1-countHistory.slice(-10).filter(x=>x>0).length/Math.max(1,10))*100).toFixed(0):'100'}
+  ];
+  for(const kv of disp)html+=`<div class="dbox"><b>${kv.k}</b><br>${kv.v}</div>`;
+  dataEl.innerHTML=html;
+}
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'▶':'⏸'}
+document.getElementById('resetBtn').onclick=reset;
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('hlSlider').oninput=function(){halfLife=parseFloat(this.value);reset()};
+document.getElementById('n0Slider').oninput=function(){N0=parseInt(this.value);reset()};
+document.getElementById('deadSlider').oninput=function(){deadTime=parseFloat(this.value);reset()};
+initAtoms();reset();
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Hydrogen Atom · Eₙ = −13.6/n² eV</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+select{font-family:'Courier New',monospace;font-size:0.65em;border:1px solid #ddd;padding:2px 4px}
+</style></head><body>
+<h1>Hydrogen Atom</h1>
+<p>Eₙ = −13.6/n² eV · ∇²ψ = −2m/ℏ²(E − V)ψ</p>
+<canvas id="c" width="900" height="540"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=540;
+let n=2,l=1,m=0,paused=0,spd=1;
+let hx=[],hy=[],ht=0;
+const a0=40,rMax=250,cx=350,cy=270;
+function P(r){const p=r/a0
+if(n===1&&l===0)return Math.exp(-2*p)
+if(n===2&&l===0)return(2-p)**2*Math.exp(-p)
+if(n===2&&l===1)return p*p*Math.exp(-p)
+if(n===3&&l===0)return(6-6*p+p*p)**2*Math.exp(-2*p/3)
+if(n===3&&l===1)return p*p*(4-p)**2*Math.exp(-2*p/3)
+if(n===3&&l===2)return p**4*Math.exp(-2*p/3)
+if(n===4&&l===0)return(24-36*p+12*p*p-p*p*p)**2*Math.exp(-p/2)/100
+if(n===4&&l===1)return p*p*(6-p)**2*Math.exp(-p/2)/50
+if(n===4&&l===2)return p**4*Math.exp(-p/2)/20
+if(n===4&&l===3)return p**6*Math.exp(-p/2)/100
+return Math.exp(-p)*p**(2*l)}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+const En=-13.6/(n*n)
+const img=ctx.createImageData(rMax*2,cy*2)
+for(let y=-cy+10;y<cy-10;y++)for(let x=-rMax+10;x<rMax-10;x++){const r=Math.sqrt(x*x+y*y),th=Math.acos(y/r||0)
+if(r>rMax)continue;const rad=P(r),ang=Math.abs(Math.cos(th))**(2*Math.abs(m)),dens=rad*ang
+const gy=Math.round(255-dens*1800),idx=((y+cy)*rMax*2+(x+rMax))*4
+img.data[idx]=gy;img.data[idx+1]=gy;img.data[idx+2]=gy;img.data[idx+3]=255}
+ctx.putImageData(img,cx-rMax,cy)
+ctx.fillStyle='#111';ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill()
+ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('p⁺',cx,cy-12)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('|ψ|² cloud',cx-rMax+10,cy-rMax+14)
+const eX=680,eY=50,eW=180,eH=400
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(eX,eY,eW,eH)
+ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Eₙ = −13.6/n² eV',eX+eW/2,eY-6)
+for(let i=1;i<=6;i++){const ey=eY+eH-(-13.6/(i*i)+13.6)/13.6*eH
+ctx.strokeStyle=i===n?'#111':'rgba(0,0,0,0.06)';ctx.lineWidth=i===n?2:0.3
+ctx.beginPath();ctx.moveTo(eX+20,ey);ctx.lineTo(eX+eW-20,ey);ctx.stroke()
+ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='right';ctx.fillText(`n=${i}`,eX+18,ey+3)
+ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='left';ctx.fillText(`${(-13.6/(i*i)).toFixed(1)}eV`,eX+eW-18,ey+3)}
+if(n>1){const ey1=eY+eH-(-13.6+13.6)/13.6*eH,eyn=eY+eH-(-13.6/(n*n)+13.6)/13.6*eH
+ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(eX+40,eyn);ctx.lineTo(eX+10,eyn);ctx.stroke()}
+const lambda=1240/(-En),probMax=P(0)
+let rp=0;for(let rr=0;rr<rMax;rr+=1)rp+=P(rr)*rr*rr*4*Math.PI;rp/=rMax
+ht+=0.01*spd;if(!paused&&ht<200){hx.push(ht);hy.push(probMax);if(hx.length>150){hx.shift();hy.shift()}}
+if(hx.length>1){const mgX=680,mgY=470,mgW=180,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='left';ctx.fillText('|ψ|² max',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/200)*mgW,yy=mgY+mgH-hy[i]*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+let Eavg=0;for(let i=1;i<=6;i++)Eavg+=(-13.6/(i*i))
+document.getElementById('st').innerHTML=
+`<span><span class="l">n =</span> <span class="v">${n}</span></span>`+
+`<span><span class="l">l =</span> <span class="v">${l} (${['s','p','d','f'][l]||'?'})</span></span>`+
+`<span><span class="l">m =</span> <span class="v">${m}</span></span>`+
+`<span><span class="l">Eₙ =</span> <span class="v">${En.toFixed(3)}</span> eV</span>`+
+`<span><span class="l">λ(n→1) =</span> <span class="v">${lambda.toFixed(1)}</span> nm</span>`+
+`<span><span class="l">Z =</span> <span class="v">1</span></span>`+
+`<span><span class="l">a₀ =</span> <span class="v">0.529 Å</span></span>`+
+`<span><span class="l">|ψ(0)|² =</span> <span class="v">${probMax.toFixed(4)}</span></span>`+
+`<span><span class="l">⟨r⟩∝</span> <span class="v">${rp.toFixed(3)}</span></span>`+
+`<span><span class="l">1/λ =</span> <span class="v">${(1/(lambda||1)*1e6).toFixed(2)}</span> m⁻¹</span>`+
+`<span><span class="l">ν = c/λ =</span> <span class="v">${(3e8/(lambda*1e-9||1)/1e14).toFixed(2)}e14</span> Hz</span>`+
+`<span><span class="l">ΔE = E₁−Eₙ =</span> <span class="v">${(-13.6-En).toFixed(3)}</span> eV</span>`}
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>n</label><select id="nS"><option value="1" ${n===1?'selected':''}>1</option><option value="2" ${n===2?'selected':''}>2</option><option value="3" ${n===3?'selected':''}>3</option><option value="4" ${n===4?'selected':''}>4</option></select></div>`+
+`<div class="ctrl-g"><label>l</label><select id="lS"><option value="0" ${l===0?'selected':''}>0(s)</option><option value="1" ${l===1?'selected':''}>1(p)</option><option value="2" ${l===2?'selected':''}>2(d)</option><option value="3" ${l===3?'selected':''}>3(f)</option></select></div>`+
+`<div class="ctrl-g"><label>m</label><select id="mS"><option value="-2" ${m===-2?'selected':''}>-2</option><option value="-1" ${m===-1?'selected':''}>-1</option><option value="0" ${m===0?'selected':''}>0</option><option value="1" ${m===1?'selected':''}>1</option><option value="2" ${m===2?'selected':''}>2</option></select></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('nS').onchange=function(){n=+this.value;hx=[];hy=[];ht=0}
+document.getElementById('lS').onchange=function(){l=+this.value;hx=[];hy=[];ht=0}
+document.getElementById('mS').onchange=function(){m=+this.value;hx=[];hy=[];ht=0}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){hx=[];hy=[];ht=0}
+}
+anim()
+</script></body></html>

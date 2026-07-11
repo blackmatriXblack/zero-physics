@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum HO · Eₙ = ℏω(n+½) Hermite eigenfunctions</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Quantum Harmonic Oscillator</h1>
+<p>Eₙ = ℏω(n+½) — Hermite polynomial eigenfunctions</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+const L=600,ox=150,oy=300;
+let n=2,paused=false,time=0,speed=1;
+const history={t:[],xp:[],pp:[],En:[]};
+const FLOOR=1e-10;
+
+function hermite(n,x){
+  if(n===0)return 1;
+  if(n===1)return 2*x;
+  return 2*x*hermite(n-1,x)-2*(n-1)*hermite(n-2,x);
+}
+function fact(n){return n<=1?1:n*fact(n-1);}
+
+function psi(n,x){
+  const pref=1/Math.sqrt(Math.pow(2,n)*fact(n)*Math.sqrt(Math.PI));
+  return pref*hermite(n,x)*Math.exp(-x*x/2);
+}
+
+function energyExact(n){return n+0.5;}
+
+function expectationX(n,phase){
+  let xp=0;
+  for(let x=-4;x<=4;x+=0.02){
+    const p=psi(n,x);
+    xp+=x*p*p*0.02;
+  }
+  return xp;
+}
+
+function expectationP(n,phase){
+  let pp=0;
+  for(let x=-4;x<=4;x+=0.05){
+    const dp=(psi(n,x+0.01)-psi(n,x-0.01))/0.02;
+    pp+=-dp*psi(n,x)*0.05;
+  }
+  return pp;
+}
+
+function classicalTurningPoints(n){return Math.sqrt(2*(n+0.5));}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const En=energyExact(n);
+  const xt=classicalTurningPoints(n);
+  const curY=oy-En*50;
+
+  // Potential V(x) = ½x²
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+  ctx.beginPath();
+  for(let x=0;x<=L;x++){
+    const xx=(x/L)*6-3;
+    const V=0.5*xx*xx;
+    const py=oy-V*60;
+    x===0?ctx.moveTo(ox+x,py):ctx.lineTo(ox+x,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText('V(x) = ½mω²x²',ox+L/2,oy-180);
+
+  // All energy levels
+  for(let i=0;i<=7;i++){
+    const ey=oy-(i+0.5)*50;
+    if(ey<40)break;
+    ctx.strokeStyle=i===n?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.06)';
+    ctx.lineWidth=i===n?1:0.3;ctx.setLineDash(i===n?[]:[3,3]);
+    ctx.beginPath();ctx.moveTo(ox+5,ey);ctx.lineTo(ox+L-5,ey);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=i===n?'#111':'#999';ctx.font='5px monospace';ctx.textAlign='right';
+    ctx.fillText(`n=${i}`,ox+4,ey+3);
+    ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='left';
+    ctx.fillText(`E=${(i+0.5).toFixed(1)}`,ox+L-2,ey+3);
+  }
+
+  // Wavefunction
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;
+  ctx.beginPath();
+  for(let x=0;x<=L;x++){
+    const xx=(x/L)*6-3;
+    const val=psi(n,xx)*2;
+    const py=oy-En*50-val*40;
+    x===0?ctx.moveTo(ox+x,py):ctx.lineTo(ox+x,py);
+  }
+  ctx.stroke();
+
+  // |ψ|²
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  for(let x=0;x<=L;x++){
+    const xx=(x/L)*6-3;
+    const val=psi(n,xx)*2;
+    const prob=val*val;
+    const py=oy-En*50-prob*80;
+    x===0?ctx.moveTo(ox+x,py):ctx.lineTo(ox+x,py);
+  }
+  ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText('ψ (—)  |ψ|² (- -)',ox+L/2,oy+20);
+
+  // Classical turning points
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText(`Classical turning pts x=±${xt.toFixed(2)}`,ox+L/2,oy+40);
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  const tpx1=ox+(3-xt)/6*L;const tpx2=ox+(3+xt)/6*L;
+  ctx.beginPath();ctx.arc(tpx1,curY,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(tpx2,curY,3,0,Math.PI*2);ctx.fill();
+
+  // Info box: expectation values
+  const ix=570,iy=320;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,300,110);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('EXPECTATION VALUES',ix+5,iy+14);
+  const expX=expectationX(n,time).toFixed(4);
+  const expP=expectationP(n,time).toFixed(4);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`⟨x⟩ = ${expX}   (expectation 0 for stationary)`,ix+5,iy+28);
+  ctx.fillText(`⟨p⟩ = ${expP}`,ix+5,iy+42);
+  ctx.fillText(`⟨E⟩ = ${En.toFixed(4)}   Eₙ = ℏω(${n}+½) = ${En.toFixed(1)}`,ix+5,iy+56);
+  ctx.fillText(`ΔE = ℏω (equally spaced)`,ix+5,iy+70);
+  ctx.fillText(`ZPE = ½ℏω = ${(0.5).toFixed(1)}   ${n===0?'✓ ground state':''}`,ix+5,iy+84);
+  ctx.fillText(`Nodes = ${n}`,ix+5,iy+98);
+
+  // Mini graph: probability density histogram
+  const hx=570,hy=30,hw=300,hh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(hx,hy,hw,hh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('|ψ|² SPATIAL DISTRIBUTION',hx+3,hy+10);
+  for(let i=0;i<60;i++){
+    const xx=(i/60)*6-3;
+    const val=psi(n,xx)*2;
+    const prob=val*val;
+    const barH=prob*hh*0.7;
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.fillRect(hx+i*(hw/60),hy+hh-10-barH,hw/60-1,barH);
+  }
+
+  // Mini graph: energy spectrum
+  const ex=570,ey=130,ew=300,eh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ex,ey,ew,eh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('ENERGY SPECTRUM Eₙ = ℏω(n+½)',ex+3,ey+10);
+  for(let i=0;i<=7;i++){
+    const barH=((i+0.5)/(7.5))*eh*0.7;
+    ctx.fillStyle=i===n?'#111':'rgba(0,0,0,0.12)';
+    ctx.fillRect(ex+8+i*(ew-16)/8,ey+eh-8-barH,(ew-16)/8-2,barH);
+    ctx.fillStyle='#666';ctx.font='5px monospace';ctx.textAlign='center';
+    ctx.fillText(`${i}`,ex+8+i*(ew-16)/8+(ew-16)/16,ey+eh-3);
+  }
+
+  // Probability norm
+  let normInt=0;
+  for(let x=-4;x<=4;x+=0.01)normInt+=psi(n,x)**2*0.01;
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';
+  ctx.fillText(`∫|ψ|²dx = ${normInt.toFixed(4)} ${Math.abs(normInt-1)<0.01?'✓':'⚠'}`,ex+3,ey+eh-5);
+
+  // Store history
+  history.t.push(time);history.xp.push(parseFloat(expX));history.pp.push(parseFloat(expP));history.En.push(En);
+  if(history.t.length>300){history.t.shift();history.xp.shift();history.pp.shift();history.En.shift();}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>n</label><input type="range" id="nS" min="0" max="7" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="val" id="spV">${speed}×</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('nS').addEventListener('input',function(){n=parseInt(this.value);document.getElementById('nV').textContent=n;});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('spV').textContent=speed+'×';});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',function(){paused=false;time=0;document.getElementById('pauseBtn').textContent='Pause';});
+
+  // Stats
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">n =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">Eₙ = (n+½)ℏω =</span> <span class="val">${En.toFixed(1)}</span></span>`+
+    `<span><span class="label">ZPE =</span> <span class="val">${(0.5).toFixed(1)}</span></span>`+
+    `<span><span class="label">Nodes =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">Turn. pts</span> <span class="val">x=±${xt.toFixed(2)}</span></span>`+
+    `<span><span class="label">⟨x⟩ =</span> <span class="val">${expX}</span></span>`+
+    `<span><span class="label">⟨p⟩ =</span> <span class="val">${expP}</span></span>`+
+    `<span><span class="label">∫|ψ|² =</span> <span class="val">${normInt.toFixed(4)}</span></span>`+
+    `<span><span class="label">ΔE =</span> <span class="val">ℏω (const)</span></span>`;
+}
+draw();
+</script>
+</body>
+</html>

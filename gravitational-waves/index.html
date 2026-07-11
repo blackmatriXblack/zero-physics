@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gravitational Waves</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Gravitational Waves</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480;
+let t=0, paused=false, speed=1, mass=1.5, sep=130;
+let chirpData=[], chirpTime=0;
+let historyFreq=[], historyAmp=[], historySep=[], historyTime=[];
+
+function resetSim(){
+  t=0;chirpData=[];chirpTime=0;
+  historyFreq=[];historyAmp=[];historySep=[];historyTime=[];
+}
+
+function update(){
+  if(paused)return;
+  const d=0.015*speed;
+  t+=d;chirpTime+=d;
+  const M=mass*2;
+  const a0=sep;
+  const a=a0*Math.max(0.15,1-t*0.005);
+  const omega=Math.sqrt(M/(a*a*a));
+  const fGW=omega/Math.PI;
+  const amp=4*Math.pow(M,2)/(a*Math.pow(1,2))*Math.pow(Math.PI*fGW,2/3);
+  const h=amp*200;
+  chirpData.push({t:chirpTime,h:fGW>0?h*Math.sin(omega*chirpTime):0,f:fGW,a});
+  historyFreq.push({t:chirpTime,val:fGW});historyAmp.push({t:chirpTime,val:h});
+  historySep.push({t:chirpTime,val:a});historyTime.push({t:chirpTime,val:chirpTime});
+  if(chirpData.length>600){chirpData.splice(0,10)};if(historyFreq.length>400){historyFreq.shift();historyAmp.shift();historySep.shift();historyTime.shift()}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const M=mass*2, a=sep*Math.max(0.15,1-t*0.005);
+  const omega=Math.sqrt(M/(a*a*a));
+
+  // binary system
+  const cx=180, cy=200;
+  const orbR=Math.min(a*.5,80);
+  const m1x=cx-orbR*Math.cos(t*omega), m1y=cy-orbR*Math.sin(t*omega);
+  const m2x=cx+orbR*Math.cos(t*omega), m2y=cy+orbR*Math.sin(t*omega);
+
+  // gravitational wave ripples
+  for(let r=30;r<200;r+=18){
+    const wavePhase=t*omega*2-r*.03;
+    const ampR=8*Math.sin(wavePhase)/Math.max(1,r*.015);
+    ctx.beginPath();
+    ctx.ellipse(cx,cy,r+ampR,r-ampR,0,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,0,0,${Math.max(.04,.5-r*.002)})`;
+    ctx.lineWidth=.4+Math.abs(ampR)*.15;
+    ctx.stroke();
+  }
+
+  // masses
+  ctx.fillStyle='#000';
+  ctx.beginPath();ctx.arc(m1x,m1y,5+mass*2.5,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(m2x,m2y,5+mass*2.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText('M₁',m1x,m1y-12);ctx.fillText('M₂',m2x,m2y-12);
+
+  // orbit trail
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=.5;ctx.setLineDash([2,2]);
+  ctx.beginPath();ctx.arc(cx,cy,orbR,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+
+  // info panel right
+  ctx.fillStyle='#000';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText(`M = ${(mass*2).toFixed(1)} M☉`,380,30);
+  ctx.fillText(`Separation a = ${a.toFixed(0)}`,380,48);
+  ctx.fillText(`ω_orb = ${omega.toFixed(2)} rad/s`,380,66);
+  ctx.fillText(`f_GW = 2f_orb = ${(omega/Math.PI).toFixed(2)} Hz`,380,84);
+  const amp=4*Math.pow(M,2)/(a*Math.pow(1,2))*Math.pow(Math.PI*omega/Math.PI,2/3);
+  ctx.fillText(`Strain h = ${amp.toExponential(3)}`,380,102);
+  ctx.fillText(`t = ${t.toFixed(1)} s`,380,120);
+  ctx.fillText(`Chirp: f_GW increasing`,380,138);
+
+  // chirp waveform
+  const gx=40,gy=280,gw=W-80,gh=130;
+  ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('Gravitational Wave Strain h(t) — Chirp Signal',gx+5,gy+12);
+  ctx.fillText('0',gx+3,gy+gh/2+3);
+  ctx.strokeStyle='rgba(0,0,0,.15)';ctx.lineWidth=.5;
+  ctx.beginPath();ctx.moveTo(gx,gy+gh/2);ctx.lineTo(gx+gw,gy+gh/2);ctx.stroke();
+  if(chirpData.length>3){
+    ctx.strokeStyle='#000';ctx.lineWidth=1.2;ctx.beginPath();
+    const limit=Math.min(chirpData.length,gw);
+    const start=Math.max(0,chirpData.length-limit);
+    for(let i=start;i<chirpData.length;i++){
+      const px=gx+(i-start)/limit*gw, py=gy+gh/2-chirpData[i].h;
+      i===start?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  // frequency evolution graph
+  const gx2=40,gy2=430,gw2=330,gh2=35;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('f_GW(t) → increasing (chirp)',gx2+3,gy2+10);
+  if(historyFreq.length>3){
+    ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=.8;ctx.beginPath();
+    const maxF=Math.max(...historyFreq.map(d=>d.val),.1);
+    for(let i=0;i<historyFreq.length;i++){
+      const px=gx2+i/historyFreq.length*gw2,py=gy2+gh2-(historyFreq[i].val/maxF)*gh2;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  // separation evolution
+  const gx3=W-200,gy2b=430,gw3=180,gh3=35;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx3,gy2b,gw3,gh3);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('a(t) decreasing',gx3+3,gy2b+10);
+  if(historySep.length>3){
+    ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=.7;ctx.beginPath();
+    for(let i=0;i<historySep.length;i++){
+      const px=gx3+i/historySep.length*gw3,py=gy2b+gh3-(historySep[i].val/sep)*gh3;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  data.innerHTML=
+    `M = ${(mass*2).toFixed(1)} M☉ | a = ${a.toFixed(0)} | f_GW = ${(omega/Math.PI).toFixed(2)} Hz`+
+    ` | h ~ ${amp.toExponential(3)} | t = ${t.toFixed(1)}`+
+    ` | Chirp data points: ${chirpData.length}`+
+    ` | Orbital freq = ${(omega/(2*Math.PI)).toFixed(2)} Hz`;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>Mass <input type="range" id="massS" min="0.5" max="3" step="0.1" value="${mass}"><span id="massD">${mass.toFixed(1)}</span></label>
+<label>Separation <input type="range" id="sepS" min="60" max="200" step="1" value="${sep}"><span id="sepD">${sep}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>`;
+
+document.getElementById('massS').oninput=function(){mass=parseFloat(this.value);document.getElementById('massD').textContent=mass.toFixed(1);resetSim()};
+document.getElementById('sepS').oninput=function(){sep=parseInt(this.value);document.getElementById('sepD').textContent=sep;resetSim()};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=resetSim;
+</script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harmonic Oscillator · mẍ + kx = 0</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Harmonic Oscillator</h1>
+<p>mẍ + kx = 0 — Spring-mass system with phase space</p>
+<canvas id="c" width="900" height="440"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+let k=2, m=1, x=1.5, v=0;
+const dt=0.016;
+let paused=false, speed=1, damping=0;
+let simTime=0;
+
+const cx=240, cy=215, scale=90;
+const pcx=550, pcy=215, pscale=80;
+
+const history={t:[],x:[],v:[],ke:[],pe:[],te:[]};
+const maxHist=500;
+
+function energy(){
+  return{ke:0.5*m*v*v, pe:0.5*k*x*x, te:0.5*m*v*v+0.5*k*x*x};
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    const a=-k/m*x-damping*v;
+    v+=a*dt*0.5;
+    x+=v*dt;
+    v+=a*dt*0.5;
+    const e=energy();
+    history.t.push(simTime);history.x.push(x);history.v.push(v);
+    history.ke.push(e.ke);history.pe.push(e.pe);history.te.push(e.te);
+    if(history.t.length>maxHist){history.t.shift();history.x.shift();history.v.shift();history.ke.shift();history.pe.shift();history.te.shift();}
+    simTime+=dt;
+  }
+}
+
+function resetSim(){
+  x=1.5;v=0;simTime=0;
+  history.t.length=0;history.x.length=0;history.v.length=0;
+  history.ke.length=0;history.pe.length=0;history.te.length=0;
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  const sx=cx-scale*1.8;
+  const ex=cx+x*scale-12;
+  const my=cy;
+
+  // Wall
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+  ctx.beginPath();
+  for(let i=-8;i<=8;i++){ctx.moveTo(sx-12,my+i*7);ctx.lineTo(sx+2,my+i*7);}
+  ctx.stroke();
+  // Wall base
+  ctx.fillStyle='#111';
+  ctx.fillRect(sx-16,my+58,22,6);
+
+  // Spring
+  const ncoils=16;
+  ctx.beginPath();ctx.moveTo(sx,my);
+  for(let i=1;i<=ncoils;i++){
+    const t=i/ncoils;
+    const px_=sx+(ex-sx)*t;
+    const py_=my+(i%2===0?1:-1)*Math.min(16,(ex-sx)/ncoils*1.2);
+    ctx.lineTo(px_,py_);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.stroke();
+
+  // Mass with gradient
+  const grad=ctx.createLinearGradient(ex-16,my-16,ex+4,my+4);
+  grad.addColorStop(0,'#333');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.fillRect(ex-16,my-16,32,32);
+  ctx.strokeStyle='#fff';ctx.lineWidth=0.8;ctx.strokeRect(ex-16,my-16,32,32);
+
+  // Velocity arrow
+  const vsc=3;
+  ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ex,my);ctx.lineTo(ex+v*vsc,my);ctx.stroke();
+  ctx.fillStyle='#111';
+  if(Math.abs(v)>0.01){
+    ctx.beginPath();
+    ctx.moveTo(ex+v*vsc+4*Math.sign(v||1),my);
+    ctx.lineTo(ex+v*vsc-2*Math.sign(v||1),my-3);
+    ctx.lineTo(ex+v*vsc-2*Math.sign(v||1),my+3);
+    ctx.closePath();ctx.fill();
+  }
+
+  // Ground
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;ctx.setLineDash([3,6]);
+  ctx.beginPath();ctx.moveTo(sx-30,my+42);ctx.lineTo(cx+scale*2.2,my+42);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // F=ma label
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('F = -kx',sx+5,my-25);
+  ctx.fillText('m = '+m.toFixed(1)+' kg',sx+5,my-14);
+
+  // x(t) graph
+  const gX=480, gY=30, gW=400, gH=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.textAlign='left';ctx.fillText('x(t)',gX+3,gY+9);
+
+  if(history.x.length>2){
+    const xMax=Math.max(...history.x.map(Math.abs))*1.2||1;
+    ctx.beginPath();
+    for(let i=0;i<history.x.length;i++){
+      const gx=gX+(i/history.x.length)*gW;
+      const gy=gY+gH/2-(history.x[i]/xMax)*(gH/2-4);
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  // Energy graph
+  const eX=480, eY=125, eW=400, eH=75;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(eX,eY,eW,eH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('ENERGY',eX+3,eY+9);
+
+  if(history.te.length>2){
+    const eMax=Math.max(...history.te)*1.05||1;
+    ctx.beginPath();
+    for(let i=0;i<history.pe.length;i++){
+      const gx=eX+(i/history.pe.length)*eW;
+      const gy=eY+eH-(history.pe[i]/eMax)*eH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();
+    for(let i=0;i<history.ke.length;i++){
+      const gx=eX+(i/history.ke.length)*eW;
+      const gy=eY+eH-(history.ke[i]/eMax)*eH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<history.te.length;i++){
+      const gx=eX+(i/history.te.length)*eW;
+      const gy=eY+eH-(history.te[i]/eMax)*eH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.4;ctx.stroke();
+    ctx.font='6px monospace';
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillText('KE',eX+eW-28,eY+9);
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillText('PE',eX+eW-15,eY+9);
+    ctx.fillStyle='#111';ctx.fillText('E',eX+eW-40,eY+9);
+  }
+
+  // Phase space
+  const pX=480, pY=220, pW=400, pH=200;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(pX,pY,pW,pH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('PHASE SPACE (x vs v)',pX+3,pY+9);
+  // Axes
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.4;
+  ctx.beginPath();ctx.moveTo(pX+pW/2,pY);ctx.lineTo(pX+pW/2,pY+pH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pX,pY+pH/2);ctx.lineTo(pX+pW,pY+pH/2);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('x',pX+pW-10,pY+pH/2-3);
+  ctx.fillText('v',pX+pW/2+3,pY+8);
+
+  if(history.x.length>2){
+    const xMax=Math.max(...history.x.map(Math.abs))*1.3||1;
+    const vMax=Math.max(...history.v.map(Math.abs))*1.3||1;
+    ctx.beginPath();
+    for(let i=0;i<history.x.length;i++){
+      const gx=pX+pW/2+(history.x[i]/xMax)*(pW/2-8);
+      const gy=pY+pH/2-(history.v[i]/vMax)*(pH/2-8);
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;ctx.stroke();
+    // Current point
+    cpX=pX+pW/2+(x/xMax)*(pW/2-8);
+    cpY=pY+pH/2-(v/vMax)*(pH/2-8);
+    ctx.fillStyle='#111';
+    ctx.beginPath();ctx.arc(cpX,cpY,4,0,Math.PI*2);ctx.fill();
+    // Theoretical ellipse
+    ctx.beginPath();
+    for(let a=0;a<=Math.PI*2;a+=0.02){
+      const tx=Math.cos(a)*xMax, ty=Math.sin(a)*vMax;
+      const gx=pX+pW/2+(tx/xMax)*(pW/2-8);
+      const gy=pY+pH/2-(ty/vMax)*(pH/2-8);
+      a===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.5;ctx.setLineDash([3,5]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // x(t) analytical prediction overlay
+  const omega0=Math.sqrt(k/m);
+  const T0=2*Math.PI/omega0;
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>k</label><input type="range" id="kS" min="0.2" max="8" step="0.1" value="${k}"><span class="val" id="kV">${k.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m</label><input type="range" id="mS" min="0.2" max="5" step="0.1" value="${m}"><span class="val" id="mV">${m.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>x₀</label><input type="range" id="xS" min="0.1" max="3" step="0.01" value="${Math.abs(x)}"><span class="val" id="xV">${Math.abs(x).toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>γ</label><input type="range" id="dampS" min="0" max="2" step="0.01" value="${damping}"><span class="val" id="dampV">${damping.toFixed(2)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('kS').addEventListener('input',function(){k=parseFloat(this.value);document.getElementById('kV').textContent=k.toFixed(1);});
+  document.getElementById('mS').addEventListener('input',function(){m=parseFloat(this.value);document.getElementById('mV').textContent=m.toFixed(1);});
+  document.getElementById('xS').addEventListener('input',function(){
+    x=parseFloat(this.value)*Math.sign(x||1);v=0;simTime=0;
+    history.t.length=0;history.x.length=0;history.v.length=0;
+    history.ke.length=0;history.pe.length=0;history.te.length=0;
+    document.getElementById('xV').textContent=Math.abs(x).toFixed(2);
+  });
+  document.getElementById('dampS').addEventListener('input',function(){
+    damping=parseFloat(this.value);
+    document.getElementById('dampV').textContent=damping.toFixed(2);
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+}
+    speed=parseInt(this.value);
+    document.getElementById('speedV').textContent=speed+'x';
+  });
+
+  const e=energy();
+  const eDrift=history.te.length>2?((Math.max(...history.te)-Math.min(...history.te))/Math.abs(Math.max(...history.te)||1)*100):0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">x =</span> <span class="val">${x.toFixed(4)}</span> m</span>`+
+    `<span><span class="label">v =</span> <span class="val">${v.toFixed(4)}</span> m/s</span>`+
+    `<span><span class="label">a =</span> <span class="val">${(-k/m*x-damping*v).toFixed(4)}</span> m/s²</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${e.ke.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">PE =</span> <span class="val">${e.pe.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">E =</span> <span class="val">${e.te.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">ΔE/E =</span> <span class="val">${eDrift.toFixed(4)}%</span></span>`+
+    `<span><span class="label">ω₀ =</span> <span class="val">${omega0.toFixed(3)}</span> rad/s</span>`+
+    `<span><span class="label">T =</span> <span class="val">${T0.toFixed(3)}</span> s</span>`+
+    `<span><span class="label">f =</span> <span class="val">${(1/T0).toFixed(3)}</span> Hz</span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

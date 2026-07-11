@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulley System · MA = 2n</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Pulley System</h1>
+<p>MA = 2n &nbsp;·&nbsp; <span class="eq">F<sub>e</sub> = mg/(2n) · v<sub>e</sub> = 2n·v<sub>l</sub></span></p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=480,g=9.8;
+let lm=15,np=2,ly=360,vy=0,ey=120,ve=0,run=0,st=0,wi=0,wo=0,p=0,sm=1;
+const h={t:[],vy:[],ve:[],wi:[],wo:[],ma:[],ly:[]};
+function rs(){ly=360;vy=0;ey=120;ve=0;run=0;st=0;wi=0;wo=0;p=0;h.t.length=0;h.vy.length=0;h.ve.length=0;h.wi.length=0;h.wo.length=0;h.ma.length=0;h.ly.length=0;document.getElementById('rb2').textContent='Run'}
+function stp(){
+  if(p||!run)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.006,ma=np>0?2*np:1,eff=lm*g/ma;
+    const accel=(lm*g-eff)/(lm+eff/g);
+    vy+=accel*dt;ve=-vy*ma;
+    ly+=vy*dt;ey+=ve*dt;
+    wo+=lm*g*Math.abs(vy)*dt;wi+=eff*Math.abs(ve)*dt;
+    st+=dt;
+    h.t.push(st);h.vy.push(vy);h.ve.push(ve);h.wi.push(wi);h.wo.push(wo);h.ma.push(ma);h.ly.push(ly);
+    while(h.t.length>350){h.t.shift();h.vy.shift();h.ve.shift();h.wi.shift();h.wo.shift();h.ma.shift();h.ly.shift()}
+    if(ly>440||ey<25){vy=0;ve=0;run=0;p=0;document.getElementById('rb2').textContent='Run'}
+  }
+}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#111';ctx.fillRect(30,10,W-60,8);const cx=250,cy=80;
+  for(let i=0;i<np;i++){const py=cy+40,px=cx+i*70;
+    ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,22,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(px+110,py,22,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(px+110,py,6,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(px,py-22);ctx.lineTo(px,cy);ctx.stroke();ctx.beginPath();ctx.moveTo(px+110,py-22);ctx.lineTo(px+110,cy);ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(px-22,py);ctx.lineTo(px+22,py);ctx.stroke();ctx.beginPath();ctx.moveTo(px+110-22,py);ctx.lineTo(px+110+22,py);ctx.stroke();
+    if(i===0){ctx.beginPath();ctx.moveTo(px,py+22);ctx.lineTo(px-60,ly);ctx.stroke()}
+    if(i===np-1){ctx.beginPath();ctx.moveTo(px+110,py+22);ctx.lineTo(px+200,ey);ctx.stroke()}
+    const bp=cy+140;ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(px,bp);ctx.lineTo(px+110,bp);ctx.stroke();ctx.setLineDash([])
+  }
+  const lx=190;ctx.fillStyle='#111';ctx.fillRect(lx-22,ly-2,44,18);ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(`${lm}kg`,lx,ly+10);ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('LOAD',lx,ly+28);
+  const ex=560,eff=lm*g/(np*2||1);ctx.fillStyle='#111';ctx.fillRect(ex-22,ey-2,44,18);ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(`${(eff/g).toFixed(2)}kg`,ex,ey+10);ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('EFFORT',ex-28,ey-10);
+  const ma=np>0?2*np:1;
+  const gx=580,gy=20,gw=290,gh=60;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('load velocity vs time',gx+3,gy+10);
+  if(h.vy.length>2){const vm=Math.max(...h.vy.map(Math.abs))*1.1||1;ctx.beginPath();for(let i=0;i<h.vy.length;i++){const px=gx+(i/h.vy.length)*gw,py=gy+gh/2-(h.vy[i]/vm)*(gh/2-4);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke()}
+  const wgx=580,wgy=90,wgw=290,wgh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(wgx,wgy,wgw,wgh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('work (in vs out)',wgx+3,wgy+10);
+  if(h.wi.length>2){const wm=Math.max(...h.wi)*1.1||1;ctx.beginPath();for(let i=0;i<h.wi.length;i++){const px=wgx+(i/h.wi.length)*wgw,py=wgy+wgh-(h.wi[i]/wm)*wgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();ctx.beginPath();for(let i=0;i<h.wo.length;i++){const px=wgx+(i/h.wo.length)*wgw,py=wgy+wgh-(h.wo[i]/wm)*wgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([])}
+  const egx=580,egy=155,egw=290,egh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(egx,egy,egw,egh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('load position vs time',egx+3,egy+10);
+  if(h.ly.length>2){const lm2=Math.min(...h.ly),lmx=Math.max(...h.ly),lr=lmx-lm2||1;ctx.beginPath();for(let i=0;i<h.ly.length;i++){const px=egx+(i/h.ly.length)*egw,py=egy+egh-(h.ly[i]-lm2)/lr*egh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.6;ctx.stroke()}
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>Load</label><input type="range" id="lS" min="2" max="30" step="0.5" value="${lm}"><span class="v" id="lV">${lm.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>Pulleys</label><input type="range" id="nS" min="1" max="4" step="1" value="${np}"><span class="v" id="nV">${np}</span></div>`+
+    `<button id="rb2">Run</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('lS').oninput=function(){lm=+this.value;document.getElementById('lV').textContent=lm.toFixed(1)};
+  document.getElementById('nS').oninput=function(){np=+this.value;document.getElementById('nV').textContent=np;rs()};
+  document.getElementById('rb2').onclick=function(){run=!run;p=0;this.textContent=run?'Pause':'Run';if(run){ly=360;vy=0;ey=120;ve=0;wi=0;wo=0}};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  const ratio=wo>0?wi/wo:0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">MA =</span> <span class="v">${ma}</span></span>`+
+    `<span><span class="l">Load =</span> <span class="v">${lm.toFixed(1)}</span> kg</span>`+
+    `<span><span class="l">Effort =</span> <span class="v">${eff.toFixed(2)}</span> N</span>`+
+    `<span><span class="l">v<sub>load</sub> =</span> <span class="v">${vy.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="l">v<sub>eff</sub> =</span> <span class="v">${ve.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="l">y<sub>load</sub> =</span> <span class="v">${ly.toFixed(1)}</span></span>`+
+    `<span><span class="l">y<sub>eff</sub> =</span> <span class="v">${ey.toFixed(1)}</span></span>`+
+    `<span><span class="l">Work<sub>in</sub> =</span> <span class="v">${wi.toFixed(2)}</span> J</span>`+
+    `<span><span class="l">Work<sub>out</sub> =</span> <span class="v">${wo.toFixed(2)}</span> J</span>`+
+    `<span><span class="l">W<sub>in</sub>/W<sub>out</sub> =</span> <span class="v">${ratio.toFixed(3)}</span></span>`+
+    `<span><span class="l">State =</span> <span class="v">${run?'RUNNING':'STOPPED'}</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

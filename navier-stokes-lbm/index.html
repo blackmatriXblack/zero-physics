@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Navier-Stokes · LBM</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+canvas{display:block;flex:1;width:100%}
+.ctrl{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;padding:4px 8px;font-size:10px;background:#fafafa;border-top:1px solid #ddd}
+.ctrl label{display:flex;align-items:center;gap:2px;color:#666;text-transform:uppercase;letter-spacing:1px;font-size:8px}
+.ctrl input[type=range]{width:55px;accent-color:#000;height:12px}
+.ctrl button{padding:1px 8px;font:8px monospace;border:1px solid #000;background:#fff;color:#000;cursor:pointer}
+.ctrl button:hover{background:#000;color:#fff}
+.d{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:1px;padding:2px 8px;border-top:1px solid #eee;background:#fcfcfc}
+.d span{font:7px monospace;color:#666;text-align:center;padding:1px 2px}
+.d b{color:#000}
+.eq{position:absolute;top:20px;left:20px;font:9px monospace;color:rgba(0,0,0,.3);letter-spacing:1px;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="eq">ρ(∂u/∂t+u·∇u)=−∇p+μ∇²u · D2Q9 LBM</div>
+<canvas id="c"></canvas>
+<div class="ctrl" id="ctrl">
+<label>Re <input type="range" id="reS" min="10" max="200" value="80"></label>
+<label>U_in <input type="range" id="uS" min="2" max="20" value="8"></label>
+<button id="playBtn">⏸</button><button id="resetBtn">↺</button>
+<label>Rate <input type="range" id="rate" min="1" max="8" value="3"></label>
+</div>
+<div class="d" id="d"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight-40}
+window.addEventListener('resize',resize);resize();
+const NX=140,NY=Math.floor(NX*0.6),ex=[0,1,0,-1,0,1,-1,-1,1],ey=[0,0,1,0,-1,1,1,-1,-1],w=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36],opp=[0,3,4,1,2,7,8,5,6];
+let play=1,spd=3,uIn=.08,tau=.62,Re=80;
+let f=new Float64Array(NX*NY*9),rho=new Float64Array(NX*NY),ux=new Float64Array(NX*NY),uy=new Float64Array(NX*NY),tS=0;
+let hist={t:[],Ek:[],enst:[],drag:[],lift:[]};
+const oCX=Math.floor(NX*.28),oCY=Math.floor(NY/2),oR=7;
+function idx(x,y,d){return(y*NX+x)*9+d}
+function setOmega(){tau=3*uIn*oR*2/Re+.5;Re=Math.round(2*uIn*oR*2/(tau-.5))}
+function init(){for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){rho[y*NX+x]=1;ux[y*NX+x]=uIn;uy[y*NX+x]=0;for(let d=0;d<9;d++){const eu=ex[d]*ux[y*NX+x]+ey[d]*uy[y*NX+x];f[idx(x,y,d)]=w[d]*rho[y*NX+x]*(1+3*eu+4.5*eu*eu-1.5*(ux[y*NX+x]*ux[y*NX+x]+uy[y*NX+x]*uy[y*NX+x]))}}}
+function step(){
+if(!play)return;const omega=1/tau;
+for(let iter=0;iter<spd;iter++){
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR)continue;let r=0,uxl=0,uyl=0;for(let d=0;d<9;d++){const fi=f[idx(x,y,d)];r+=fi;uxl+=ex[d]*fi;uyl+=ey[d]*fi}const id=y*NX+x;rho[id]=r;ux[id]=uxl/r;uy[id]=uyl/r}
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR)continue;const id=y*NX+x;for(let d=0;d<9;d++){const eu=ex[d]*ux[id]+ey[d]*uy[id];const feq=w[d]*rho[id]*(1+3*eu+4.5*eu*eu-1.5*(ux[id]*ux[id]+uy[id]*uy[id]));f[idx(x,y,d)]+=omega*(feq-f[idx(x,y,d)])}}
+const fnew=new Float64Array(NX*NY*9);
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++)for(let d=0;d<9;d++){let nx=x+ex[d],ny=y+ey[d];if(nx<0||nx>=NX||ny<0||ny>=NY){nx=x;ny=y}fnew[idx(nx,ny,d)]=f[idx(x,y,d)]}
+f=fnew;
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR){for(let d=0;d<9;d++){let nx=x+ex[d],ny=y+ey[d];if(nx>=0&&nx<NX&&ny>=0&&ny<NY&&(nx-oCX)**2+(ny-oCY)**2>=oR*oR){const tmp=f[idx(nx,ny,opp[d])];f[idx(nx,ny,opp[d])]=f[idx(x,y,d)];f[idx(x,y,d)]=tmp}}}}
+for(let y=0;y<NY;y++){const ri=1;for(let d=0;d<9;d++)f[idx(0,y,d)]=w[d]*ri*(1+3*ex[d]*uIn+4.5*ex[d]*ex[d]*uIn*uIn-1.5*uIn*uIn)}
+for(let y=0;y<NY;y++)for(let d=0;d<9;d++){const ri=1;f[idx(NX-1,y,d)]=w[d]*ri*(1+3*ex[d]*uIn+4.5*ex[d]*ex[d]*uIn*uIn-1.5*uIn*uIn)}
+tS++}
+if(tS%5===0){let Ek=0,enst=0;for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR)continue;const id=y*NX+x;Ek+=.5*rho[id]*(ux[id]*ux[id]+uy[id]*uy[id]);enst+=(ux[id]-ux[id])**2}
+let dragF=0,liftF=0;for(let y=Math.max(0,oCY-oR-1);y<Math.min(NY,oCY+oR+1);y++){for(let d=0;d<9;d++){const x=oCX+ex[d],yy=y+ey[d];if(x>=0&&x<NX&&yy>=0&&yy<NY&&(x-oCX)**2+(yy-oCY)**2>=oR*oR){const id=yy*NX+x;dragF+=rho[id]*ux[id];liftF+=rho[id]*uy[id]}}}
+hist.t.push(tS);hist.Ek.push(Ek/NX/NY);hist.enst.push(enst);hist.drag.push(Math.abs(dragF));hist.lift.push(Math.abs(liftF));if(hist.t.length>150){hist.t.shift();hist.Ek.shift();hist.enst.shift();hist.drag.shift();hist.lift.shift()}}}
+function drawMini(x,y,w,h,data,color,label){if(data.length<2)return;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.fillStyle='rgba(255,255,255,.85)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=.5;ctx.strokeRect(x,y,w,h);const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<data.length;i++){const px=x+i*w/data.length,py=y+h-(data[i]-mn)/rng*h;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke();ctx.fillStyle='rgba(0,0,0,.4)';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(label,x+2,y+8);ctx.restore()}
+function draw(){ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+const cs=Math.min(W/NX,H/NY),ox=(W-NX*cs)/2,oy=(H-NY*cs)/2;
+for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR){ctx.fillStyle='#111';ctx.fillRect(ox+x*cs,oy+y*cs,cs,cs);continue}const vm=Math.sqrt(ux[y*NX+x]**2+uy[y*NX+x]**2);const g=Math.floor(255*(1-Math.min(vm*6,1)));ctx.fillStyle=`rgb(${g},${g},${g})`;ctx.fillRect(ox+x*cs,oy+y*cs,cs,cs)}
+ctx.strokeStyle='#111';ctx.lineWidth=.8;ctx.strokeRect(ox,oy,NX*cs,NY*cs);
+for(let y=4;y<NY;y+=14)for(let x=6;x<NX;x+=16){if((x-oCX)**2+(y-oCY)**2<oR*oR+12)continue;const ax=ox+x*cs,ay=oy+y*cs,vm=Math.sqrt(ux[y*NX+x]**2+uy[y*NX+x]**2);if(vm<.001)continue;const sc=cs*3.5/vm;ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax+ux[y*NX+x]*sc,ay+uy[y*NX+x]*sc);ctx.stroke()}
+drawMini(ox+5,oy+5,110,40,hist.Ek,'rgba(0,0,0,.7)','Ek');drawMini(ox+120,oy+5,110,40,hist.drag,'rgba(0,0,0,.5)','Drag');
+const Re=Math.round(2*uIn*oR*2/(tau-.5));
+let maxV=0,minRho=1/0,maxRho=0;for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){if((x-oCX)**2+(y-oCY)**2<oR*oR)continue;const id=y*NX+x;const vm=Math.sqrt(ux[id]**2+uy[id]**2);if(vm>maxV)maxV=vm;if(rho[id]<minRho)minRho=rho[id];if(rho[id]>maxRho)maxRho=rho[id]}
+ctx.fillStyle='rgba(0,0,0,.5)';ctx.font='9px monospace';ctx.textAlign='left';
+ctx.fillText('← U_in ='+uIn.toFixed(3)+' Re='+Re+' τ='+tau.toFixed(3)+' t='+tS,ox+4,oy-6);
+let h='';const fields=[['Re',Re],['U_in',uIn.toFixed(3)],['τ',tau.toFixed(3)],['ν',((tau-.5)/3).toFixed(4)],['max|u|',maxV.toFixed(4)],['min ρ',minRho.toFixed(4)],['max ρ',maxRho.toFixed(4)],['mean ρ',(rho.reduce((a,b)=>a+b,0)/rho.length).toFixed(4)],['Ek mean',(hist.Ek.length>0?hist.Ek[hist.Ek.length-1]:0).toFixed(4)],['enstrophy',(hist.enst.length>0?hist.enst[hist.enst.length-1]:0).toExponential(3)],
+['drag est',(hist.drag.length>0?hist.drag[hist.drag.length-1]:0).toFixed(3)],['lift est',(hist.lift.length>0?hist.lift[hist.lift.length-1]:0).toFixed(3)],['St',(0.198*(1-19.7/Re)).toFixed(3)],['grid',NX+'×'+NY],['t_step',tS]];
+for(const[k,v]of fields)h+=`<span>${k}&nbsp;<b>${v}</b></span>`;
+document.getElementById('d').innerHTML=h;}
+let frame=0;
+function loop(){for(let i=0;i<6;i++)step();frame++;if(frame%2===0)draw();requestAnimationFrame(loop)}
+document.getElementById('playBtn').onclick=()=>{play^=1;document.getElementById('playBtn').textContent=play?'⏸':'▶'}
+document.getElementById('resetBtn').onclick=()=>{tS=0;init();hist={t:[],Ek:[],enst:[],drag:[],lift:[]}}
+document.getElementById('reS').oninput=e=>{Re=parseInt(e.value);setOmega();document.getElementById('reS').previousSibling.textContent=Re}
+document.getElementById('uS').oninput=e=>{uIn=e.value/100;setOmega();init();hist={t:[],Ek:[],enst:[],drag:[],lift:[]}}
+document.getElementById('rate').oninput=e=>{spd=parseInt(e.value)}
+setOmega();init();for(let i=0;i<300;i++)step();loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N-Body Gravity · F = −GMm/r² r̂</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>N-Body Gravity</h1>
+<p>Newtonian gravitational interaction — F = −GΣmᵢmⱼ/r²</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const G=0.8, dt=0.012, soft=0.5;
+let N=60;
+let paused=false, speed=1, showTrails=true, showCOM=true;
+const maxN=200;
+const cx=W/2, cy=H/2, sc=Math.min(W,H)*0.18;
+
+let px,py,vx,vy,ax,ay,m;
+let trail;
+
+function initSystem(){
+  px=new Float64Array(N);py=new Float64Array(N);
+  vx=new Float64Array(N);vy=new Float64Array(N);
+  ax=new Float64Array(N);ay=new Float64Array(N);
+  m=new Float64Array(N);
+  trail=Array.from({length:N},()=>[]);
+
+  // Central massive body
+  m[0]=5;
+  px[0]=0;py[0]=0;vx[0]=0;vy[0]=0;
+
+  for(let i=1;i<N;i++){
+    const r=0.3+Math.random()*1.5;
+    const a=Math.random()*Math.PI*2;
+    px[i]=r*Math.cos(a);
+    py[i]=r*Math.sin(a);
+    const vr=Math.sqrt(G*m[0]/r)*0.7+Math.random()*0.2;
+    const va=a+Math.PI/2+(Math.random()-0.5)*0.3;
+    vx[i]=vr*Math.cos(va);
+    vy[i]=vr*Math.sin(va);
+    m[i]=0.1+Math.random()*0.8;
+  }
+}
+
+function forces(){
+  for(let i=0;i<N;i++){ax[i]=0;ay[i]=0;}
+  for(let i=0;i<N;i++){
+    for(let j=i+1;j<N;j++){
+      let dx=px[i]-px[j], dy=py[i]-py[j];
+      const dist2=dx*dx+dy*dy+soft*soft;
+      const dist=Math.sqrt(dist2);
+      const f=G/(dist2*dist);
+      const fx=f*dx, fy=f*dy;
+      ax[i]-=fx*m[j]; ay[i]-=fy*m[j];
+      ax[j]+=fx*m[i]; ay[j]+=fy*m[i];
+    }
+  }
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    forces();
+    for(let i=0;i<N;i++){vx[i]+=ax[i]*dt*0.5;vy[i]+=ay[i]*dt*0.5;}
+    for(let i=0;i<N;i++){px[i]+=vx[i]*dt;py[i]+=vy[i]*dt;}
+    forces();
+    for(let i=0;i<N;i++){vx[i]+=ax[i]*dt*0.5;vy[i]+=ay[i]*dt*0.5;}
+    // Merge check
+    for(let i=1;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const dx=px[i]-px[j], dy=py[i]-py[j];
+        if(dx*dx+dy*dy<0.02){
+          const mt=m[i]+m[j];
+          px[i]=(px[i]*m[i]+px[j]*m[j])/mt;
+          py[i]=(py[i]*m[i]+py[j]*m[j])/mt;
+          vx[i]=(vx[i]*m[i]+vx[j]*m[j])/mt;
+          vy[i]=(vy[i]*m[i]+vy[j]*m[j])/mt;
+          m[i]=mt;
+          for(let k=j;k<N-1;k++){
+            px[k]=px[k+1];py[k]=py[k+1];
+            vx[k]=vx[k+1];vy[k]=vy[k+1];
+            m[k]=m[k+1];
+          }
+          N--;
+          trail.pop();
+          break;
+        }
+      }
+    }
+    for(let i=0;i<N;i++){
+      trail[i].push({x:px[i],y:py[i]});
+      if(trail[i].length>120)trail[i].shift();
+    }
+  }
+}
+
+function resetSim(){
+  initSystem();
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+initSystem();
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Center marker
+  ctx.fillStyle='rgba(0,0,0,0.08)';
+  ctx.beginPath();ctx.arc(cx,cy,2,0,Math.PI*2);ctx.fill();
+
+  // Trails
+  if(showTrails){
+    for(let i=0;i<N;i++){
+      const t=trail[i];
+      if(t.length<2)continue;
+      ctx.beginPath();ctx.moveTo(cx+t[0].x*sc,cy+t[0].y*sc);
+      for(let j=1;j<t.length;j++)ctx.lineTo(cx+t[j].x*sc,cy+t[j].y*sc);
+      ctx.strokeStyle=`rgba(0,0,0,${0.03+0.04*(i%5)/5})`;ctx.lineWidth=0.3;ctx.stroke();
+    }
+  }
+
+  // Bodies
+  for(let i=0;i<N;i++){
+    const r=Math.max(1.5,Math.sqrt(m[i])*3.5);
+    const gx=cx+px[i]*sc, gy=cy+py[i]*sc;
+    if(i===0){
+      const grad=ctx.createRadialGradient(gx-4,gy-4,3,gx,gy,10);
+      grad.addColorStop(0,'#555');grad.addColorStop(1,'#000');
+      ctx.fillStyle=grad;
+    }else{
+      ctx.fillStyle='#111';
+    }
+    ctx.beginPath();ctx.arc(gx,gy,r,0,Math.PI*2);ctx.fill();
+    // Velocity indicator
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.3;
+    ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(gx+vx[i]*2,gy+vy[i]*2);ctx.stroke();
+  }
+
+  // Center of mass
+  if(showCOM){
+    let comx=0,comy=0,totM=0;
+    for(let i=0;i<N;i++){comx+=px[i]*m[i];comy+=py[i]*m[i];totM+=m[i];}
+    comx/=totM;comy/=totM;
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.setLineDash([2,4]);
+    ctx.beginPath();ctx.arc(cx+comx*sc,cy+comy*sc,8,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='7px monospace';ctx.textAlign='left';
+    ctx.fillText('COM',cx+comx*sc+10,cy+comy*sc+3);
+  }
+
+  // Energy and stats panel
+  let KE=0,PE=0;
+  for(let i=0;i<N;i++)KE+=0.5*m[i]*(vx[i]*vx[i]+vy[i]*vy[i]);
+  for(let i=0;i<N;i++){
+    for(let j=i+1;j<N;j++){
+      const dx=px[i]-px[j], dy=py[i]-py[j];
+      PE-=G*m[i]*m[j]/Math.sqrt(dx*dx+dy*dy+soft*soft);
+    }
+  }
+  const totM=Array.from(m).reduce((a,b)=>a+b,0);
+  const Lz=px.map((_,i)=>px[i]*vy[i]-py[i]*vx[i]).reduce((a,b)=>a+b,0);
+
+  // Info box
+  const bx=590, by=30;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(bx,by,290,120);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('N-BODY GRAVITY',bx+8,by+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`N = ${N} bodies`,bx+8,by+30);
+  ctx.fillText(`KE = ${KE.toFixed(2)}`,bx+8,by+44);
+  ctx.fillText(`PE = ${PE.toFixed(2)}`,bx+8,by+58);
+  ctx.fillText(`E = ${(KE+PE).toFixed(2)}`,bx+8,by+72);
+  ctx.fillText(`L_z = ${Lz.toFixed(3)}`,bx+8,by+86);
+  ctx.fillText(`M_total = ${totM.toFixed(2)}`,bx+8,by+100);
+  ctx.fillText(`|E/KE| = ${Math.abs((KE+PE)/(KE||1)).toFixed(4)}`,bx+8,by+114);
+
+  // Virial
+  const virial=Math.abs(2*KE+PE);
+  ctx.fillText(`Virial: 2KE+PE = ${virial.toFixed(3)} (${virial<0.1?'✓ equilibrated':'relaxing'})`,bx+140,by+30);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>N</label><input type="range" id="nS" min="10" max="${maxN}" step="5" value="${N}"><span class="val" id="nV">${N}</span></div>`+
+    `<div class="ctrl-group"><label>G</label><input type="range" id="gS" min="0.1" max="3" step="0.05" value="${G}"><span class="val" id="gV">${G.toFixed(2)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('nS').addEventListener('input',function(){
+    N=parseInt(this.value);document.getElementById('nV').textContent=N;
+    initSystem();
+  });
+  document.getElementById('gS').addEventListener('input',function(){
+    const val=parseFloat(this.value);
+    document.getElementById('gV').textContent=val.toFixed(2);
+    // Can't easily change G in JavaScript without re-declaring, so use window
+    window.G=val;
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',function(){N=parseInt(document.getElementById('nS').value);initSystem();});
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+}
+
+}
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

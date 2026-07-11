@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pendulum Wave · Length gradient</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Pendulum Wave</h1>
+<p>Linear length increase → periodic wave &nbsp;·&nbsp; <span class="eq">T = 2π√(L/g)</span></p>
+<canvas id="c" width="900" height="440"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=440,py=65,sx=50;
+let nP=18,amp=0.6,g=280,sm=1,p=0,st=0;
+const spacing=(W-100)/(nP-1);
+let pends=[];
+const h={t:[],angles:[],ke:[],pe:[],te:[]};
+function init(){
+  pends=[];spacing=(W-100)/(nP-1);
+  for(let i=0;i<nP;i++){const len=80+i*(140/(nP-1));pends.push({th:1.3,vt:0,len,px:sx+i*spacing,py})}
+  h.t.length=0;h.angles.length=0;h.ke.length=0;h.pe.length=0;h.te.length=0
+}
+init();
+function stp(){
+  if(p)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.004;
+    for(const p2 of pends){const acc=-(g/p2.len)*Math.sin(p2.th);p2.vt+=acc*dt;p2.vt*=0.9997;p2.th+=p2.vt*dt}
+    let ke=0,pe=0;
+    for(const p2 of pends){ke+=0.5*p2.vt*p2.vt*p2.len*p2.len;pe+=g*p2.len*(1-Math.cos(p2.th))}
+    h.t.push(st);h.angles.push(pends.map(p=>p.th));h.ke.push(ke);h.pe.push(pe);h.te.push(ke+pe);
+    while(h.t.length>600){h.t.shift();h.angles.shift();h.ke.shift();h.pe.shift();h.te.shift()}
+    st+=dt
+  }
+}
+function rs(){for(const p2 of pends){p2.th=1.3;p2.vt=0}st=0;h.t.length=0;h.angles.length=0;h.ke.length=0;h.pe.length=0;h.te.length=0;p=0;document.getElementById('pb').textContent='Pause'}
+function sync(){for(const p2 of pends){p2.th=amp;p2.vt=0}}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const sx2=sx;ctx.fillStyle='#111';ctx.fillRect(sx2-10,py-5,sx2+(nP-1)*spacing+20,8);ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;
+  for(let i=0;i<nP;i++){ctx.beginPath();ctx.moveTo(pends[i].px,py+2);ctx.lineTo(pends[i].px,py-15);ctx.stroke()}
+  for(let i=0;i<nP;i++){const p2=pends[i],ex=p2.px+p2.len*Math.sin(p2.th)*amp,ey=p2.py+p2.len*Math.cos(p2.th)*amp;
+    ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(p2.px,p2.py);ctx.lineTo(ex,ey);ctx.stroke();
+    const f=i/(nP-1),g2=ctx.createRadialGradient(ex-2,ey-2,1,ex,ey,5+f*2);g2.addColorStop(0,'#444');g2.addColorStop(1,'#000');ctx.fillStyle=g2;const br=3+f*2.5;ctx.beginPath();ctx.arc(ex,ey,br,0,Math.PI*2);ctx.fill()}
+  const trx=40,try=370,trw=W-80,trh=50;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(trx,try,trw,trh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('θ vs position (snapshot)',trx+3,try+10);
+  let maxTh=0;for(const p2 of pends)maxTh=Math.max(maxTh,Math.abs(p2.th));const thMax=Math.max(maxTh,0.1)*1.3;
+  ctx.beginPath();for(let i=0;i<nP;i++){const px=trx+(i+0.5)/nP*trw,py2=try+trh/2-(pends[i].th/thMax)*(trh/2-6);i===0?ctx.moveTo(px,py2):ctx.lineTo(px,py2)}ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  ctx.lineTo(trx+trw,try+trh);ctx.lineTo(trx,try+trh);ctx.closePath();ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fill();
+  const mid=nP>>1,midP=pends[mid],tgx=40,tgy=15,tgw=260,tgh=40;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(tgx,tgy,tgw,tgh);ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText(`θ(${mid+1}) vs t`,tgx+3,tgy+9);
+  if(h.angles.length>2){const vals=h.angles.map(a=>a[mid]),vm=Math.max(...vals.map(Math.abs))*1.2||1;ctx.beginPath();for(let i=0;i<vals.length;i++){const px=tgx+(i/vals.length)*tgw,py=tgy+tgh/2-(vals[i]/vm)*(tgh/2-3);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;ctx.stroke()}
+  const egx=320,egy=15,egw=540,egh=45;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(egx,egy,egw,egh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('energy vs time (all pendulums)',egx+3,egy+10);
+  if(h.te.length>2){const em=Math.max(...h.te)*1.1||1;ctx.beginPath();for(let i=0;i<h.ke.length;i++){const px=egx+(i/h.ke.length)*egw,py=egy+egh-(h.ke[i]/em)*egh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();ctx.beginPath();for(let i=0;i<h.te.length;i++){const px=egx+(i/h.te.length)*egw,py=egy+egh-(h.te[i]/em)*egh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.3;ctx.stroke()}
+  const T0=2*Math.PI*Math.sqrt(pends[0].len/g),Tlast=2*Math.PI*Math.sqrt(pends[nP-1].len/g);
+  let tke=0,tpe=0;for(const p2 of pends){tke+=0.5*p2.vt*p2.vt*p2.len*p2.len;tpe+=g*p2.len*(1-Math.cos(p2.th))}
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>Amp</label><input type="range" id="aS" min="0.1" max="1.5" step="0.02" value="${amp}"><span class="v" id="aV">${amp.toFixed(2)}</span></div>`+
+    `<div class="cg"><label>N</label><input type="range" id="nS" min="8" max="30" step="1" value="${nP}"><span class="v" id="nV">${nP}</span></div>`+
+    `<button id="sb">Sync</button><button id="pb">Pause</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('aS').oninput=function(){amp=+this.value;document.getElementById('aV').textContent=amp.toFixed(2)};
+  document.getElementById('nS').oninput=function(){const n=+this.value;document.getElementById('nV').textContent=n;if(n!==nP){nP=n;init();rs()}};
+  document.getElementById('sb').onclick=sync;
+  document.getElementById('pb').onclick=function(){p=!p;this.textContent=p?'Play':'Pause'};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">N =</span> <span class="v">${nP}</span></span>`+
+    `<span><span class="l">L<sub>min</sub> =</span> <span class="v">${pends[0].len.toFixed(0)}</span></span>`+
+    `<span><span class="l">L<sub>max</sub> =</span> <span class="v">${pends[nP-1].len.toFixed(0)}</span></span>`+
+    `<span><span class="l">T<sub>0</sub> =</span> <span class="v">${T0.toFixed(3)}</span> s</span>`+
+    `<span><span class="l">T<sub>N</sub> =</span> <span class="v">${Tlast.toFixed(3)}</span> s</span>`+
+    `<span><span class="l">T<sub>0</sub>/T<sub>N</sub> =</span> <span class="v">${(T0/Tlast).toFixed(3)}</span></span>`+
+    `<span><span class="l">KE =</span> <span class="v">${tke.toFixed(1)}</span></span>`+
+    `<span><span class="l">PE =</span> <span class="v">${tpe.toFixed(1)}</span></span>`+
+    `<span><span class="l">E =</span> <span class="v">${(tke+tpe).toFixed(1)}</span></span>`+
+    `<span><span class="l">θ<sub>max</sub> =</span> <span class="v">${maxTh.toFixed(2)}</span> rad</span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

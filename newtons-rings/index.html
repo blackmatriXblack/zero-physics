@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Newton's Rings · r²ₘ = mλR</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Newton's Rings</h1>
+<p>r²ₘ = mλR — Thin film interference between curved lens and flat plate</p>
+<canvas id="c" width="920" height="580"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=580;
+let lambda=30,R=200,paused=false,speed=1,time=0;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const cx=300,cy=280,rMax=Math.min(cx,cy,280);
+ const imageData=ctx.createImageData(rMax*2,cy*2);
+ for(let y=-cy;y<cy;y++){for(let x=-rMax;x<rMax;x++){const r=Math.sqrt(x*x+y*y);if(r>rMax)continue;const thickness=r*r/(2*R);const pathDiff=2*thickness+lambda/2;const intensity=Math.cos(Math.PI*pathDiff/(lambda/2))**2;const gray=Math.round(255-intensity*220);const idx=((y+cy)*rMax*2+(x+rMax))*4;imageData.data[idx]=gray;imageData.data[idx+1]=gray;imageData.data[idx+2]=gray;imageData.data[idx+3]=255;}}
+ ctx.putImageData(imageData,cx-rMax,cy-rMax);
+ const nRings=Math.floor(rMax*rMax/(lambda*R));
+ hist.push(nRings);if(hist.length>hMax)hist.shift();
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`λ = ${lambda}`,cx+200,cy-40);ctx.fillText(`R = ${R}`,cx+200,cy-26);ctx.fillText(`r² = mλR`,cx+200,cy-12);
+ ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([3,3]);
+ for(let m=1;m<=20;m++){const rm=Math.sqrt(m*lambda*R);if(rm>rMax)break;ctx.beginPath();ctx.arc(cx,cy,rm,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';ctx.fillText(`m=${m}`,cx,cy-rm-4);}
+ ctx.setLineDash([]);
+ const sX=650,sY=120;ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(sX+150,sY+400,R,0,Math.PI/2);ctx.stroke();
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(sX,sY+80);ctx.lineTo(sX+300,sY+80);ctx.stroke();
+ ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(sX+50,sY+60,200,30);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('t = r²/(2R)',sX+150,sY+70);ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('lens',sX+150,sY+40);ctx.fillText('plate',sX+150,sY+120);
+ const pX=650,pY=200,pW=240,pH=80;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(pX,pY,pW,pH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('t(r) = r²/(2R)',pX+3,pY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.beginPath();
+ for(let x=0;x<=pW;x++){const r=x/pW*rMax;const th=r*r/(2*R);const py=pY+pH-th*500;x===0?ctx.moveTo(pX+x,py):ctx.lineTo(pX+x,py);}
+ ctx.stroke();
+ const hX=650,hY=310,hW=240,hH=110;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Ring count N(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-Math.min(hist[i]/30,1)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ const r1=Math.sqrt(lambda*R),r10=Math.sqrt(10*lambda*R);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('r²ₘ = mλR  (dark rings)',10,H-40);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`λ=${lambda}  R=${R}  r₁=${r1.toFixed(1)}  r₁₀=${r10.toFixed(1)}  N≈${nRings}`,10,H-56);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>λ</label><input type="range" id="lS" min="5" max="70" step="1" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+ `<div class="ctrl-group"><label>R</label><input type="range" id="rS" min="50" max="600" step="10" value="${R}"><span class="val" id="rV">${R}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('lS').oninput=function(){lambda=+this.value;lV.textContent=lambda;};
+ document.getElementById('rS').oninput=function(){R=+this.value;rV.textContent=R;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">λ =</span> <span class="val">${lambda}</span></span>`+
+ `<span><span class="label">R =</span> <span class="val">${R}</span></span>`+
+ `<span><span class="label">r₁ = √(λR) =</span> <span class="val">${r1.toFixed(2)}</span></span>`+
+ `<span><span class="label">r₁₀ = √(10λR) =</span> <span class="val">${r10.toFixed(2)}</span></span>`+
+ `<span><span class="label">Max rings</span> <span class="val">~${nRings}</span></span>`+
+ `<span><span class="label">Center</span> <span class="val">dark (π shift)</span></span>`+
+ `<span><span class="label">λR =</span> <span class="val">${lambda*R}</span></span>`+
+ `<span><span class="label">√(λR) =</span> <span class="val">${r1.toFixed(2)}</span></span>`+
+ `<span><span class="label">r₅ =</span> <span class="val">${Math.sqrt(5*lambda*R).toFixed(2)}</span></span>`+
+ `<span><span class="label">r₂₀ =</span> <span class="val">${Math.sqrt(20*lambda*R).toFixed(2)}</span></span>`+
+ `<span><span class="label">r_max =</span> <span class="val">${rMax}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

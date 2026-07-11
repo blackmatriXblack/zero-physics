@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Michelson Interferometer · Δ = 2(d₁−d₂)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Michelson Interferometer</h1>
+<p>Δ = 2(d₁−d₂) — Interference from path difference</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=560;
+let d1=200,d2=200,lambda=60,paused=false,speed=1,time=0;
+const hMax=300;const hist=[],tHist=[];
+for(let i=0;i<hMax;i++){hist.push(0.5);tHist.push(i/hMax);}
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const delta=2*(d1-d2),phase=2*Math.PI*delta/lambda,I=Math.cos(phase/2)**2;
+ hist.push(I);tHist.push(time);if(hist.length>hMax){hist.shift();tHist.shift();}
+ const cx=280,cy=260;
+ ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-30,cy+30);ctx.lineTo(cx+30,cy-30);ctx.stroke();
+ ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(cx-32,cy-32,64,64);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('BS',cx,cy+4);
+ ctx.fillStyle='rgba(0,0,0,0.04)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('★ source',cx-80,cy-40);
+ ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-d1-10,cy-80);ctx.lineTo(cx-d1-10,cy+80);ctx.stroke();
+ ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(cx-d1-14,cy-84,8,168);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('M₁',cx-d1-30,cy-90);
+ ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-80,cy+d2+10);ctx.lineTo(cx+80,cy+d2+10);ctx.stroke();
+ ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(cx-84,cy+d2+6,168,8);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('M₂',cx-90,cy+d2+24);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.5+0.3*I;ctx.beginPath();ctx.moveTo(200,200);ctx.lineTo(cx-d1,cy);ctx.moveTo(cx-d1,cy);ctx.lineTo(200,280);ctx.stroke();
+ ctx.strokeStyle=`rgba(0,0,0,${0.1+0.3*(1-I)})`;ctx.lineWidth=0.5+0.3*(1-I);
+ ctx.beginPath();ctx.moveTo(200,200);ctx.lineTo(cx,cy+d2);ctx.moveTo(cx,cy+d2);ctx.lineTo(200,280);ctx.stroke();
+ ctx.fillStyle='rgba(0,0,0,0.1)';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`L₁=${d1}`,cx-d1/2,cy-12);ctx.fillText(`L₂=${d2}`,cx-12,cy+d2/2);
+ const sX=650,sY=40,sW=230,sH=420;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(sX,sY,sW,sH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Interference pattern',sX+sW/2,sY-6);
+ for(let y=0;y<sH;y++){const angle=((y-sH/2)/sH)*Math.PI*0.1;const int=Math.cos(phase/2+angle)**2;const gray=Math.round(255-int*200);ctx.fillStyle=`rgb(${gray},${gray},${gray})`;ctx.fillRect(sX+4,sY+y,sW-8,1);}
+ const nFringes=Math.abs(delta/lambda);
+ const gX=10,gY=420,gW=400,gH=100;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('I(t)',gX+3,gY+10);
+ ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=gX+(i/hMax)*gW,py=gY+gH-4-(hist[i]||0)*(gH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Δ = 2(d₁−d₂)',10,H-16);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`I = cos²(πΔ/λ) = ${I.toFixed(4)}`,10,H-32);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>d₁</label><input type="range" id="d1S" min="50" max="300" step="5" value="${d1}"><span class="val" id="d1V">${d1}</span></div>`+
+ `<div class="ctrl-group"><label>d₂</label><input type="range" id="d2S" min="50" max="300" step="5" value="${d2}"><span class="val" id="d2V">${d2}</span></div>`+
+ `<div class="ctrl-group"><label>λ</label><input type="range" id="lS" min="10" max="120" step="2" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('d1S').oninput=function(){d1=+this.value;d1V.textContent=d1;};
+ document.getElementById('d2S').oninput=function(){d2=+this.value;d2V.textContent=d2;};
+ document.getElementById('lS').oninput=function(){lambda=+this.value;lV.textContent=lambda;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0.5);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">Δ = 2(d₁−d₂) =</span> <span class="val">${delta}</span></span>`+
+ `<span><span class="label">λ =</span> <span class="val">${lambda}</span></span>`+
+ `<span><span class="label">Δ/λ =</span> <span class="val">${(delta/lambda).toFixed(3)}</span></span>`+
+ `<span><span class="label">Fringes ≈</span> <span class="val">${nFringes.toFixed(1)}</span></span>`+
+ `<span><span class="label">I = cos²(πΔ/λ) =</span> <span class="val">${I.toFixed(4)}</span></span>`+
+ `<span><span class="label">d₁−d₂ =</span> <span class="val">${(d1-d2)}</span></span>`+
+ `<span><span class="label">phase =</span> <span class="val">${(phase%(2*Math.PI)).toFixed(3)}</span></span>`+
+ `<span><span class="label">Fringe order</span> <span class="val">${Math.round(nFringes)}</span></span>`+
+ `<span><span class="label">Type</span> <span class="val">${I>0.99?'Bright':I<0.01?'Dark':'Mixed'}</span></span>`+
+ `<span><span class="label">Path L₁ =</span> <span class="val">${2*d1}</span></span>`+
+ `<span><span class="label">Path L₂ =</span> <span class="val">${2*d2}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
