@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snell's Law · n₁ sin θ₁ = n₂ sin θ₂</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:grab}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Snell's Law</h1>
+<p>n₁ sin θ₁ = n₂ sin θ₂ — Refraction at dielectric interface</p>
+<canvas id="c" width="920" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),C=c.getContext('2d'),W=c.width,H=c.height;
+let n1=1,n2=1.5,theta1=45,beamAnim=0,speed=1;
+const cx=250,cy=270;
+let dragging=false;
+let rHist=[],tHist=[],angHist=[],hMax=120;
+
+c.onmousedown=()=>{dragging=true;c.style.cursor='grabbing';};
+c.onmouseup=()=>{dragging=false;c.style.cursor='grab';};
+c.onmousemove=e=>{if(!dragging)return;const r=c.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*W/r.width,my=(e.clientY-r.top)*H/r.height;
+  const dx=mx-cx,dy=cy-my;
+  theta1=Math.max(1,Math.min(89,Math.atan2(Math.abs(dx),Math.abs(dy))*180/Math.PI));
+  if(dx<0)theta1=180-theta1;theta1=Math.min(89,Math.max(1,theta1));
+};
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  // Medium labels
+  C.fillStyle='rgba(0,0,0,0.04)';C.fillRect(0,0,W,cy);
+  C.fillStyle='rgba(0,0,0,0.02)';C.fillRect(0,cy,W,H-cy);
+  // Interface
+  C.strokeStyle='#111';C.lineWidth=2.5;
+  C.beginPath();C.moveTo(0,cy);C.lineTo(W,cy);C.stroke();
+  C.fillStyle='#666';C.font='8px monospace';C.textAlign='left';
+  C.fillText(`n₁ = ${n1.toFixed(2)}`,15,cy-12);
+  C.fillText(`n₂ = ${n2.toFixed(2)}`,15,cy+22);
+  // Normal
+  C.strokeStyle='rgba(0,0,0,0.1)';C.lineWidth=0.3;C.setLineDash([3,3]);
+  C.beginPath();C.moveTo(cx,cy-200);C.lineTo(cx,cy+200);C.stroke();C.setLineDash([]);
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='center';C.fillText('NORMAL',cx,cy-205);
+
+  const rad1=theta1*Math.PI/180;
+  const sinT2=n1*Math.sin(rad1)/n2;
+  const tir=Math.abs(sinT2)>1;
+  const theta2=tir?90:Math.asin(sinT2)*180/Math.PI;
+  const rad2=theta2*Math.PI/180;
+  const Rlen=180,beamOff=beamAnim*8;
+  const refractExist=!tir;
+
+  // Incident beam
+  const grad1=C.createLinearGradient(cx-10,cy-10,cx-160*Math.sin(rad1),cy-160*Math.cos(rad1));
+  grad1.addColorStop(0,'rgba(0,0,0,0.5)');grad1.addColorStop(1,'rgba(0,0,0,0.02)');
+  C.strokeStyle='#111';C.lineWidth=2.5;
+  C.beginPath();C.moveTo(cx-160*Math.sin(rad1),cy-160*Math.cos(rad1));C.lineTo(cx,cy);C.stroke();
+  // Animated beam dots
+  for(let d=10;d<160;d+=15){const bx=cx-d*Math.sin(rad1),by=cy-d*Math.cos(rad1);
+    C.fillStyle=`rgba(0,0,0,${0.08+0.1*Math.sin(d/8+beamOff)})`;C.beginPath();C.arc(bx,by,2,0,6.28);C.fill();}
+  // Arrow
+  C.fillStyle='#111';
+  const am=cx-60*Math.sin(rad1),an=cy-60*Math.cos(rad1);
+  C.beginPath();C.moveTo(am,an);C.lineTo(am-10*Math.sin(rad1-0.3),an-10*Math.cos(rad1-0.3));
+  C.lineTo(am-10*Math.sin(rad1+0.3),an-10*Math.cos(rad1+0.3));C.fill();
+
+  // Refracted beam
+  if(refractExist){
+    C.strokeStyle='rgba(0,0,0,0.35)';C.lineWidth=1.8;C.setLineDash([4,3]);
+    C.beginPath();C.moveTo(cx,cy);C.lineTo(cx+Rlen*Math.sin(rad2),cy+Rlen*Math.cos(rad2));C.stroke();C.setLineDash([]);
+    for(let d=10;d<Rlen;d+=15){const bx=cx+d*Math.sin(rad2),by=cy+d*Math.cos(rad2);
+      C.fillStyle=`rgba(0,0,0,${0.05+0.07*Math.sin(d/6+beamOff)})`;C.beginPath();C.arc(bx,by,2,0,6.28);C.fill();}
+  }
+  // Reflected beam
+  C.strokeStyle='rgba(0,0,0,0.12)';C.lineWidth=0.8;
+  C.beginPath();C.moveTo(cx,cy);C.lineTo(cx+Rlen*Math.sin(rad1),cy-Rlen*Math.cos(rad1));C.stroke();
+
+  // Angle arcs
+  C.strokeStyle='rgba(0,0,0,0.2)';C.lineWidth=0.5;
+  C.beginPath();C.arc(cx,cy,40,2*Math.PI-rad1,2*Math.PI);C.stroke();
+  C.fillStyle='#666';C.font='7px monospace';C.textAlign='right';C.fillText(`θ₁ = ${theta1}°`,cx-8,cy-50);
+  if(refractExist){
+    C.beginPath();C.arc(cx,cy,35,Math.PI,Math.PI+rad2);C.stroke();
+    C.fillStyle='#666';C.font='7px monospace';C.textAlign='right';C.fillText(`θ₂ = ${theta2.toFixed(1)}°`,cx-8,cy+50);
+  }else{C.fillStyle='#111';C.font='8px monospace';C.textAlign='center';C.fillText('TOTAL INTERNAL REFLECTION',cx+120,cy-30);
+    const crit=Math.asin(n2/n1)*180/Math.PI;C.fillStyle='#999';C.font='6px monospace';C.fillText(`θ_c = ${crit.toFixed(1)}°`,cx+120,cy-16);}
+
+  // Fresnel graph
+  const gX=cx+300,gY=30,gW=W-cx-320,gH=200;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(gX,gY,gW,gH);
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='left';C.fillText('FRESNEL R, T vs θ₁',gX+3,gY+10);
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+  for(let a=0;a<=90;a+=15){const x=gX+(a/90)*gW;
+    C.beginPath();C.moveTo(x,gY);C.lineTo(x,gY+gH);C.stroke();
+    C.fillStyle='#999';C.font='4px monospace';C.textAlign='center';C.fillText(`${a}°`,x,gY+gH+8);}
+  C.beginPath();C.moveTo(gX,gY+gH);C.lineTo(gX+gW,gY+gH);C.stroke();
+  C.beginPath();C.moveTo(gX,gY);C.lineTo(gX,gY+gH);C.stroke();
+  for(let a=0;a<=90;a+=1){
+    const ar=a*Math.PI/180;
+    const st=n1*Math.sin(ar)/n2;
+    const t=Math.abs(st)>1?90:Math.asin(st)*180/Math.PI;
+    const at=t*Math.PI/180;
+    const Rs=Math.pow((n1*Math.cos(ar)-n2*Math.cos(at))/(n1*Math.cos(ar)+n2*Math.cos(at)),2);
+    const Rp=Math.pow((n2*Math.cos(ar)-n1*Math.cos(at))/(n2*Math.cos(ar)+n1*Math.cos(at)),2);
+    if(a===0){C.strokeStyle='#111';C.lineWidth=0.8;C.beginPath();C.moveTo(gX+(a/90)*gW,gY+gH-Rs*gH);}
+    else{C.lineTo(gX+(a/90)*gW,gY+gH-Rs*gH);}
+  }C.stroke();
+  C.fillStyle='#666';C.font='5px monospace';C.fillText('Rₛ',gX+gW-15,gY+gH-30);
+  for(let a=0;a<=90;a+=1){
+    const ar=a*Math.PI/180;
+    const st=n1*Math.sin(ar)/n2;
+    const t=Math.abs(st)>1?90:Math.asin(st)*180/Math.PI;
+    const at=t*Math.PI/180;
+    const Rp=Math.pow((n2*Math.cos(ar)-n1*Math.cos(at))/(n2*Math.cos(ar)+n1*Math.cos(at)),2);
+    if(a===0){C.strokeStyle='rgba(0,0,0,0.4)';C.lineWidth=0.8;C.beginPath();C.moveTo(gX+(a/90)*gW,gY+gH-Rp*gH);}
+    else{C.lineTo(gX+(a/90)*gW,gY+gH-Rp*gH);}
+  }C.stroke();
+  C.fillStyle='rgba(0,0,0,0.4)';C.font='5px monospace';C.fillText('Rₚ',gX+gW-15,gY+gH-10);
+  // Current angle marker
+  C.strokeStyle='rgba(0,0,0,0.15)';C.lineWidth=0.5;
+  const mkX=gX+(theta1/90)*gW;
+  C.beginPath();C.moveTo(mkX,gY);C.lineTo(mkX,gY+gH);C.stroke();
+
+  // Brewster angle
+  const thetaB=Math.atan(n2/n1)*180/Math.PI;
+  if(!tir){C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+    const bX=gX+(thetaB/90)*gW;
+    C.beginPath();C.moveTo(bX,gY+gH-5);C.lineTo(bX,gY+gH);C.stroke();
+    C.fillStyle='#999';C.font='4px monospace';C.textAlign='center';C.fillText(`θ_B=${thetaB.toFixed(0)}°`,bX,gY+gH+8);}
+
+  // RT gauge at current angle
+  const rX=gX,gR=gY+gH+15,rW=gW,rH=30;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(rX,gR,rW,rH);
+  const Rs=refractExist?Math.pow((n1*Math.cos(rad1)-n2*Math.cos(rad2))/(n1*Math.cos(rad1)+n2*Math.cos(rad2)),2):1;
+  const Ts=1-Rs;
+  C.fillStyle='#111';C.fillRect(rX+2,gR+5,rW*Rs,rH-10);
+  C.fillStyle='#eee';C.fillRect(rX+2+rW*Rs,gR+5,rW*Ts,rH-10);
+  C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';C.fillText(`Rₛ=${(Rs*100).toFixed(0)}%  Tₛ=${(Ts*100).toFixed(0)}%`,rX+rW/2,gR+20);
+
+  // Phase velocity ratio
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='left';
+  C.fillText(`v₁/v₂ = n₂/n₁ = ${(n2/n1).toFixed(3)}`,15,H-25);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>n₁</label><input type="range" id="n1S" min="1" max="2.5" step="0.01" value="${n1}"><span class="val" id="n1V">${n1.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>n₂</label><input type="range" id="n2S" min="1" max="2.5" step="0.01" value="${n2}"><span class="val" id="n2V">${n2.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>θ₁</label><input type="range" id="t1S" min="1" max="89" step="1" value="${theta1}"><span class="val" id="t1V">${theta1}</span></div>`+
+    `<div class="ctrl-group"><label>spd</label><input type="range" id="spdS" min="0" max="300" step="10" value="${speed*100}"><span class="val" id="spdV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${false?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+  document.getElementById('n1S').oninput=function(){n1=+this.value;document.getElementById('n1V').textContent=n1.toFixed(2);};
+  document.getElementById('n2S').oninput=function(){n2=+this.value;document.getElementById('n2V').textContent=n2.toFixed(2);};
+  document.getElementById('t1S').oninput=function(){theta1=+this.value;document.getElementById('t1V').textContent=theta1;};
+  document.getElementById('spdS').oninput=function(){speed=this.value/100;document.getElementById('spdV').textContent=speed.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){};
+  document.getElementById('resetBtn').onclick=function(){beamAnim=0;};
+}
+
+  beamAnim+=0.03*speed;
+  const critAng=n1>n2?Math.asin(n2/n1)*180/Math.PI:0;
+  const snellLHS=n1*Math.sin(rad1);
+  const snellRHS=refractExist?n2*Math.sin(rad2):0;
+  const deviation=refractExist?theta1-theta2:0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">n₁ =</span> <span class="val">${n1.toFixed(2)}</span></span>`+
+    `<span><span class="label">n₂ =</span> <span class="val">${n2.toFixed(2)}</span></span>`+
+    `<span><span class="label">θ₁ =</span> <span class="val">${theta1}°</span></span>`+
+    `<span><span class="label">θ₂ =</span> <span class="val">${refractExist?theta2.toFixed(2)+'°':'TIR'}</span></span>`+
+    `<span><span class="label">n₁ sin θ₁ =</span> <span class="val">${snellLHS.toFixed(4)}</span></span>`+
+    `<span><span class="label">n₂ sin θ₂ =</span> <span class="val">${refractExist?snellRHS.toFixed(4):'TIR'}</span></span>`+
+    `<span><span class="label">Rₛ =</span> <span class="val">${Rs.toFixed(4)}</span></span>`+
+    `<span><span class="label">Tₛ =</span> <span class="val">${Ts.toFixed(4)}</span></span>`+
+    `<span><span class="label">θ_B = tan⁻¹(n₂/n₁)</span> <span class="val">${thetaB.toFixed(2)}°</span></span>`+
+    `<span><span class="label">θ_c = sin⁻¹(n₂/n₁)</span> <span class="val">${critAng>0?critAng.toFixed(2)+'°':'N/A'}</span></span>`+
+    `<span><span class="label">Deviation δ =</span> <span class="val">${refractExist?deviation.toFixed(2)+'°':'N/A'}</span></span>`+
+    `<span><span class="label">c/n₁ =</span> <span class="val">${(3e8/n1).toExponential(0)}</span> m/s</span>`+
+    `<span><span class="label">c/n₂ =</span> <span class="val">${(3e8/n2).toExponential(0)}</span> m/s</span>`;
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

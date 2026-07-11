@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Vortex Dynamics</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:8px;font-size:12px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:2px 0}
+canvas{display:block;border:1px solid #000;width:100%;max-width:820px;height:auto;background:#fff}
+.ctrl{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;margin:3px 0;width:100%;max-width:820px}
+.ctrl label{display:flex;align-items:center;gap:2px;color:#666;text-transform:uppercase;letter-spacing:1px;font-size:9px}
+.ctrl input[type=range]{width:60px;accent-color:#000;height:14px}
+.ctrl button{padding:2px 10px;font:9px monospace;border:1px solid #000;background:#fff;color:#000;cursor:pointer}
+.ctrl button:hover{background:#000;color:#fff}
+.d{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:2px;width:100%;max-width:820px;margin:2px 0}
+.d span{font:8px monospace;color:#666;text-align:center;padding:1px 2px;border:1px solid #eee}
+.d b{color:#000}
+.eq{font-size:9px;color:#999;text-align:center;margin:2px 0;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Vortex Dynamics</h1>
+<div class="eq">v(r)=Γ/(2πr) · dΓ/dt=0 · Click:add · Right-click:remove</div>
+<canvas id="c" width="820" height="460"></canvas>
+<div class="ctrl" id="ctrl">
+<label>Circulation <input type="range" id="gammaS" min="5" max="40" value="15"></label>
+<button id="playBtn">⏸</button><button id="resetBtn">↺</button>
+<label>Rate <input type="range" id="rate" min="1" max="10" value="3"></label>
+<button id="strmBtn">Streamlines</button>
+</div>
+<div class="d" id="d"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+let play=1,spd=3,gamma0=1.5,strm=0,vorts=[],sign=1;
+let hist={Ek:[],enst:[],nVort:[],t:[]},t=0;
+function addV(x,y){vorts.push({x,y,gamma:gamma0*sign});sign*=-1}
+function initV(){vorts=[];sign=1;addV(W*.3,H*.35);addV(W*.3,H*.65);addV(W*.65,H*.35);addV(W*.65,H*.65)}
+initV();
+function step(){if(!play)return;for(let s=0;s<spd;s++){const n=vorts.length;const acc=vorts.map(()=>({fx:0,fy:0}));
+for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const dx=vorts[j].x-vorts[i].x,dy=vorts[j].y-vorts[i].y,r2=dx*dx+dy*dy;if(r2<4)continue;const f=1/(2*Math.PI*r2);acc[i].fx+=-vorts[j].gamma*f*dy;acc[i].fy+=vorts[j].gamma*f*dx;acc[j].fx+=-vorts[i].gamma*f*(-dy);acc[j].fy+=vorts[i].gamma*f*(-dx)}
+for(let i=0;i<n;i++){vorts[i].x+=acc[i].fx*2;vorts[i].y+=acc[i].fy*2;const m=15;if(vorts[i].x<m)vorts[i].x=m;if(vorts[i].x>W-m)vorts[i].x=W-m;if(vorts[i].y<m)vorts[i].y=m;if(vorts[i].y>H-m)vorts[i].y=H-m}t++}
+if(t%5===0){let Ek=0,enst=0;for(const v of vorts){for(const v2 of vorts){if(v===v2)continue;const dx=v.x-v2.x,dy=v.y-v2.y,r2=dx*dx+dy*dy;if(r2>1)Ek+=v.gamma*v2.gamma*Math.log(Math.sqrt(r2))/(4*Math.PI)}enst+=v.gamma*v.gamma}hist.Ek.push(Ek);hist.enst.push(enst);hist.nVort.push(vorts.length);hist.t.push(t);if(hist.t.length>200){hist.t.shift();hist.Ek.shift();hist.enst.shift();hist.nVort.shift()}}}
+function drawStr(){const step=14;ctx.strokeStyle='rgba(0,0,0,.05)';ctx.lineWidth=.5;for(let sx=step;sx<W;sx+=step)for(let sy=step;sy<H;sy+=step){let px=sx,py=sy;ctx.beginPath();ctx.moveTo(px,py);for(let k=0;k<25;k++){let vx=0,vy=0;for(const v of vorts){const dx=px-v.x,dy=py-v.y,r2=dx*dx+dy*dy;if(r2<1)break;const f=1/(2*Math.PI*r2);vx+=-v.gamma*f*dy;vy+=v.gamma*f*dx}const len=Math.sqrt(vx*vx+vy*vy);if(len<.01)break;px+=vx/len*3.5;py+=vy/len*3.5;if(px<0||px>W||py<0||py>H)break;ctx.lineTo(px,py)}ctx.stroke()}}
+function drawMini(x,y,w,h,data,color,label){if(data.length<2)return;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(x,y,w,h);const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<data.length;i++){const px=x+i*w/data.length,py=y+h-(data[i]-mn)/rng*h;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke();ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(label,x+2,y+8);ctx.restore()}
+function draw(){ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);if(strm)drawStr();
+for(const v of vorts){const r=Math.abs(v.gamma)*2+5;ctx.strokeStyle=v.gamma>0?'rgba(0,0,0,.18)':'rgba(0,0,0,.12)';ctx.lineWidth=.5;for(let ring=1;ring<=3;ring++){ctx.beginPath();ctx.arc(v.x,v.y,r+ring*5,0,Math.PI*2);ctx.stroke()}ctx.fillStyle='#000';ctx.beginPath();ctx.arc(v.x,v.y,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(v.gamma>0?'+':'−',v.x,v.y+1);ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textBaseline='top';ctx.fillText('Γ='+v.gamma.toFixed(1),v.x+r+3,v.y-r)}
+const n=vorts.length;let totG=0,minD=Infinity,cxV=0,cyV=0;for(const v of vorts){totG+=v.gamma;cxV+=v.x;cyV+=v.y}cxV/=n||1;cyV/=n||1;
+for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const d=Math.hypot(vorts[i].x-vorts[j].x,vorts[i].y-vorts[j].y);if(d<minD)minD=d}
+let Ek=0;for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const dx=vorts[i].x-vorts[j].x,dy=vorts[i].y-vorts[j].y,r2=dx*dx+dy*dy;if(r2>1)Ek+=vorts[i].gamma*vorts[j].gamma*Math.log(Math.sqrt(r2))/(4*Math.PI)}
+let h='';const fields=[['vortices',n],['total Γ',totG.toFixed(2)],['Ek',Ek.toFixed(2)],['min dist',minD===Infinity?'∞':minD.toFixed(1)],['Γ₀',gamma0.toFixed(2)],['c.vort x',cxV.toFixed(1)],['c.vort y',cyV.toFixed(1)],['max|Γ|',n>0?Math.max(...vorts.map(v=>Math.abs(v.gamma))).toFixed(2):'0'],
+['rms vel',n>0?Math.sqrt(vorts.reduce((s,v)=>{let vx=0,vy=0;for(const v2 of vorts){if(v===v2)continue;const dx=v.x-v2.x,dy=v.y-v2.y,r2=dx*dx+dy*dy;if(r2>1){const f=1/(2*Math.PI*r2);vx+=-v2.gamma*f*dy;vy+=v2.gamma*f*dx}}return s+vx*vx+vy*vy},0)/n).toFixed(3):'0'],
+['t',t],['next sign',sign>0?'+':'−'],['enstrophy ΣΓ²',vorts.reduce((s,v)=>s+v.gamma*v.gamma,0).toFixed(2)]];
+for(const[k,v]of fields)h+=`<span>${k}&nbsp;<b>${v}</b></span>`;
+document.getElementById('d').innerHTML=h;
+drawMini(5,H-90,130,45,hist.Ek,'rgba(0,0,0,.7)','Ek');drawMini(W-135,H-90,130,45,hist.enst,'rgba(0,0,0,.5)','Enstrophy');
+ctx.fillStyle='#666';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText('Click:add vortex · Right-click:remove · n='+n,8,14);}
+function loop(){step();draw();requestAnimationFrame(loop)}
+document.getElementById('playBtn').onclick=()=>{play^=1;document.getElementById('playBtn').textContent=play?'⏸':'▶'}
+document.getElementById('resetBtn').onclick=()=>{t=0;initV();hist={Ek:[],enst:[],nVort:[],t:[]}}
+document.getElementById('gammaS').oninput=e=>{gamma0=e.value/10;document.getElementById('gammaS').previousSibling.textContent=gamma0.toFixed(1)}
+document.getElementById('rate').oninput=e=>{spd=parseInt(e.value)}
+document.getElementById('strmBtn').onclick=()=>{strm^=1;document.getElementById('strmBtn').textContent=strm?'Hide Streams':'Streamlines'}
+c.onclick=e=>{const rect=c.getBoundingClientRect();addV(e.clientX-rect.left,e.clientY-rect.top)}
+c.oncontextmenu=e=>{e.preventDefault();const rect=c.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;let minD=Infinity,minI=-1;for(let i=0;i<vorts.length;i++){const d=Math.hypot(vorts[i].x-mx,vorts[i].y-my);if(d<minD){minD=d;minI=i}}if(minI>=0&&minD<2500)vorts.splice(minI,1)}
+loop();
+</script>
+</body>
+</html>

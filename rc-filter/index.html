@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RC Filter · f_c = 1/(2πRC)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+.ctrl-group select{font-family:'Courier New',monospace;font-size:0.65em;border:1px solid #ddd;padding:2px 4px}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>RC Filter</h1>
+<p>f<sub>c</sub> = 1/(2πRC) — |H(f)| = 1/√(1+(f/f<sub>c</sub>)²) (LP), 1/√(1+(f<sub>c</sub>/f)²) (HP)</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=900,H=500;
+let R=10e3,Cv=1e-6,type='LP',time=0,paused=false,spd=1,freq=100,Vin=0,Vout=0;
+const vInH=[],vOutH=[],tH=[],gH=[];const maxH=400;
+function step(){
+  if(paused)return;
+  const dt=0.0001*spd,omega=2*Math.PI*freq;
+  Vin=5*Math.sin(omega*time);
+  const tau=R*Cv;
+  if(type==='LP')Vout+=(Vin-Vout)/tau*dt*0.02;
+  else{const dVin=5*omega*Math.cos(omega*time);Vout+=(dVin*R*Cv-Vout)/tau*dt*0.02*100;}
+  time+=dt;
+  const fc=1/(2*Math.PI*R*Cv),fRatio=freq/fc;
+  const gain=type==='LP'?1/Math.sqrt(1+fRatio**2):1/Math.sqrt(1+(1/fRatio)**2);
+  vInH.push(Vin);vOutH.push(Vout);tH.push(time);gH.push(20*Math.log10(gain));
+  if(vInH.length>maxH){vInH.shift();vOutH.shift();tH.shift();gH.shift();}
+}
+function reset(){time=0;Vin=0;Vout=0;vInH.length=0;vOutH.length=0;tH.length=0;gH.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const fc=1/(2*Math.PI*R*Cv),omega=2*Math.PI*freq,fRatio=freq/fc;
+  const gain=type==='LP'?1/Math.sqrt(1+fRatio**2):1/Math.sqrt(1+(1/fRatio)**2);
+  const phase=type==='LP'?-Math.atan(fRatio):Math.atan(1/fRatio)-Math.PI/2;
+  const gX=30,gY=10,gW=520,gH=140;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('|H(f)| (dB)  fc='+(fc/1000).toFixed(2)+'kHz',gX+3,gY+10);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(gX+40,gY);ctx.lineTo(gX+40,gY+gH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+  const fcPx=gX+40+(Math.log10(fc)-Math.log10(10))/(Math.log10(100000)-Math.log10(10))*(gW-40);
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(fcPx,gY);ctx.lineTo(fcPx,gY+gH);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('fc',fcPx,gY+gH-3);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.beginPath();
+  for(let i=0;i<=gW-40;i++){
+    const f=10+Math.pow(10,(i/(gW-40))*(Math.log10(100000)-Math.log10(10))+Math.log10(10));
+    const H=type==='LP'?1/Math.sqrt(1+(f/fc)**2):1/Math.sqrt(1+(fc/f)**2),dB=20*Math.log10(H);
+    i===0?ctx.moveTo(gX+40+i,gY+gH/2-dB/60*(gH/2)):ctx.lineTo(gX+40+i,gY+gH/2-dB/60*(gH/2));
+  }
+  ctx.stroke();
+  const wX=30,wY=170,wW=840,wH=200;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(wX,wY,wW,wH);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(wX,wY+wH/2);ctx.lineTo(wX+wW,wY+wH/2);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Vin —,  Vout - -,  Gain(dB) ··',wX+3,wY+10);
+  if(tH.length>2){
+    ctx.beginPath();
+    for(let i=0;i<vInH.length;i++){const px=wX+(i/vInH.length)*wW,py=wY+wH/2-vInH[i]*(wH/2-10)/5;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<vOutH.length;i++){const px=wX+(i/vOutH.length)*wW,py=wY+wH/2-vOutH[i]*(wH/2-10)/5;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.7;ctx.setLineDash([5,3]);ctx.stroke();ctx.setLineDash([]);
+    const maxG=Math.max(...gH),minG=Math.min(...gH);
+    ctx.beginPath();
+    for(let i=0;i<gH.length;i++){const px=wX+(i/gH.length)*wW,py=wY+wH/2-(gH[i]-minG)/((maxG-minG)||1)*(wH/2-10);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.4;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([]);
+  }
+  const tau=R*Cv;
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>R (kΩ)</label><input type="range" id="rS" min="1" max="100" step="1" value="'+(R/1000)+'"><span class="val" id="rV">'+(R/1000).toFixed(0)+'</span></div>'+
+    '<div class="ctrl-group"><label>C (μF)</label><input type="range" id="cS" min="0.01" max="10" step="0.01" value="'+(Cv*1e6)+'"><span class="val" id="cV">'+(Cv*1e6).toFixed(2)+'</span></div>'+
+    '<div class="ctrl-group"><label>f (Hz)</label><input type="range" id="fS" min="20" max="5000" step="20" value="'+freq+'"><span class="val" id="fV">'+freq+'</span></div>'+
+    '<div class="ctrl-group"><label>Type</label><select id="typeSel"><option value="LP" '+(type==='LP'?'selected':'')+'>Low-Pass</option><option value="HP" '+(type==='HP'?'selected':'')+'>High-Pass</option></select></div>'+
+    '<div class="ctrl-group"><label>spd</label><input type="range" id="spS" min="0" max="5" step="0.5" value="'+spd+'"><span class="val" id="spV">'+spd.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>';
+  document.getElementById('rS').oninput=function(){R=+this.value*1000;document.getElementById('rV').textContent=(R/1000).toFixed(0);};
+  document.getElementById('cS').oninput=function(){Cv=+this.value*1e-6;document.getElementById('cV').textContent=(Cv*1e6).toFixed(2);};
+  document.getElementById('fS').oninput=function(){freq=+this.value;document.getElementById('fV').textContent=freq;};
+  document.getElementById('typeSel').onchange=function(){type=this.value;Vout=0;reset();};
+  document.getElementById('spS').oninput=function(){spd=+this.value;document.getElementById('spV').textContent=spd.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=reset;
+}
+  const fcActual=1/(2*Math.PI*R*Cv);
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">f<sub>c</sub> =</span> <span class="val">'+(fcActual/1e3).toFixed(3)+'</span> kHz</span>'+
+    '<span><span class="label">τ = RC =</span> <span class="val">'+(tau*1e6).toFixed(2)+'</span> μs</span>'+
+    '<span><span class="label">f =</span> <span class="val">'+freq+'</span> Hz</span>'+
+    '<span><span class="label">|H| =</span> <span class="val">'+(gain*100).toFixed(2)+'</span> %</span>'+
+    '<span><span class="label">Gain =</span> <span class="val">'+(20*Math.log10(gain)).toFixed(2)+'</span> dB</span>'+
+    '<span><span class="label">φ =</span> <span class="val">'+(phase*180/Math.PI).toFixed(2)+'</span>°</span>'+
+    '<span><span class="label">V<sub>in</sub> =</span> <span class="val">'+Vin.toFixed(3)+'</span> V</span>'+
+    '<span><span class="label">V<sub>out</sub> =</span> <span class="val">'+Vout.toFixed(3)+'</span> V</span>'+
+    '<span><span class="label">R×C =</span> <span class="val">'+(R/1000).toFixed(0)+'k × '+(Cv*1e6).toFixed(2)+'μ</span></span>'+
+    '<span><span class="label">f/f<sub>c</sub> =</span> <span class="val">'+(freq/fcActual).toFixed(3)+'</span></span>'+
+    '<span><span class="label">Gain @ f =</span> <span class="val">'+(20*Math.log10(gain)).toFixed(2)+'</span> dB</span>'+
+    '<span><span class="label">t =</span> <span class="val">'+time.toFixed(3)+'</span> s</span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

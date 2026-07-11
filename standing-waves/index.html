@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standing Waves · y = 2A sin(kx) cos(ωt)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 12px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Standing Waves</h1>
+<p>y(x,t) = 2A sin(kx) cos(ωt) — y = A[sin(kx−ωt) + sin(kx+ωt)]</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),C=c.getContext('2d'),W=c.width,H=c.height;
+let n=1,f=2,A=80,speed=1,obsX=300,time=0,paused=false,showTraveling=false;
+const L=600,ox=30,oy=300,hist=[],hMax=280;
+c.onmousemove=e=>{const r=c.getBoundingClientRect();obsX=Math.max(0,Math.min(L,(e.clientX-r.left-ox)*W/r.width))};
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  const ω=2*Math.PI*f,k=n*Math.PI/L,T=1/f,v=ω/k,dt=time*speed;
+  const amp=(x)=>Math.sin(k*x)*A;
+  const disp=(x)=>amp(x)*Math.cos(ω*dt);
+
+  C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.5;
+  C.beginPath();C.moveTo(ox,oy);C.lineTo(ox+L,oy);C.stroke();
+  C.strokeStyle='#111';C.lineWidth=2.5;
+  C.beginPath();C.moveTo(ox-6,oy-80);C.lineTo(ox-6,oy+80);C.stroke();
+  C.beginPath();C.moveTo(ox+L+6,oy-80);C.lineTo(ox+L+6,oy+80);C.stroke();
+
+  // Node markers
+  const nodePositions=[];
+  for(let x=0;x<=L;x++)if(Math.abs(Math.sin(k*x))<0.015){
+    C.fillStyle='rgba(0,0,0,0.15)';C.beginPath();C.arc(ox+x,oy,4,0,6.28);C.fill();
+    C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';C.fillText('N',ox+x,oy-10);
+    nodePositions.push(x);
+  }
+
+  // Standing wave
+  const pts=[];for(let x=0;x<=L;x++)pts.push(disp(x));
+  C.strokeStyle='#111';C.lineWidth=2;
+  C.beginPath();pts.forEach((y,i)=>i===0?C.moveTo(ox+i,oy+y):C.lineTo(ox+i,oy+y));C.stroke();
+
+  // Envelope
+  C.strokeStyle='rgba(0,0,0,0.07)';C.lineWidth=0.5;C.setLineDash([4,3]);
+  C.beginPath();for(let x=0;x<=L;x++){x===0?C.moveTo(ox+x,oy+amp(x)):C.lineTo(ox+x,oy+amp(x));}C.stroke();
+  C.beginPath();for(let x=0;x<=L;x++){x===0?C.moveTo(ox+x,oy-amp(x)):C.lineTo(ox+x,oy-amp(x));}C.stroke();C.setLineDash([]);
+
+  // Traveling wave components
+  if(showTraveling){
+    C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.5;
+    C.beginPath();for(let x=0;x<=L;x++){const y=A*Math.sin(k*x-ω*dt);x===0?C.moveTo(ox+x,oy+y):C.lineTo(ox+x,oy+y);}C.stroke();
+    C.fillStyle='rgba(0,0,0,0.08)';C.font='5px monospace';C.textAlign='left';
+    C.fillText('— forward wave A sin(kx−ωt)',ox+L+5,oy-50);
+    C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.5;
+    C.beginPath();for(let x=0;x<=L;x++){const y=A*Math.sin(k*x+ω*dt);x===0?C.moveTo(ox+x,oy+y):C.lineTo(ox+x,oy+y);}C.stroke();
+    C.fillText('— reverse wave A sin(kx+ωt)',ox+L+5,oy-35);
+  }
+
+  // Displacement bars at antinodes
+  for(let x=0;x<=L;x++){if(Math.abs(Math.cos(k*x))<0.02&&Math.sin(k*x)>0.5){
+    C.strokeStyle='rgba(0,0,0,0.04)';C.lineWidth=1;
+    C.beginPath();C.moveTo(ox+x,oy);C.lineTo(ox+x,oy+disp(x));C.stroke();
+    C.fillStyle='#999';C.font='4px monospace';C.textAlign='center';C.fillText('A',ox+x,oy+12);
+  }}
+
+  const oi=Math.round(obsX),od=pts[oi]||0;
+  C.strokeStyle='rgba(0,0,0,0.2)';C.lineWidth=0.5;
+  C.beginPath();C.moveTo(ox+obsX,oy-100);C.lineTo(ox+obsX,oy+100);C.stroke();
+  C.fillStyle='#666';C.font='6px monospace';C.textAlign='center';C.fillText('● OBS',ox+obsX,oy-108);
+  C.fillStyle='#111';C.beginPath();C.arc(ox+obsX,oy+od,3.5,0,6.28);C.fill();
+
+  // Energy bar and tracking
+  const KE=0.5*A*A*ω*ω*Math.sin(ω*dt)**2;
+  const PE=0.5*A*A*k*k*v*v*Math.cos(ω*dt)**2;
+  const TE=KE+PE;
+  const eX=755,eY=30,eW=135,eH=8;
+  C.fillStyle='#eee';C.fillRect(eX,eY,eW,eH);
+  C.fillStyle='#111';C.fillRect(eX,eY,TE/(A*A*ω*ω+1)*eW,eH);
+  C.fillStyle='#666';C.font='5px monospace';C.textAlign='center';C.fillText('TOTAL ENERGY ∝ A²ω²',eX+eW/2,eY-3);
+  C.fillStyle='#999';C.font='4px monospace';C.fillText(` KE: ${(KE/(KE+PE||1)*100).toFixed(0)}%`,eX+3,eY+16);
+  C.fillStyle='rgba(0,0,0,0.4)';C.font='4px monospace';C.fillText(` PE: ${(PE/(KE+PE||1)*100).toFixed(0)}%`,eX+65,eY+16);
+
+  // Time series y(t)
+  const gX=ox+L+30,gY=55,gW=W-(ox+L+50),gH=100;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(gX,gY,gW,gH);
+  C.fillStyle='#666';C.font='6px monospace';C.textAlign='left';C.fillText('y(t) at obs point',gX+3,gY+10);
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(gX,gY+gH/2);C.lineTo(gX+gW,gY+gH/2);C.stroke();
+  if(!paused)hist.push({t:dt,y:od});
+  while(hist.length>hMax)hist.shift();
+  if(hist.length>1){C.strokeStyle='#111';C.lineWidth=0.7;C.beginPath();
+    hist.forEach((p,i)=>{const x=gX+(i/hMax)*gW,y=gY+gH/2-p.y/55*35;i===0?C.moveTo(x,y):C.lineTo(x,y);});C.stroke();}
+
+  // Amplitude spectrum
+  const sX=gX,sY=gY+gH+8,sW=gW,sH=38;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(sX,sY,sW,sH);
+  C.fillStyle='#666';C.font='5px monospace';C.textAlign='left';C.fillText('HARMONIC SPECTRUM',sX+2,sY+8);
+  C.strokeStyle='rgba(0,0,0,0.1)';C.lineWidth=0.3;
+  for(let h=1;h<=8;h++){const x=sX+6+(h/8)*sW,amp=h===n?1:0;
+    C.fillStyle='#111';C.fillRect(x-1.5,sY+sH-5,3,-amp*20);}
+  for(let h=1;h<=5;h++){C.fillStyle='#999';C.font='4px monospace';C.textAlign='center';
+    C.fillText(`f${h}`,sX+6+(h/8)*sW,sY+sH-1);}
+
+  // Displacement magnitude bar at obs point
+  const bX=gX,bY=sY+sH+6,bW=gW,bH=20;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(bX,bY,bW,bH);
+  C.fillStyle='#eee';C.fillRect(bX+2,bY+3,bW-4,bH-6);
+  const dispFrac=Math.abs(od)/(A+1);
+  C.fillStyle='#111';C.fillRect(bX+2,bY+3,(bW-4)*dispFrac,bH-6);
+  C.fillStyle='#666';C.font='5px monospace';C.textAlign='center';
+  C.fillText(`|y|/A = ${dispFrac.toFixed(3)}`,bX+bW/2,bY+bH/2+2);
+
+  // Phase space plot
+  const pX=gX,pY=bY+bH+8,pW=gW,pH=42;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(pX,pY,pW,pH);
+  C.fillStyle='#666';C.font='5px monospace';C.textAlign='left';C.fillText('PHASE (y vs dy/dt)',pX+2,pY+8);
+  if(hist.length>10){C.strokeStyle='rgba(0,0,0,0.3)';C.lineWidth=0.4;C.beginPath();
+    for(let i=3;i<hist.length;i++){
+      const d=hist[i].y,dt_=hist[i].t-hist[i-1].t,vv=dt_>0?(hist[i].y-hist[i-2].y)/(2*dt_):0;
+      const x=pX+(d/A+1)*pW/4,y=pY+pH/2-vv/0.05;
+      i===3?C.moveTo(x,y):C.lineTo(x,y);}C.stroke();}
+
+  // Wave speed ratio
+  C.fillStyle='rgba(0,0,0,0.15)';C.font='6px monospace';C.textAlign='right';
+  C.fillText(`v (phase) = ω/k = ${(v/10).toFixed(2)} cm/s`,W-10,oy+25);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>n</label><input type="range" id="nS" min="1" max="8" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+    `<div class="ctrl-group"><label>f</label><input type="range" id="fS" min="0.5" max="10" step="0.1" value="${f}"><span class="val" id="fV">${f.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>A</label><input type="range" id="aS" min="20" max="140" step="1" value="${A}"><span class="val" id="aV">${A}</span></div>`+
+    `<div class="ctrl-group"><label>spd</label><input type="range" id="spdS" min="0" max="300" step="10" value="${speed*100}"><span class="val" id="spdV">${speed.toFixed(1)}</span></div>`+
+    `<button id="togBtn">${showTraveling?'Hide':'Show'} TW</button>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+  document.getElementById('nS').oninput=function(){n=+this.value;document.getElementById('nV').textContent=n;hist.length=0;};
+  document.getElementById('fS').oninput=function(){f=+this.value;document.getElementById('fV').textContent=f.toFixed(1);};
+  document.getElementById('aS').oninput=function(){A=+this.value;document.getElementById('aV').textContent=A;};
+  document.getElementById('spdS').oninput=function(){speed=this.value/100;document.getElementById('spdV').textContent=speed.toFixed(1);};
+  document.getElementById('togBtn').onclick=function(){showTraveling=!showTraveling;this.textContent=showTraveling?'Hide TW':'Show TW';};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=function(){time=0;hist.length=0;};
+}
+
+  if(!paused)time+=0.02*speed;
+  const lambda=2*L/n;
+  const antinodePositions=[];
+  for(let x=Math.floor(L/(2*n));x<=L;x+=L/n)antinodePositions.push(x);
+  const nodePosStr=nodePositions.map(x=>(x/10).toFixed(0)).join(', ');
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">n =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">λ = 2L/n =</span> <span class="val">${(lambda/10).toFixed(1)}</span> cm</span>`+
+    `<span><span class="label">f =</span> <span class="val">${f.toFixed(1)}</span> Hz</span>`+
+    `<span><span class="label">ω = 2πf =</span> <span class="val">${ω.toFixed(2)}</span> rad/s</span>`+
+    `<span><span class="label">k = nπ/L =</span> <span class="val">${k.toFixed(4)}</span> rad/px</span>`+
+    `<span><span class="label">v = ω/k =</span> <span class="val">${(v/10).toFixed(2)}</span> cm/s</span>`+
+    `<span><span class="label">T = 1/f =</span> <span class="val">${T.toFixed(3)}</span> s</span>`+
+    `<span><span class="label">fₙ = nv/2L</span> <span class="val">${(n*v/(2*L)).toFixed(2)}</span></span>`+
+    `<span><span class="label">Nodes =</span> <span class="val">${n+1}</span></span>`+
+    `<span><span class="label">Antinodes =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">Node x =</span> <span class="val">${nodePosStr}</span></span>`+
+    `<span><span class="label">A =</span> <span class="val">${A}</span> px</span>`+
+    `<span><span class="label">E ∝ A²ω² =</span> <span class="val">${(A*A*ω*ω/1000).toFixed(2)}</span></span>`+
+    `<span><span class="label">KE : PE</span> <span class="val">${(KE/(KE+PE||1)*100).toFixed(0)} : ${(PE/(KE+PE||1)*100).toFixed(0)}</span></span>`+
+    `<span><span class="label">y(obs) =</span> <span class="val">${od.toFixed(1)}</span> px</span>`+
+    `<span><span class="label">ωt =</span> <span class="val">${((ω*dt)%(2*Math.PI)).toFixed(3)}</span> rad</span>`;
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

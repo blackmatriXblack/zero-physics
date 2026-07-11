@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Rabi Oscillations</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Rabi Oscillations</h1>
+<p>P<sub>e</sub>(t) = (Ω₀²/Ω<sub>R</sub>²) · sin²(Ω<sub>R</sub>t/2) · Ω<sub>R</sub> = √(Ω₀² + Δ²)</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let Om0=2.0,det=0.0,t=0,run=1,spd=1,peH=[],pgH=[],maxH=400
+function rP(ti){const Or=Math.sqrt(Om0*Om0+det*det);if(Or===0)return 0;return(Om0*Om0/(Or*Or))*Math.sin(Or*ti/2)**2}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const gX=60,gY=30,gW=600,gH=220
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gX,gY,gW,gH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Time',gX+gW/2,gY+gH+16);ctx.textAlign='right';ctx.fillText('P_e',gX-8,gY+10);ctx.fillText('1',gX-12,gY+8);ctx.fillText('0',gX-12,gY+gH)
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5
+for(let i=0;i<=4;i++){const y=gY+(i/4)*gH;ctx.beginPath();ctx.moveTo(gX,y);ctx.lineTo(gX+gW,y);ctx.stroke()}
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath()
+for(let i=0;i<peH.length;i++){const x=gX+(i/maxH)*gW,y=gY+gH-peH[i]*gH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke()
+ctx.strokeStyle='#999';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath()
+for(let i=0;i<pgH.length;i++){const x=gX+(i/maxH)*gW,y=gY+gH-pgH[i]*gH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#000';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('P_e (excited)',gX+8,gY+14);ctx.fillStyle='#999';ctx.fillText('P_g (ground)',gX+8,gY+26)
+const curP=peH.length>0?peH[peH.length-1]:0
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(gX+gW,gY+gH-curP*gH,4,0,Math.PI*2);ctx.fill()
+const cx=350,cy=370,Or=Math.sqrt(Om0*Om0+det*det),Tpi=Or>0?Math.PI/Or:0
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,45,0,Math.PI*2);ctx.stroke()
+ctx.font='8px monospace';ctx.textAlign='center'
+ctx.fillStyle=curP>0.5?'#000':'#ccc';ctx.fillText('EXCITED',cx,cy-8);ctx.fillStyle=curP>0.5?'#ccc':'#000';ctx.fillText('GROUND',cx,cy+14)
+ctx.fillStyle='#000';ctx.font='7px monospace';ctx.fillText('|e⟩',cx-52,cy-6);ctx.fillText('|g⟩',cx-52,cy+14)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(cx-48,cy-3);ctx.lineTo(cx+48,cy-3);ctx.moveTo(cx-48,cy+10);ctx.lineTo(cx+48,cy+10);ctx.stroke();ctx.setLineDash([])
+const bW=100,bH=10;ctx.fillStyle='#ddd';ctx.fillRect(cx-bW/2,cy+35,bW,bH);ctx.fillStyle='#000';ctx.fillRect(cx-bW/2,cy+35,bW*curP,bH)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(cx-bW/2,cy+35,bW,bH)
+ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('P_e='+(curP*100).toFixed(1)+'%',cx,cy+60)
+if(Tpi>0){ctx.fillText('t/T_π='+(t/Tpi).toFixed(2),cx,cy+78)}
+const int=(1+Math.sin(t*5+Math.PI/2))/2
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.setLineDash([3,3])
+const sX=cx-95,eX=cx-50,wY=cy-18;ctx.beginPath()
+for(let x=sX;x<=eX;x+=2){const y=wY+6*Math.sin((x-sX)*0.3+t*5);x===sX?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#000';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('LASER',(sX+eX)/2,wY-8)
+if(!paused){t+=0.03*spd;peH.push(curP);pgH.push(1-curP);if(peH.length>maxH){peH.shift();pgH.shift()}}
+document.getElementById('st').innerHTML=
+`<span><span class="l">t =</span> <span class="v">${t.toFixed(2)}</span></span>`+
+`<span><span class="l">P_e =</span> <span class="v">${(curP*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">P_g =</span> <span class="v">${((1-curP)*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">Ω_R =</span> <span class="v">${Or.toFixed(3)}</span></span>`+
+`<span><span class="l">Ω₀ =</span> <span class="v">${Om0.toFixed(2)}</span></span>`+
+`<span><span class="l">Δ =</span> <span class="v">${det.toFixed(2)}</span></span>`+
+`<span><span class="l">T_π = π/Ω_R =</span> <span class="v">${Tpi.toFixed(3)}</span></span>`+
+`<span><span class="l">Max P_e =</span> <span class="v">${(Om0*Om0/(Or*Or||1)*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">Rabi freq =</span> <span class="v">${Or.toFixed(3)}</span></span>`+
+`<span><span class="l">π-pulse =</span> <span class="v">${(Math.Pi/Om0).toFixed(3)}</span></span>`+
+`<span><span class="l">t/T_π =</span> <span class="v">${Tpi>0?(t/Tpi).toFixed(2):'N/A'}</span></span>`+
+`<span><span class="l">State =</span> <span class="v">${curP>0.99?'|e⟩':curP<0.01?'|g⟩':'mixed'}</span></span>`
+}
+let paused=0
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>Ω₀</label><input type="range" id="omS" min="0.2" max="4" step="0.1" value="${Om0}"><span class="val" id="omV">${Om0}</span></div>`+
+`<div class="ctrl-g"><label>Δ</label><input type="range" id="detS" min="-2" max="2" step="0.05" value="${det}"><span class="val" id="detV">${det}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('omS').oninput=function(){Om0=+this.value;document.getElementById('omV').textContent=Om0;t=0;peH=[];pgH=[]}
+document.getElementById('detS').oninput=function(){det=+this.value;document.getElementById('detV').textContent=det;t=0;peH=[];pgH=[]}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){t=0;peH=[];pgH=[]}
+}
+anim()
+</script></body></html>

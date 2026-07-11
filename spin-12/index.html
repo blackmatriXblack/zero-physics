@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin ½ · Stern–Gerlach, Bloch sphere</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;height:12px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Spin ½ State</h1>
+<p>|ψ⟩ = cos(θ/2)|↑⟩ + e^(iφ) sin(θ/2)|↓⟩ — Bloch sphere</p>
+<canvas id="c" width="920" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),cx=C.getContext('2d'),W=920,H=500;
+let theta=45,phi=30,time=0,running=1,speed=1;
+let hpUp=[],hpDn=[],hPhase=[];
+
+function reset(){theta=45;phi=30;time=0;hpUp=[];hpDn=[];hPhase=[];}
+function step(){
+ if(!running)return;
+ time+=0.02*speed;
+ phi+=0.3*speed;if(phi>360)phi-=360;
+ const th=theta*Math.PI/180,ph=phi*Math.PI/180;
+ hpUp.push(Math.cos(th/2)**2);hpDn.push(Math.sin(th/2)**2);hPhase.push(ph);
+ if(hpUp.length>60){hpUp.shift();hpDn.shift();hPhase.shift();}
+}
+
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const th=theta*Math.PI/180,ph=phi*Math.PI/180;
+ const x=280,y=250,r=145;
+ const sx=Math.sin(th)*Math.cos(ph),sy=Math.sin(th)*Math.sin(ph),sz=Math.cos(th);
+
+ // Bloch sphere - meridians
+ cx.strokeStyle='rgba(0,0,0,0.04)';cx.lineWidth=0.3;
+ for(let i=0;i<360;i+=30){
+  cx.beginPath();
+  for(let j=0;j<=360;j+=5){
+   const xx=r*Math.cos(j*Math.PI/180)*Math.sin(i*Math.PI/180),yy=r*Math.sin(j*Math.PI/180),zz=r*Math.cos(j*Math.PI/180)*Math.cos(i*Math.PI/180);
+   const px=x+xx,py=y-zz;j===0?cx.moveTo(px,py):cx.lineTo(px,py);
+  }
+  cx.stroke();
+ }
+ // Equator
+ cx.strokeStyle='rgba(0,0,0,0.08)';cx.lineWidth=0.5;cx.beginPath();cx.arc(x,y,r,0,Math.PI*2);cx.stroke();
+ // Axes
+ cx.strokeStyle='rgba(0,0,0,0.12)';cx.lineWidth=0.3;
+ cx.beginPath();cx.moveTo(x,y-r-15);cx.lineTo(x,y+r+15);cx.stroke();
+ cx.beginPath();cx.moveTo(x-r-15,y);cx.lineTo(x+r+15,y);cx.stroke();
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='center';
+ cx.fillText('|↑⟩',x,y-r-6);cx.fillText('|↓⟩',x,y+r+12);
+ cx.fillText('|→⟩',x+r+8,y+3);cx.fillText('|←⟩',x-r-8,y+3);
+
+ // State vector
+ cx.strokeStyle='#111';cx.lineWidth=2;
+ cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+sx*r,y-sz*r);cx.stroke();
+ cx.fillStyle='#111';cx.beginPath();cx.arc(x+sx*r,y-sz*r,5,0,Math.PI*2);cx.fill();
+ // Bloch coords label
+ cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='center';
+ cx.fillText('('+sx.toFixed(2)+','+sy.toFixed(2)+','+sz.toFixed(2)+')',x,y+r+30);
+
+ // Probability bars
+ const pUp=Math.cos(th/2)**2,pDn=Math.sin(th/2)**2;
+ const bX=500,bY=30,bW=320,bH=22;
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY,bW,bH);
+ cx.fillRect(bX,bY+35,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY,bW*pUp,bH);
+ cx.fillRect(bX,bY+35,bW*pDn,bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('P(↑) = cos²(θ/2) = '+pUp.toFixed(4),bX,bY-2);
+ cx.fillText('P(↓) = sin²(θ/2) = '+pDn.toFixed(4),bX,bY+33);
+
+ // Qubit state equation
+ cx.fillStyle='#111';cx.font='7px monospace';
+ cx.fillText('|ψ⟩ = cos('+theta+'°/2) |↑⟩ + e^(i'+phi+'°) sin('+theta+'°/2) |↓⟩',bX,bY+85);
+ cx.fillStyle='#999';cx.font='6px monospace';
+ cx.fillText('⟨σₓ⟩ = sinθ cosφ = '+(sx).toFixed(4),bX,bY+102);
+ cx.fillText('⟨σᵧ⟩ = sinθ sinφ = '+(sy).toFixed(4),bX,bY+116);
+ cx.fillText('⟨σ₂⟩ = cosθ = '+(sz).toFixed(4),bX,bY+130);
+
+ // Stern-Gerlach diagram
+ const sgX=500,sgY=170;
+ cx.strokeStyle='#111';cx.lineWidth=1.2;cx.strokeRect(sgX,sgY,280,45);
+ cx.fillStyle='#111';cx.font='6px monospace';cx.textAlign='center';
+ cx.fillText('Stern-Gerlach (z-axis)',sgX+140,sgY+26);
+ cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.5;
+ cx.beginPath();cx.moveTo(sgX-15,sgY+22);cx.lineTo(sgX,sgY+22);cx.stroke();
+ cx.fillStyle='rgba(0,0,0,0.1)';cx.beginPath();cx.arc(sgX+310,sgY+10,6,0,Math.PI*2);cx.fill();
+ cx.fillStyle='#111';cx.beginPath();cx.arc(sgX+310,sgY+35,6,0,Math.PI*2);cx.fill();
+ cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='center';
+ cx.fillText('P(↑)='+pUp.toFixed(3),sgX+322,sgY+8);cx.fillText('P(↓)='+pDn.toFixed(3),sgX+322,sgY+38);
+
+ // Probability history mini-graph
+ const ggx=500,ggy=240,ggw=380,ggh=90;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(ggx,ggy,ggw,ggh);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('Probability history',ggx+3,ggy+8);
+ if(hpUp.length>1){
+  cx.strokeStyle='#111';cx.lineWidth=0.8;cx.beginPath();
+  hpUp.forEach((v,i)=>{const px=ggx+i/(hpUp.length-1)*ggw,py=ggy+ggh-v*(ggh-12);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+  cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.8;cx.beginPath();
+  hpDn.forEach((v,i)=>{const px=ggx+i/(hpDn.length-1)*ggw,py=ggy+ggh-v*(ggh-12);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('— P(↑)',ggx+4,ggy+ggh-20);cx.fillText('— P(↓)',ggx+4,ggy+ggh-10);
+
+ // Phase evolution mini-graph
+ const ggx2=500,ggy2=335,ggw2=380,ggh2=70;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(ggx2,ggy2,ggw2,ggh2);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.fillText('Phase φ evolution',ggx2+3,ggy2+8);
+ if(hPhase.length>1){
+  cx.strokeStyle='rgba(0,0,0,0.4)';cx.lineWidth=0.8;cx.beginPath();
+  hPhase.forEach((v,i)=>{const px=ggx2+i/(hPhase.length-1)*ggw2,py=ggy2+ggh2-v/(Math.PI*2)*(ggh2-8);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+
+ // Controls
+ const cS='<div class="ctrl-group"><label>θ(°)</label><input type="range" id="tS" min="0" max="180" step="1" value="'+theta+'"><span class="val" id="tV">'+theta+'</span></div>'+
+ '<div class="ctrl-group"><label>φ(°)</label><input type="range" id="pS" min="0" max="360" step="1" value="'+phi+'"><span class="val" id="pV">'+phi+'</span></div>'+
+ '<button id="playB">'+(running?'⏸':'▶')+'</button><button id="resetB">↺</button>'+
+ '<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="1" max="10" step="1" value="'+speed+'"><span class="val" id="spdV">'+speed+'</span></div>';
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=cS;
+ document.getElementById('tS').oninput=function(){theta=+this.value;document.getElementById('tV').textContent=theta;};
+ document.getElementById('pS').oninput=function(){phi=+this.value;document.getElementById('pV').textContent=phi;};
+ document.getElementById('playB').onclick=function(){running=!running;this.textContent=running?'⏸':'▶';};
+ document.getElementById('resetB').onclick=function(){reset();};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;document.getElementById('spdV').textContent=speed;};
+
+ // Stats
+ const S='<span><span class="label">θ =</span> <span class="val">'+theta+'°</span></span>'+
+ '<span><span class="label">φ =</span> <span class="val">'+phi+'°</span></span>'+
+ '<span><span class="label">P(↑) =</span> <span class="val">'+(pUp*100).toFixed(2)+'%</span></span>'+
+ '<span><span class="label">P(↓) =</span> <span class="val">'+(pDn*100).toFixed(2)+'%</span></span>'+
+ '<span><span class="label">⟨σₓ⟩ =</span> <span class="val">'+sx.toFixed(4)+'</span></span>'+
+ '<span><span class="label">⟨σᵧ⟩ =</span> <span class="val">'+sy.toFixed(4)+'</span></span>'+
+ '<span><span class="label">⟨σ₂⟩ =</span> <span class="val">'+sz.toFixed(4)+'</span></span>'+
+ '<span><span class="label">Sₓ = ħ/2⟨σₓ⟩ =</span> <span class="val">'+(sx*0.5).toFixed(4)+' ħ</span></span>'+
+ '<span><span class="label">Sᵧ =</span> <span class="val">'+(sy*0.5).toFixed(4)+' ħ</span></span>'+
+ '<span><span class="label">S₂ =</span> <span class="val">'+(sz*0.5).toFixed(4)+' ħ</span></span>'+
+ '<span><span class="label">|Bloch| =</span> <span class="val">'+Math.sqrt(sx*sx+sy*sy+sz*sz).toFixed(4)+'</span></span>'+
+ '<span><span class="label">cosθ =</span> <span class="val">'+sz.toFixed(4)+'</span></span>'+
+ '<span><span class="label">sinθ =</span> <span class="val">'+Math.sin(th).toFixed(4)+'</span></span>'+
+ '<span><span class="label">t =</span> <span class="val">'+time.toFixed(1)+'</span></span>';
+}
+ document.getElementById('stats').innerHTML=S;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

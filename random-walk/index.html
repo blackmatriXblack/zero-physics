@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Random Walk · ⟨x²⟩ = n · l²</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.eq{font-size:0.7em;color:#666;margin-bottom:5px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:65px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.st{display:flex;flex-wrap:wrap;gap:1px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Random Walk</h1>
+<p class="eq">⟨x²⟩ = n l² — RMS ∝ √n — Central Limit Theorem</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="ctrl" id="ctrls"></div>
+<div class="st" id="st"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=920,H=520;
+const OX=220,OY=260,colors=['#000','#333','#555','#777','#999','#bbb'];
+let N=60,stepSz=4,maxS=3000,speed=1,paused=0,reset=0,steps=0;
+const P=[],msdHist=[],stepHist=[],dispHist=[],maxH=300;
+
+class Walker{constructor(){this.x=0;this.y=0;this.trail=[{x:0,y:0}];this.steps=0;this.active=1;this.col=colors[Math.floor(Math.random()*colors.length)]}
+  walk(){if(!this.active)return;const θ=Math.random()*2*Math.PI;this.x+=stepSz*Math.cos(θ);this.y+=stepSz*Math.sin(θ);this.trail.push({x:this.x,y:this.y});this.steps++;if(this.steps>=maxS)this.active=0}
+  draw(){if(this.trail.length<2)return;ctx.strokeStyle=this.col;ctx.lineWidth=0.8;ctx.beginPath();for(let i=0;i<this.trail.length;i++){const px=OX+this.trail[i].x,py=OY+this.trail[i].y;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke();if(this.active){ctx.fillStyle=this.col;ctx.beginPath();ctx.arc(OX+this.x,OY+this.y,2.5,0,Math.PI*2);ctx.fill()}}}
+
+function init(){P.length=0;for(let i=0;i<N;i++)P.push(new Walker());steps=0;msdHist.length=0;stepHist.length=0;dispHist.length=0}
+init();
+
+function computeMSD(){let s=0,c=0;for(const p of P){s+=p.x*p.x+p.y*p.y;c++}return c?s/c:0}
+function computeRMS(){let s=0,c=0;for(const p of P){s+=Math.sqrt(p.x*p.x+p.y*p.y);c++}return c?s/c:0}
+function computeDisp(){const bins=40,bw=40,off=bins/2*stepSz*Math.sqrt(maxS)/20;let h=new Float64Array(bins);for(const p of P){const d=Math.sqrt(p.x*p.x+p.y*p.y),idx=Math.floor(d/stepSz);if(idx>=0&&idx<bins)h[idx]++}return h}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    for(const p of P)p.walk();steps++;
+    if(steps%3===0){msdHist.push(computeMSD());stepHist.push(steps);if(msdHist.length>maxH){msdHist.shift();stepHist.shift()}}
+    if(steps%10===0)dispHist.push(computeDisp());
+    if(reset){init();reset=0;return}
+  }
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  // crosshair
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(OX,OY-25);ctx.lineTo(OX,OY+25);ctx.moveTo(OX-25,OY);ctx.lineTo(OX+25,OY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('ORIGIN',OX,OY+35);
+  for(const p of P)p.draw();
+  // MSD graph
+  const gx=460,gy=20,gw=430,gh=180;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('⟨r²⟩ vs steps (solid) · theory MSD = n·l² (dashed)',gx+3,gy+10);
+  if(msdHist.length>2){const mm=Math.max(...msdHist,1);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<msdHist.length;i++){const px=gx+(i/msdHist.length)*gw,py=gy+gh-msdHist[i]/mm*(gh-20);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke();ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(gx,gy+gh);ctx.lineTo(gx+gw,gy);ctx.stroke();ctx.setLineDash([])}
+  // distribution histogram
+  const gx2=gx,gy2=gy+gh+10,gw2=gw,gh2=130;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Radial distribution of walkers',gx2+3,gy2+10);
+  if(dispHist.length>0){const h=dispHist[dispHist.length-1],mh=Math.max(...h,1);ctx.fillStyle='#111';for(let i=0;i<h.length;i++){const bw=gw2/h.length;ctx.fillRect(gx2+i*bw,gy2+gh2-h[i]/mh*(gh2-15),bw-0.5,h[i]/mh*(gh2-15))}}
+  const msd=computeMSD(),rms=computeRMS(),D=steps>0?msd/(4*steps*stepSz*stepSz):0;
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>N</label><input type="range" id="sN" min="5" max="200" step="5" value="${N}"><span class="v" id="vN">${N}</span></div>`+
+    `<div class="cg"><label>Step</label><input type="range" id="sS" min="1" max="15" step="0.5" value="${stepSz}"><span class="v" id="vS">${stepSz.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>MaxS</label><input type="range" id="sM" min="500" max="10000" step="500" value="${maxS}"><span class="v" id="vM">${maxS}</span></div>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="sSp" min="0" max="20" step="1" value="${speed}"><span class="v" id="vSp">${speed}</span></div>`+
+    `<button id="pb">${paused?'PLAY':'PAUSE'}</button><button id="rs">RESET</button>`;
+  document.getElementById('sN').oninput=function(){N=+this.value;init();document.getElementById('vN').textContent=N};
+  document.getElementById('sS').oninput=function(){stepSz=+this.value;init();document.getElementById('vS').textContent=stepSz.toFixed(1)};
+  document.getElementById('sM').oninput=function(){maxS=+this.value;init();document.getElementById('vM').textContent=maxS};
+  document.getElementById('sSp').oninput=function(){speed=+this.value;document.getElementById('vSp').textContent=speed};
+  document.getElementById('pb').onclick=function(){paused=!paused;this.textContent=paused?'PLAY':'PAUSE'};
+  document.getElementById('rs').onclick=function(){reset=1;steps=0;msdHist.length=0;stepHist.length=0;dispHist.length=0};
+}
+  const thMSD=steps*stepSz*stepSz;
+  document.getElementById('st').innerHTML=
+    `<span><span class="l">Steps =</span> <span class="v">${steps}</span></span>`+
+    `<span><span class="l">⟨r²⟩ =</span> <span class="v">${msd.toFixed(1)}</span></span>`+
+    `<span><span class="l">nl² =</span> <span class="v">${thMSD.toFixed(1)}</span></span>`+
+    `<span><span class="l">RMS =</span> <span class="v">${rms.toFixed(1)}</span></span>`+
+    `<span><span class="l">D_eff =</span> <span class="v">${D.toFixed(4)}</span></span>`+
+    `<span><span class="l">N =</span> <span class="v">${P.filter(p=>p.active).length}</span></span>`+
+    `<span><span class="l">StepSz =</span> <span class="v">${stepSz.toFixed(1)}</span></span>`+
+    `<span><span class="l">MaxS =</span> <span class="v">${maxS}</span></span>`+
+    `<span><span class="l">Speed =</span> <span class="v">${speed}</span></span>`+
+    `<span><span class="l">Var(r²) =</span> <span class="v">${(msd-rms*rms).toFixed(1)}</span></span>`+
+    `<span><span class="l">σ_r =</span> <span class="v">${Math.sqrt(Math.abs(msd-rms*rms)).toFixed(1)}</span></span>`+
+    `<span><span class="l">CLT</span> <span class="v">RMS∝√n ✓</span></span>`
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Spherical Harmonics Y_l^m</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Spherical Harmonics</h1>
+<p>Y<sub>l</sub><sup>m</sup>(θ,φ) = N·P<sub>l</sub><sup>m</sup>(cosθ)·e<sup>imφ</sup></p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let l=1,m=0,rot=0,paused=0,spd=1
+let hx=[],hy=[],ht=0
+const oL=['s','p','d','f','g','h']
+function fac(n){let r=1;for(let i=2;i<=n;i++)r*=i;return r}
+function P(l,m,x){
+if(m<0){const p=P(l,-m,x);return((-1)**-m)*fac(l+m)/fac(l-m)*p}
+if(l===0)return 1
+if(l===1){if(m===0)return x;if(m===1)return-Math.sqrt(1-x*x)}
+if(l===2){if(m===0)return 0.5*(3*x*x-1);if(m===1)return-3*x*Math.sqrt(1-x*x);if(m===2)return 3*(1-x*x)}
+if(l===3){if(m===0)return 0.5*(5*x*x*x-3*x);if(m===1)return-1.5*(5*x*x-1)*Math.sqrt(1-x*x);if(m===2)return 15*x*(1-x*x);if(m===3)return-15*Math.pow(1-x*x,1.5)}
+if(l===4){if(m===0)return(35*x*x*x*x-30*x*x+3)/8;if(m===1)return-2.5*(7*x*x*x-3*x)*Math.sqrt(1-x*x);if(m===2)return 7.5*(7*x*x-1)*(1-x*x);if(m===3)return-105*x*Math.pow(1-x*x,1.5);if(m===4)return 105*(1-x*x)*(1-x*x)}
+if(l===5){if(m===0)return(63*x*x*x*x*x-70*x*x*x+15*x)/8;if(m===1)return-15/8*(21*x*x*x*x-14*x*x+1)*Math.sqrt(1-x*x);if(m===2)return 105/2*(3*x*x*x-x)*(1-x*x);if(m===3)return-945/2*x*x*Math.pow(1-x*x,1.5)*(x?1:0);if(m===4)return 945*x*(1-x*x)*(1-x*x);if(m===5)return-945*Math.pow(1-x*x,2.5)}
+return 1}
+function Y(l,m,th,ph){const a=Math.abs(m),Plm=P(l,a,Math.cos(th)),N=Math.sqrt((2*l+1)*fac(l-a)/(4*Math.PI*fac(l+a)))
+const rv=N*Plm*Math.cos(m*ph);return{mag:Math.abs(rv),ph:rv>=0?1:-1,val:rv}}
+function getMaxY(){let mv=0;for(let th=0;th<=Math.PI;th+=0.1)for(let ph=0;ph<=2*Math.PI;ph+=0.2){const y=Y(l,m,th,ph).val;if(Math.abs(y)>mv)mv=Math.abs(y)}return mv||0.3}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const cx=350,cy=260,baseR=150,cosR=Math.cos(rot),sinR=Math.sin(rot),maxY=getMaxY()
+const nPh=30,nTh=20
+for(let i=0;i<nTh;i++){const th=Math.PI*i/nTh;ctx.beginPath();let fst=1
+for(let j=0;j<=nPh;j++){const ph=2*Math.PI*j/nPh,yv=Y(l,m,th,ph),r=baseR*(0.3+0.7*Math.abs(yv.val)/maxY)
+const x3=r*Math.sin(th)*Math.cos(ph),y3=r*Math.cos(th),z3=r*Math.sin(th)*Math.sin(ph)
+const rx=x3*cosR-z3*sinR,rz=x3*sinR+z3*cosR,sx=cx+rx,sy=cy-(y3*0.8+rz*0.4)
+fst?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);fst=0}
+ctx.closePath();ctx.fillStyle='rgba(0,0,0,'+(0.1+0.4*Math.abs(yv.val)/maxY)+')';ctx.fill()
+ctx.strokeStyle='#666';ctx.lineWidth=0.5;ctx.stroke()}
+for(let j=0;j<=nPh;j++){const ph=2*Math.PI*j/nPh;ctx.beginPath();let fst=1
+for(let i=0;i<=nTh;i++){const th=Math.PI*i/nTh,yv=Y(l,m,th,ph),r=baseR*(0.3+0.7*Math.abs(yv.val)/maxY)
+const x3=r*Math.sin(th)*Math.cos(ph),y3=r*Math.cos(th),z3=r*Math.sin(th)*Math.sin(ph)
+const rx=x3*cosR-z3*sinR,rz=x3*sinR+z3*cosR,sx=cx+rx,sy=cy-(y3*0.8+rz*0.4)
+fst?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);fst=0}
+ctx.strokeStyle='#888';ctx.lineWidth=0.5;ctx.stroke()}
+const ltr=oL[l]||'?'
+ctx.fillStyle='#000';ctx.font='12px monospace';ctx.textAlign='center';ctx.fillText(`Y_${l}^${m}(θ,φ)  l=${l}  m=${m}  ${l+1}${ltr}`,cx,30)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('(Rotating 3D surface — black = positive phase, gray = negative)',cx,H-15)
+if(!paused){rot+=0.015*spd;ht+=0.1*spd
+if(ht<300){hx.push(ht);hy.push(maxY);if(hx.length>200){hx.shift();hy.shift()}}}
+if(hx.length>1){const mgX=620,mgY=440,mgW=250,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('max|Y|(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+const my=Math.max(...hy,1);for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/hx[hx.length-1]||1)*mgW,yy=mgY+mgH-(hy[i]/my)*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const deg=(rot*180/Math.PI%360).toFixed(1)
+document.getElementById('st').innerHTML=
+`<span><span class="l">l =</span> <span class="v">${l}</span></span>`+
+`<span><span class="l">m =</span> <span class="v">${m}</span></span>`+
+`<span><span class="l">Orbital =</span> <span class="v">${l+1}${ltr}</span></span>`+
+`<span><span class="l">Rotation =</span> <span class="v">${deg}°</span></span>`+
+`<span><span class="l">max|Y| =</span> <span class="v">${maxY.toFixed(3)}</span></span>`+
+`<span><span class="l">∫|Y|²dΩ =</span> <span class="v">1</span></span>`+
+`<span><span class="l">Parity (−1)^l =</span> <span class="v">${(-1)**l}</span></span>`+
+`<span><span class="l">N_lm =</span> <span class="v">${Math.sqrt((2*l+1)*fac(l-Math.abs(m))/(4*Math.PI*fac(l+Math.abs(m)))).toFixed(3)}</span></span>`+
+`<span><span class="l">|m|/l =</span> <span class="v">${l>0?(Math.abs(m)/l).toFixed(2):'0'}</span></span>`+
+`<span><span class="l">l·(l+1) =</span> <span class="v">${l*(l+1)}</span></span>`+
+`<span><span class="l">Nodes θ =</span> <span class="v">${l-Math.abs(m)}</span></span>`+
+`<span><span class="l">Nodes φ =</span> <span class="v">${Math.abs(m)}</span></span>`
+}
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>l (0-5)</label><input type="range" id="lS" min="0" max="5" value="${l}" step="1"><span class="val" id="lV">${l}</span></div>`+
+`<div class="ctrl-g"><label>m</label><input type="range" id="mS" min="${-l}" max="${l}" value="${m}" step="1"><span class="val" id="mV">${m}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('lS').oninput=function(){l=+this.value;const ms=document.getElementById('mS');ms.max=l;ms.min=-l;if(Math.abs(m)>l){m=0;ms.value=0}
+document.getElementById('lV').textContent=l;document.getElementById('mV').textContent=m;hx=[];hy=[];ht=0}
+document.getElementById('mS').oninput=function(){m=+this.value;document.getElementById('mV').textContent=m;hx=[];hy=[];ht=0}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){rot=0;hx=[];hy=[];ht=0}
+}
+anim()
+</script></body></html>

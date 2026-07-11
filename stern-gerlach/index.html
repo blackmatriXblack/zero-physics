@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Stern-Gerlach</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Stern—Gerlach</h1>
+<p>F = μ·∇B · S<sub>z</sub>|↑⟩ = +ℏ/2|↑⟩</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let particles=[],paused=0,spd=1,total=0,spUp=0,spDn=0,seq=0,seqSp=1,stage=0
+let hx=[],hy=[],hxt=[]
+const mX=350,mY=120,mH=260,mW=180
+function mkP(){return{x:60,y:260,vx:2*spd,vy:0,spin:seq?seqSp:(Math.random()<0.5?1:-1),inM:0,done:0}}
+function spawn(){if(particles.length<80){const p=mkP();particles.push(p);total++;if(p.spin>0)spUp++;else spDn++}}
+function upd(){
+if(paused)return
+if(Math.random()<0.15*spd)spawn()
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx
+if(p.x>mX-mW/2&&p.x<mX+mW/2){p.vy+=p.spin*0.15*spd}
+p.y+=p.vy
+if(p.x>W+20||p.y<mY-20||p.y>mY+mH+20)p.done=1
+if(p.done)particles.splice(i,1)}
+if(seq&&particles.length<3){stage++;seqSp=stage%2===0?1:-1}
+ht+=0.1*spd;if(!paused&&ht<300&&total>0){hx.push(ht);hy.push(spUp);hxt.push(spDn);if(hx.length>200){hx.shift();hy.shift();hxt.shift()}}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.fillStyle='#ddd';ctx.fillRect(mX-mW/2,mY,mW,mH)
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.strokeRect(mX-mW/2,mY,mW,mH)
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center'
+ctx.fillText('N',mX-mW/2-15,mY+25);ctx.fillText('S',mX+mW/2+15,mY+25)
+ctx.fillText('Inhomogeneous B',mX,mY+mH+15);ctx.fillText('ẑ·∇B ≠ 0',mX,mY+mH+28)
+for(const p of particles){ctx.fillStyle=p.spin>0?'#000':'#888';ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill()}
+ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='left'
+ctx.fillText('Total: '+total,20,30);ctx.fillText('↑ UP: '+spUp,20,47);ctx.fillText('↓ DOWN: '+spDn,20,64)
+const upFrac=total>0?spUp/total:0.5
+ctx.fillStyle='#999';ctx.font='9px monospace';ctx.textAlign='center'
+ctx.fillText('↑ beam',610,140);ctx.fillText('↓ beam',610,390)
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([4,4])
+ctx.beginPath();ctx.moveTo(60,130);ctx.lineTo(610,130);ctx.moveTo(60,390);ctx.lineTo(610,390);ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('Ag source',60,275)
+if(hx.length>1){const mgX=620,mgY=440,mgW=260,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('↑/↓ counts',mgX+2,mgY+8)
+const my=Math.max(...hy,1)
+ctx.strokeStyle='rgba(0,0,0,0.7)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/hx[hx.length-1]||1)*mgW,yy=mgY+mgH-(hy[i]/my)*mgH*0.35
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()
+ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/hx[hx.length-1]||1)*mgW,yy=mgY+mgH-(hxt[i]/my)*mgH*0.35
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const asy=total>0?Math.abs(spUp-spDn)/total:0
+document.getElementById('st').innerHTML=
+`<span><span class="l">Total =</span> <span class="v">${total}</span></span>`+
+`<span><span class="l">↑ count =</span> <span class="v">${spUp}</span></span>`+
+`<span><span class="l">↓ count =</span> <span class="v">${spDn}</span></span>`+
+`<span><span class="l">↑ fraction =</span> <span class="v">${(upFrac*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">↓ fraction =</span> <span class="v">${((1-upFrac)*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">Asymmetry =</span> <span class="v">${asy.toFixed(3)}</span></span>`+
+`<span><span class="l">In flight =</span> <span class="v">${particles.length}</span></span>`+
+`<span><span class="l">Sequential =</span> <span class="v">${seq?'ON':'OFF'}</span></span>`+
+`<span><span class="l">Next spin =</span> <span class="v">${seqSp>0?'↑':'↓'}</span></span>`+
+`<span><span class="l">Quantization =</span> <span class="v">2 values</span></span>`+
+`<span><span class="l">m_s =</span> <span class="v">±½</span></span>`+
+`<span><span class="l">g·μ_B·B/2 =</span> <span class="v">discrete</span></span>`
+}
+function anim(){upd();drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="seqB">${seq?'SEQ ON':'SEQ OFF'}</button>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('seqB').onclick=function(){seq=!seq;this.textContent=seq?'SEQ ON':'SEQ OFF'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){particles=[];total=0;spUp=0;spDn=0;stage=0;hx=[];hy=[];hxt=[];ht=0}
+}
+anim()
+</script></body></html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roller Coaster · E conserved</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Roller Coaster</h1>
+<p>E = KE + PE conserved &nbsp;·&nbsp; <span class="eq">E=mgh+½mv²</span></p>
+<canvas id="c" width="900" height="420"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=420;
+const g=9.81,N=200,track=[];
+let bi=0,spd=1e-3,p=0,sm=1,drg=0,di=-1,st=0;
+const h={t:[],v:[],ke:[],pe:[],te:[],x:[],y:[],h:[]};
+function gt(a,f,sl){track.length=0;for(let i=0;i<=N;i++){const t=i/N,x=30+t*640,y=360+a*Math.sin(t*Math.PI*f)-sl*t*120;track.push({x,y})}}
+gt(80,3,0.15);
+function tg(i){const i1=Math.min(i+1,N),i_1=Math.max(0,i-1),dx=track[i1].x-track[i_1].x,dy=track[i1].y-track[i_1].y,l=Math.hypot(dx,dy)||1;return{dx:dx/l,dy:dy/l}}
+function ge(){const pe=g*(H-track[bi].y),ke=0.5*spd*spd;return{pe,ke,te:pe+ke}}
+function stp(){
+  if(p)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.003,tg2=tg(bi);
+    let v=spd;
+    const a=g*(-tg2.dy/Math.hypot(tg2.dx,tg2.dy)||0);
+    v+=a*dt;const ds=v*dt;let left=ds,idx=bi;
+    while(left>0&&idx<N){const dx=track[idx+1].x-track[idx].x,dy=track[idx+1].y-track[idx].y,seg=Math.hypot(dx,dy);if(seg<=left){left-=seg;idx++}else{const f=left/seg;track[bi]={x:track[idx].x+f*dx,y:track[idx].y+f*dy};bi=idx;left=0}}
+    bi=Math.min(idx,N);spd=v;
+    if(bi>=N){bi=N;spd=0}
+    const e=ge();
+    h.t.push(st);h.v.push(spd);h.ke.push(e.ke);h.pe.push(e.pe);h.te.push(e.te);h.x.push(track[bi].x);h.y.push(track[bi].y);h.h.push(H-track[bi].y);
+    while(h.t.length>500){h.t.shift();h.v.shift();h.ke.shift();h.pe.shift();h.te.shift();h.x.shift();h.y.shift();h.h.shift()}
+    st+=dt
+  }
+}
+function rs(){bi=0;spd=1e-3;st=0;p=0;h.t.length=0;h.v.length=0;h.ke.length=0;h.pe.length=0;h.te.length=0;h.x.length=0;h.y.length=0;h.h.length=0;document.getElementById('pb').textContent='Pause'}
+ca.onmousedown=function(e){const r=ca.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let md=Infinity;for(let i=0;i<=N;i++){const d=Math.hypot(mx-track[i].x,my-track[i].y);if(d<md){md=d;di=i}}if(md<20){drg=1;ca.style.cursor='grabbing'}};
+ca.onmousemove=function(e){if(!drg||di<0)return;const r=ca.getBoundingClientRect();track[di].y=Math.max(50,Math.min(410,e.clientY-r.top));rs()};
+ca.onmouseup=ca.onmouseleave=function(){drg=0;di=-1;ca.style.cursor='default'};
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.beginPath();ctx.moveTo(track[0].x,track[0].y);
+  for(let i=1;i<=N;i++)ctx.lineTo(track[i].x,track[i].y);
+  ctx.lineTo(track[N].x,H);ctx.lineTo(track[0].x,H);ctx.closePath();
+  ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fill();
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(track[0].x,track[0].y);
+  for(let i=1;i<=N;i++){ctx.lineTo(track[i].x,track[i].y);if(i%25===0){ctx.fillStyle='rgba(0,0,0,0.12)';ctx.beginPath();ctx.arc(track[i].x,track[i].y,2,0,Math.PI*2);ctx.fill()}}
+  ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+  for(let i=0;i<=N;i+=25)if(i<N){ctx.beginPath();ctx.moveTo(track[i].x,track[i].y);ctx.lineTo(track[i].x,H);ctx.stroke()}
+  const p2=track[bi];
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(p2.x,p2.y);ctx.lineTo(p2.x,H);ctx.stroke();
+  const grad=ctx.createRadialGradient(p2.x-3,p2.y-3,2,p2.x,p2.y,9);
+  grad.addColorStop(0,'#333');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;ctx.beginPath();ctx.arc(p2.x,p2.y,7,0,Math.PI*2);ctx.fill();
+  if(spd>0.2){const tg2=tg(bi),vl=Math.min(spd*4,80);ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(p2.x,p2.y);ctx.lineTo(p2.x+tg2.dx*vl,p2.y+tg2.dy*vl);ctx.stroke();ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='8px monospace';ctx.fillText('v',p2.x+tg2.dx*vl+4,p2.y+tg2.dy*vl)}
+  const e=ge(),bx=660,by=15,bw=220,bh=10;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(bx,by,bw,bh);
+  if(e.te>0){ctx.fillStyle='#111';ctx.fillRect(bx,by,bw*e.ke/e.te,bh);ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(bx+bw*e.ke/e.te,by,bw*e.pe/e.te,bh)}
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('KE',bx+3,by+9);ctx.fillText('PE',bx+bw-16,by+9);
+  const egx=660,egy=32,egw=220,egh=65;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(egx,egy,egw,egh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('energy vs time',egx+3,egy+10);
+  if(h.te.length>2){const em=Math.max(...h.te)*1.1||1;
+    ctx.beginPath();for(let i=0;i<h.ke.length;i++){const gx=egx+(i/h.ke.length)*egw,gy=egy+egh-(h.ke[i]/em)*egh;i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();
+    ctx.beginPath();for(let i=0;i<h.pe.length;i++){const gx=egx+(i/h.pe.length)*egw,gy=egy+egh-(h.pe[i]/em)*egh;i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}
+    ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.5;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([])
+  }
+  const psx=660,psy=105,psw=220,psh=70;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(psx,psy,psw,psh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('phase: v vs x',psx+3,psy+10);
+  if(h.v.length>2){const vm=Math.max(...h.v)*1.1||1,xm=Math.max(...h.x)-Math.min(...h.x)||1,xmi=Math.min(...h.x);
+    ctx.beginPath();for(let i=0;i<h.v.length;i++){const gx=psx+(h.x[i]-xmi)/xm*psw,gy=psy+psh/2-(h.v[i]/vm)*(psh/2-4);i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.stroke()
+  }
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>Amp</label><input type="range" id="aS" min="30" max="150" step="5" value="80"><span class="v" id="aV">80</span></div>`+
+    `<div class="cg"><label>Freq</label><input type="range" id="fS" min="1" max="6" step="0.5" value="3"><span class="v" id="fV">3.0</span></div>`+
+    `<div class="cg"><label>Slope</label><input type="range" id="sS" min="0" max="0.4" step="0.01" value="0.15"><span class="v" id="sV">0.15</span></div>`+
+    `<button id="pb">Pause</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="1"><span class="v" id="spV">1x</span></div>`;
+  document.getElementById('aS').oninput=function(){const a=+this.value,f=+document.getElementById('fS').value,sl=+document.getElementById('sS').value;gt(a,f,sl);document.getElementById('aV').textContent=a;rs()};
+  document.getElementById('fS').oninput=function(){const a=+document.getElementById('aS').value,f=+this.value,sl=+document.getElementById('sS').value;gt(a,f,sl);document.getElementById('fV').textContent=f.toFixed(1);rs()};
+  document.getElementById('sS').oninput=function(){const a=+document.getElementById('aS').value,f=+document.getElementById('fS').value,sl=+this.value;gt(a,f,sl);document.getElementById('sV').textContent=sl.toFixed(2);rs()};
+  document.getElementById('pb').onclick=function(){p=!p;this.textContent=p?'Play':'Pause'};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  const emh=h.te.length?Math.max(...h.te):e.te,enh=h.te.length?Math.min(...h.te):e.te,drf=h.te.length>2?(emh-enh)/(Math.abs(emh)||1)*100:0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">v =</span> <span class="v">${spd.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="l">KE =</span> <span class="v">${e.ke.toFixed(2)}</span> J</span>`+
+    `<span><span class="l">PE =</span> <span class="v">${e.pe.toFixed(2)}</span> J</span>`+
+    `<span><span class="l">E =</span> <span class="v">${e.te.toFixed(2)}</span> J</span>`+
+    `<span><span class="l">h =</span> <span class="v">${(H-track[bi].y).toFixed(1)}</span> m</span>`+
+    `<span><span class="l">Pos =</span> <span class="v">${(bi/N*100).toFixed(1)}%</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`+
+    `<span><span class="l">ΔE/E =</span> <span class="v">${drf.toFixed(4)}%</span></span>`+
+    `<span><span class="l">a =</span> <span class="v">${(g*(-tg(bi).dy/Math.hypot(tg(bi).dx,tg(bi).dy)||0)).toFixed(2)}</span> m/s²</span>`+
+    `<span><span class="l">dx/dt =</span> <span class="v">${(spd*tg(bi).dx).toFixed(3)}</span></span>`+
+    `<span><span class="l">dy/dt =</span> <span class="v">${(spd*tg(bi).dy).toFixed(3)}</span></span>`+
+    `<span><span class="l">N =</span> <span class="v">${track.length}</span></span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

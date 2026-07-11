@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Equation 1D · ∂²y/∂t² = c² ∂²y/∂x²</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Wave Equation 1D</h1>
+<p>∂²y/∂t² = c² ∂²y/∂x² — Finite difference method</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const N=300;
+const L=W-40;
+const dx=L/N;
+let c_wave=2;
+let dt=0.25;
+let C=c_wave*dt/dx;
+let damping_wave=0;
+
+let u=new Float64Array(N);
+let uPrev=new Float64Array(N);
+let uNext=new Float64Array(N);
+let uAnalytical=new Float64Array(N);
+
+let paused=false, speed=1, showEnergy=true;
+let simTime=0;
+
+let mode=0;
+const modeNames=['Gaussian','Pluck','Sine','Triangle','Sech²'];
+
+function initGaussian(){
+  u.fill(0);uPrev.fill(0);
+  for(let i=0;i<N;i++){
+    const x=i/N;
+    u[i]=Math.exp(-((x-0.3)*35)**2);
+  }
+  uPrev.set(u);
+}
+
+function initPluck(){
+  u.fill(0);uPrev.fill(0);
+  const peak=Math.floor(N*0.3);
+  for(let i=0;i<N;i++){
+    if(i<peak)u[i]=i/peak;
+    else if(i<N*0.5)u[i]=1-(i-peak)/(N*0.5-peak);
+  }
+  uPrev.set(u);
+}
+
+function initSine(){
+  u.fill(0);uPrev.fill(0);
+  for(let i=0;i<N;i++){
+    const x=i/N;
+    u[i]=Math.sin(x*Math.PI*4)*Math.exp(-((x-0.25)*20)**2);
+  }
+  uPrev.set(u);
+}
+
+function initTriangle(){
+  u.fill(0);uPrev.fill(0);
+  for(let i=0;i<N;i++){
+    const x=i/N;
+    u[i]=Math.max(0,1-Math.abs(x-0.3)*8);
+  }
+  uPrev.set(u);
+}
+
+function initSech2(){
+  u.fill(0);uPrev.fill(0);
+  for(let i=0;i<N;i++){
+    const x=i/N;
+    u[i]=1/Math.cosh((x-0.3)*25);
+  }
+  uPrev.set(u);
+}
+
+function applyInit(){
+  if(mode===0)initGaussian();
+  else if(mode===1)initPluck();
+  else if(mode===2)initSine();
+  else if(mode===3)initTriangle();
+  else initSech2();
+  simTime=0;
+}
+
+// Energy
+function totalEnergy(){
+  let E=0;
+  for(let i=1;i<N-1;i++){
+    const dy=u[i+1]-u[i-1];
+    E+=dy*dy;
+  }
+  return Math.sqrt(E/(2*N));
+}
+
+function simulateStep(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    C=c_wave*dt/dx;
+    for(let i=1;i<N-1;i++){
+      const damp=damping_wave>0?damping_wave*(u[i]-uPrev[i]):0;
+      uNext[i]=2*u[i]-uPrev[i]+C*C*(u[i+1]-2*u[i]+u[i-1])-damp;
+    }
+    uNext[0]=0;uNext[N-1]=0;
+    const temp=uPrev;uPrev=u;u=uNext;uNext=temp;
+    simTime+=dt;
+  }
+}
+
+function resetSim(){
+  applyInit();
+  paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+}
+
+applyInit();
+// Pre-run
+for(let i=0;i<20;i++){
+  C=c_wave*dt/dx;
+  for(let j=1;j<N-1;j++){
+    uNext[j]=2*u[j]-uPrev[j]+C*C*(u[j+1]-2*u[j]+u[j-1]);
+  }
+  uNext[0]=0;uNext[N-1]=0;
+  const tmp=uPrev;uPrev=u;u=uNext;uNext=tmp;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  const centerY=H/2;
+
+  // Equilibrium
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.5;ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.moveTo(20,centerY);ctx.lineTo(W-20,centerY);ctx.stroke();ctx.setLineDash([]);
+
+  // Fixed ends
+  ctx.fillStyle='#111';
+  ctx.fillRect(16,centerY-18,8,36);
+  ctx.fillRect(W-24,centerY-18,8,36);
+
+  // Damping visualization (fading boundary zones)
+  ctx.fillStyle='rgba(0,0,0,0.02)';
+  ctx.fillRect(20,centerY-120,10,240);
+  ctx.fillRect(W-30,centerY-120,10,240);
+
+  // Wave
+  ctx.strokeStyle='#111';ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    const x=20+i*dx;
+    const y=centerY-u[i]*130;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Initial shape (reference)
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([2,5]);
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    const x=20+i*dx;
+    const y=centerY-uPrev[i]*130;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();ctx.setLineDash([]);
+
+  // Info
+  const energyVal=totalEnergy();
+  ctx.fillStyle='#111';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText(`∂²y/∂t² = c²∂²y/∂x²  (c = ${c_wave.toFixed(1)})`,20,25);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='9px monospace';
+  ctx.fillText(`Initial: ${modeNames[mode]}  |  CFL: C = ${C.toFixed(3)} ${C>1?'⚠ UNSTABLE':'stable'}`,20,42);
+  ctx.fillText(`Energy: ${energyVal.toFixed(6)}  |  t = ${simTime.toFixed(2)} s`,20,59);
+
+  // Energy graph
+  if(showEnergy){
+    const eX=W-280, eY=30, eW=250, eH=60;
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+    ctx.strokeRect(eX,eY,eW,eH);
+    ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';
+    ctx.fillText('ENERGY',eX+3,eY+10);
+  }
+
+  // Mode shape label
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='8px monospace';ctx.textAlign='right';
+  ctx.fillText(`N=${N} pts  dx=${dx.toFixed(1)}  dt=${dt.toFixed(3)}`,W-20,centerY+120);
+
+  // Speed of wave markers
+  const peakPos=u.indexOf(Math.max(...u));
+  if(peakPos>0&&peakPos<N-1){
+    const px=20+peakPos*dx;
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.beginPath();ctx.arc(px,centerY-u[peakPos]*130-8,2,0,Math.PI*2);ctx.fill();
+  }
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>c</label><input type="range" id="cS" min="0.2" max="5" step="0.1" value="${c_wave}"><span class="val" id="cV">${c_wave.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Damp</label><input type="range" id="dampS" min="0" max="0.5" step="0.005" value="${damping_wave}"><span class="val" id="dampV">${damping_wave.toFixed(3)}</span></div>`+
+    `<div class="ctrl-group"><label>dt</label><input type="range" id="dtS" min="0.02" max="0.6" step="0.01" value="${dt}"><span class="val" id="dtV">${dt.toFixed(2)}</span></div>`+
+    `<button id="modeBtn">${modeNames[mode]}</button>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="10" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('cS').addEventListener('input',function(){
+    c_wave=parseFloat(this.value);document.getElementById('cV').textContent=c_wave.toFixed(1);
+  });
+  document.getElementById('dampS').addEventListener('input',function(){
+    damping_wave=parseFloat(this.value);document.getElementById('dampV').textContent=damping_wave.toFixed(3);
+  });
+  document.getElementById('dtS').addEventListener('input',function(){
+    dt=parseFloat(this.value);document.getElementById('dtV').textContent=dt.toFixed(2);
+  });
+  document.getElementById('modeBtn').addEventListener('click',function(){
+    mode=(mode+1)%5;this.textContent=modeNames[mode];applyInit();
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">c =</span> <span class="val">${c_wave.toFixed(1)}</span> px/s</span>`+
+    `<span><span class="label">CFL =</span> <span class="val">${C.toFixed(4)}</span> ${C>1?'⚠':'✓'}</span>`+
+    `<span><span class="label">Energy =</span> <span class="val">${energyVal.toFixed(6)}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`+
+    `<span><span class="label">dx =</span> <span class="val">${dx.toFixed(2)}</span></span>`+
+    `<span><span class="label">Mode:</span> <span class="val">${modeNames[mode]}</span></span>`;
+}
+
+function loop(){
+  simulateStep();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

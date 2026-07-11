@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soliton · KdV: u = A sech²(√(A/12)(x−ct))</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>KdV Soliton</h1>
+<p>u(x,t) = A sech²(√(A/12)(x−ct)) — Nonlinear solitary wave</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=560;
+let A=2,time=0,paused=false,speed=1;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const k=Math.sqrt(A/12),c=A/3;
+ const gX=40,gY=30,gW=840,gH=200;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('u(x,t) = A sech²(√(A/12)(x−ct))',gX+3,gY+10);
+ const x0=400+c*time*50;
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();let first=true;
+ for(let x=0;x<=gW;x++){const xx=(x-gW/2)*0.04+400;const arg=k*(xx-c*time-300);const val=A/Math.cosh(arg)**2;const py=gY+gH/2-val*(gH/2-10)/A;first?ctx.moveTo(gX+x,py):ctx.lineTo(gX+x,py);first=false;}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`t=${time.toFixed(2)}s`,gX+20,gY+20);
+ const pX=40,pY=260,pW=400,pH=150;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(pX,pY,pW,pH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Phase portrait u vs u\'',pX+3,pY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.beginPath();first=true;
+ for(let x=0;x<=gW;x+=2){const xx=(x-gW/2)*0.04+400;const arg=k*(xx-c*time-300);const sech=1/Math.cosh(arg);const u=A*sech*sech;const du=-2*A*k*sech*sech*Math.tanh(arg);const pxC=pX+180+u*(pW/4);const pyC=pY+pH/2-du*8;if(pxC>pX&&pxC<pX+pW&&pyC>pY&&pyC<pY+pH){first?ctx.moveTo(pxC,pyC):ctx.lineTo(pxC,pyC);first=false;}}
+ ctx.stroke();
+ const E=A*A*k/3;
+ hist.push(A);if(hist.length>hMax)hist.shift();
+ const hX=460,hY=260,hW=420,hH=150;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Amplitude A(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-(hist[i]/4)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#eee';ctx.fillRect(40,430,840,2);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(`KdV: uₜ + uuₓ + uₓₓₓ = 0`,10,H-60);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`Energy E = A²k/3 = ${E.toFixed(4)}   c = A/3 = ${c.toFixed(4)}   k = ${k.toFixed(4)}`,10,H-76);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>A</label><input type="range" id="aS" min="0.3" max="5" step="0.1" value="${A}"><span class="val" id="aV">${A.toFixed(1)}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('aS').oninput=function(){A=+this.value;aV.textContent=A.toFixed(1);};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">A =</span> <span class="val">${A.toFixed(2)}</span></span>`+
+ `<span><span class="label">k = √(A/12) =</span> <span class="val">${k.toFixed(4)}</span></span>`+
+ `<span><span class="label">c = A/3 =</span> <span class="val">${c.toFixed(4)}</span></span>`+
+ `<span><span class="label">Width ∼ 1/k =</span> <span class="val">${(1/k).toFixed(2)}</span></span>`+
+ `<span><span class="label">Energy E =</span> <span class="val">${E.toFixed(4)}</span></span>`+
+ `<span><span class="label">Momentum ∫u² =</span> <span class="val">${(A*A*2*k/3).toFixed(4)}</span></span>`+
+ `<span><span class="label">Nonlinearity</span> <span class="val">A·c = ${(A*c).toFixed(3)}</span></span>`+
+ `<span><span class="label">Dispersion</span> <span class="val">k³ = ${(k*k*k).toFixed(4)}</span></span>`+
+ `<span><span class="label">Balance</span> <span class="val">${(A>0?'stable':'unstable')}</span></span>`+
+ `<span><span class="label">Shape</span> <span class="val">sech² preserves</span></span>`+
+ `<span><span class="label">Peak pos</span> <span class="val">${(400+c*time*50).toFixed(0)}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

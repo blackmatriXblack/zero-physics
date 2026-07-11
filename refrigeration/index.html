@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refrigeration · COP = Q<sub>C</sub>/W</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;height:12px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Refrigeration</h1>
+<p>COP = Q<sub>C</sub>/W = T<sub>C</sub>/(T<sub>H</sub>−T<sub>C</sub>) — Reverse heat engine</p>
+<canvas id="c" width="920" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),cx=C.getContext('2d'),W=920,H=480;
+let TC=270,TH=310,work=0,Qc=0,running=1,speed=1;
+let hCOP=[],hQC=[],hW=[];
+
+function reset(){work=0;Qc=0;hCOP=[];hQC=[];hW=[];TC=270;TH=310;}
+
+function step(){
+ if(!running)return;
+ for(let s=0;s<speed;s++){
+  if(TC>=TH-5)TC=TH-10;
+  work+=0.02*speed;Qc+=0.08*speed;
+  const COP=Qc/(work||1);
+  hCOP.push(COP);hQC.push(Qc);hW.push(work);
+  if(hCOP.length>60){hCOP.shift();hQC.shift();hW.shift();}
+  const maxCOP=TC/(TH-TC);
+  if(Math.random()<0.01){TC+=(-1+2*Math.random())*2;TH+=(-1+2*Math.random())*3;}
+ }
+}
+
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const COP=Qc/(work||1),maxCOP=TC/(TH-TC),eff=COP/maxCOP,Qh=Qc+work;
+ const x=400,y=180;
+
+ // Fridge box
+ cx.strokeStyle='#111';cx.lineWidth=1.5;cx.strokeRect(x-55,y-35,110,70);
+ cx.fillStyle='#111';cx.font='7px monospace';cx.textAlign='center';
+ cx.fillText('Cold reservoir',x,y-45);cx.fillText(TC.toFixed(0)+' K',x,y+2);
+
+ // Hot reservoir
+ cx.strokeStyle='#111';cx.lineWidth=1;cx.strokeRect(x-55,y+95,110,25);
+ cx.fillText('Hot ('+TH.toFixed(0)+' K)',x,y+113);
+
+ // Arrows
+ cx.strokeStyle='#111';cx.lineWidth=0.5;
+ cx.beginPath();cx.moveTo(x,y+35);cx.lineTo(x,y+65);cx.stroke();
+ cx.fillStyle='#111';cx.font='6px monospace';cx.fillText('Qc',x+14,y+51);
+ cx.beginPath();cx.moveTo(x,y+95);cx.lineTo(x,y+125);cx.stroke();
+ cx.fillText('Qh',x+14,y+112);
+ cx.beginPath();cx.moveTo(x-75,y+68);cx.lineTo(x-55,y+68);cx.stroke();
+ cx.fillText('W',x-83,y+64);
+
+ // Equation display
+ cx.fillStyle='#111';cx.font='7px monospace';cx.textAlign='left';
+ cx.fillText('COP = Qc/W = '+COP.toFixed(2),x+130,y-20);
+ cx.fillText('COPmax = Tc/(Th-Tc) = '+maxCOP.toFixed(2),x+130,y-8);
+ cx.fillText('ηrel = COP/COPmax = '+(eff*100).toFixed(1)+'%',x+130,y+4);
+
+ // COP history mini-graph
+ const gx=540,gy=20,gw=350,gh=90;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gx,gy,gw,gh);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('COP history',gx+3,gy+8);
+ if(hCOP.length>1){
+  cx.strokeStyle='#111';cx.lineWidth=0.8;cx.beginPath();
+  const maxV=Math.max(...hCOP,0.1);
+  hCOP.forEach((v,i)=>{const px=gx+i/(hCOP.length-1)*gw,py=gy+gh-v/maxV*(gh-12);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+
+ // Qc history mini-graph
+ const gx2=540,gy2=115,gw2=350,gh2=70;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gx2,gy2,gw2,gh2);
+ cx.fillStyle='#999';cx.font='6px monospace';
+ cx.fillText('Qc / W history',gx2+3,gy2+8);
+ if(hQC.length>1){
+  cx.strokeStyle='#111';cx.lineWidth=0.6;cx.beginPath();
+  const maxV=Math.max(...hQC,0.1);
+  hQC.forEach((v,i)=>{const px=gx2+i/(hQC.length-1)*gw2,py=gy2+gh2-v/maxV*(gh2-10);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+ if(hW.length>1){
+  cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.6;cx.beginPath();
+  const maxV=Math.max(...hW,0.1);
+  hW.forEach((v,i)=>{const px=gx2+i/(hW.length-1)*gw2,py=gy2+gh2-v/maxV*(gh2-10);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('— Qc',gx2+4,gy2+18);cx.fillText('— W',gx2+4,gy2+28);
+
+ // COP vs Tc graph
+ const gX=50,gY=250,gW=400,gH=150;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gX,gY,gW,gH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='center';
+ cx.fillText('COP vs Tc (Th const)',gX+gW/2,gY-4);
+ cx.strokeStyle='rgba(0,0,0,0.1)';cx.lineWidth=0.5;
+ cx.beginPath();cx.moveTo(gX,gY);cx.lineTo(gX,gY+gH);cx.stroke();
+ cx.beginPath();cx.moveTo(gX,gY+gH);cx.lineTo(gX+gW,gY+gH);cx.stroke();
+ cx.strokeStyle='#111';cx.lineWidth=1;cx.beginPath();let first=true;
+ for(let x=0;x<=gW;x++){const tc=200+x/gW*180,cop=tc/(TH-tc);const px=gX+x,py=gY+gH-cop/10*(gH-20);first?cx.moveTo(px,py):cx.lineTo(px,py);first=false;}
+ cx.stroke();
+ const opX=gX+((TC-200)/180)*gW,opY=gY+gH-maxCOP/10*(gH-20);
+ cx.fillStyle='#111';cx.beginPath();cx.arc(opX,opY,3,0,Math.PI*2);cx.fill();
+ cx.fillStyle='#111';cx.font='5px monospace';cx.textAlign='center';cx.fillText('OP',opX,opY-6);
+
+ // COP bar
+ const bX=470,bY=260,bW=190,bH=12;
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY,Math.min(bW,COP/6*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('COP='+COP.toFixed(2)+' (Carnot='+maxCOP.toFixed(2)+')',bX,bY-2);
+
+ // Efficiency bar
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY+20,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY+20,Math.min(bW,eff*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.fillText('ηrel='+(eff*100).toFixed(1)+'%',bX,bY+18);
+
+ // Heat flow diagram bar
+ const tFrac=(TC-200)/300,cFrac=Math.min(1,COP/8);
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY+45,bW,10);
+ cx.fillStyle='#111';cx.fillRect(bX,bY+45,bW*tFrac,10);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Tc range',bX,bY+54);
+
+ // Controls
+ const cS='<div class="ctrl-group"><label>Tc(K)</label><input type="range" id="tcS" min="200" max="350" step="2" value="'+TC+'"><span class="val" id="tcV">'+TC.toFixed(0)+'</span></div>'+
+ '<div class="ctrl-group"><label>Th(K)</label><input type="range" id="thS" min="300" max="500" step="2" value="'+TH+'"><span class="val" id="thV">'+TH.toFixed(0)+'</span></div>'+
+ '<button id="playB">'+(running?'⏸':'▶')+'</button><button id="resetB">↺</button>'+
+ '<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="1" max="10" step="1" value="'+speed+'"><span class="val" id="spdV">'+speed+'</span></div>';
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=cS;
+ document.getElementById('tcS').oninput=function(){TC=+this.value;document.getElementById('tcV').textContent=TC.toFixed(0);};
+ document.getElementById('thS').oninput=function(){TH=+this.value;document.getElementById('thV').textContent=TH.toFixed(0);};
+ document.getElementById('playB').onclick=function(){running=!running;this.textContent=running?'⏸':'▶';};
+ document.getElementById('resetB').onclick=function(){reset();};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;document.getElementById('spdV').textContent=speed;};
+
+}
+  document.getElementById('stats').innerHTML=
+  '<span><span class="label">Tc =</span> <span class="val">'+TC.toFixed(0)+'</span> K</span>'+
+  '<span><span class="label">Th =</span> <span class="val">'+TH.toFixed(0)+'</span> K</span>'+
+  '<span><span class="label">ΔT =</span> <span class="val">'+(TH-TC).toFixed(0)+'</span> K</span>'+
+  '<span><span class="label">COP =</span> <span class="val">'+COP.toFixed(3)+'</span></span>'+
+  '<span><span class="label">COPₘₐₓ =</span> <span class="val">'+maxCOP.toFixed(3)+'</span></span>'+
+  '<span><span class="label">ηᵣₑₗ =</span> <span class="val">'+(eff*100).toFixed(1)+'%</span></span>'+
+  '<span><span class="label">Qc =</span> <span class="val">'+Qc.toFixed(2)+'</span></span>'+
+  '<span><span class="label">Qh = Qc+W =</span> <span class="val">'+Qh.toFixed(2)+'</span></span>'+
+  '<span><span class="label">W =</span> <span class="val">'+work.toFixed(2)+'</span></span>'+
+  '<span><span class="label">COPref =</span> <span class="val">'+(Qc/Math.max(work,1e-6)).toFixed(3)+'</span></span>'+
+  '<span><span class="label">W/cycle =</span> <span class="val">'+(work/Math.max(1,hCOP.length)).toFixed(4)+'</span></span>'+
+  '<span><span class="label">Qc/cycle =</span> <span class="val">'+(Qc/Math.max(1,hCOP.length)).toFixed(4)+'</span></span>'+
+  '<span><span class="label">ΔS = Qh/Th − Qc/Tc =</span> <span class="val">'+(Qh/TH-Qc/TC).toFixed(4)+'</span></span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sound Waves · Longitudinal pressure waves in air</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:4px 0;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:2px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.ctrl-group label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:55px;accent-color:#000;height:10px}
+.ctrl-group .val{font-size:0.6em;color:#000;min-width:20px;text-align:right}
+select{font-family:'Courier New',monospace;font-size:0.6em;border:1px solid #ddd;background:#fff;padding:1px 3px}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Sound Waves</h1>
+<p>Longitudinal pressure waves — compression/rarefaction in air. v = 340 m/s at 20°C. Particles oscillate parallel to propagation.</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const cv=document.getElementById('c'),cx=cv.getContext('2d'),W=920,H=560;
+let f=440,A=40,time=0,paused=false,speed=1,vSound=340,waveType='sine';
+const pHist=[],tH=[],specH=[];
+const maxH=400;
+function wf(x,t){
+ const w=2*Math.PI*f;const k=w/vSound;
+ if(waveType==='sine')return Math.sin(k*x-w*t);
+ if(waveType==='square')return Math.sin(k*x-w*t)>0?1:-1;
+ return Math.sin(k*x-w*t);
+}
+function step(){
+ if(paused)return;
+ for(let s=0;s<speed;s++){
+  time+=0.0025;
+  const p=Math.sin(2*Math.PI*f*time);
+  if(pHist.length>maxH){pHist.shift();tH.shift();}
+  pHist.push(p);tH.push(time);
+ }
+}
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const omega=2*Math.PI*f,lambda=vSound/f,k=2*Math.PI/lambda;
+ const y0=135,nP=200,sp=(W-60)/nP;
+ // Particle visualization
+ for(let i=0;i<nP;i++){
+  const x=30+i*sp;
+  const p=wf(x,time);
+  const disp=p*A*0.035;
+  const density=1+p*0.35;
+  const gray=Math.round(70+185*(1-density));
+  const r=0.9+0.7*density;
+  cx.fillStyle=`rgb(${gray},${gray},${gray})`;
+  cx.beginPath();cx.arc(x+disp,y0,Math.max(0.5,r),0,7);cx.fill();
+ }
+ // Pressure labels
+ cx.fillStyle='rgba(0,0,0,0.05)';cx.font='6px monospace';cx.textAlign='center';
+ for(let x=30;x<=W-30;x+=25){const p=wf(x,time);if(p>0.3)cx.fillText('C',x,y0-22);if(p<-0.3)cx.fillText('R',x,y0+24);}
+ cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='left';cx.fillText('● particle size & color = local density   C = Compression (high P)   R = Rarefaction (low P)',30,y0+32);
+ // Pressure waveform graph
+ const gX=50,gY=200,gW=580,gH=140;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gX,gY,gW,gH);
+ cx.strokeStyle='rgba(0,0,0,0.08)';cx.lineWidth=0.5;
+ cx.beginPath();cx.moveTo(gX,gY+gH/2);cx.lineTo(gX+gW,gY+gH/2);cx.stroke();
+ cx.fillStyle='#999';cx.font='6px monospace';cx.fillText('Δp(x,t) = p(x,t) − p₀ — acoustic pressure',gX+3,gY+10);
+ cx.strokeStyle='#111';cx.lineWidth=1.2;cx.beginPath();
+ for(let x=0;x<=gW;x++){const xx=x*lambda/55;const p=wf(xx,time)*A;const py=gY+gH/2-p;x===0?cx.moveTo(gX+x,py):cx.lineTo(gX+x,py);}cx.stroke();
+ // Axis labels
+ cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='center';cx.fillText('C = compression, R = rarefaction',gX+gW/2,gY+gH-4);
+ // Right mini-graphs (5 panels)
+ const mgX=650,mgW=255,mgH=50,mgG=3;
+ const mgY=[15,15+mgH+mgG,15+2*(mgH+mgG),15+3*(mgH+mgG),15+4*(mgH+mgG)+1];
+ // 1: Pressure history p(t)
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY[0],mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('p(t) at fixed point x₀',mgX+2,mgY[0]+8);
+ if(pHist.length>2){cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<pHist.length;i++){const x=mgX+(i/pHist.length)*mgW,y=mgY[0]+mgH/2-pHist[i]*(mgH/2-8);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.beginPath();cx.moveTo(mgX,mgY[0]+mgH/2);cx.lineTo(mgX+mgW,mgY[0]+mgH/2);cx.stroke();
+ // 2: Spectrum magnitude
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY[1],mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Spectrum |F{p}|',mgX+2,mgY[1]+8);
+ const nBars=16,barW=mgW/(nBars+1);
+ for(let n=1;n<=nBars;n++){const freq=n*50;let amp=0;if((waveType==='sine'&&Math.abs(freq-f)<20)||(waveType==='square')){amp=freq<f+20&&freq>f-20?1:(waveType==='square'?1/(n+1):0);}const maxAmp=waveType==='square'?1:1;const h=Math.min(mgH-16,amp/maxAmp*(mgH-16));cx.fillStyle=amp>0.01?'#111':'rgba(0,0,0,0.03)';cx.fillRect(mgX+n*barW,mgY[1]+mgH-6-h,barW-1,Math.max(0.5,h));}
+ cx.fillStyle='#999';cx.font='4px monospace';for(let n=2;n<=nBars;n+=2){cx.fillText(n*50,mgX+(n+0.5)*barW,mgY[1]+mgH-1);}
+ // 3: Phase portrait (p vs dp/dt)
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY[2],mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Phase: p vs dp/dt',mgX+2,mgY[2]+8);
+ const dt=0.001;const p0=Math.sin(omega*time);const p1=Math.sin(omega*(time+dt));const deriv=(p1-p0)/dt;
+ const sc=20;cx.fillStyle='#111';cx.beginPath();cx.arc(mgX+mgW/2+p0*sc,mgY[2]+mgH/2-deriv*sc*0.25,3,0,7);cx.fill();
+ cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.beginPath();cx.moveTo(mgX+mgW/2,mgY[2]+4);cx.lineTo(mgX+mgW/2,mgY[2]+mgH-4);cx.stroke();
+ cx.beginPath();cx.moveTo(mgX+4,mgY[2]+mgH/2);cx.lineTo(mgX+mgW-4,mgY[2]+mgH/2);cx.stroke();
+ // 4: Spatial snapshots (multiple offsets)
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY[3],mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Spatial snapshots (4 offsets)',mgX+2,mgY[3]+8);
+ for(let offset=0;offset<4;offset++){const to=time+offset*0.003;const alpha=0.15+0.2*(1-offset/4);cx.strokeStyle=`rgba(0,0,0,${alpha})`;cx.lineWidth=0.3;cx.beginPath();for(let x=0;x<=mgW;x++){const xx=x*lambda/75;const p=Math.sin(k*xx-omega*to)*0.4;const y=mgY[3]+mgH/2-p*(mgH/2-8);x===0?cx.moveTo(mgX+x,y):cx.lineTo(mgX+x,y);}cx.stroke();}
+ // 5: Sound level meter (bar)
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY[4],mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Sound level (relative dB)',mgX+2,mgY[4]+8);
+ const dB=20*Math.log10(A/20+0.001);const dbNorm=Math.max(0,Math.min(1,(dB+40)/60));
+ cx.fillStyle='#111';cx.fillRect(mgX+10,mgY[4]+mgH-16,dbNorm*(mgW-20),8);
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(mgX+10+dbNorm*(mgW-20),mgY[4]+mgH-16,(1-dbNorm)*(mgW-20),8);
+ cx.fillStyle='#999';cx.font='4px monospace';cx.textAlign='center';cx.fillText((dB+120).toFixed(0)+' dB SPL',mgX+mgW/2,mgY[4]+mgH-3);
+ // Compute values
+ const lambdaCm=lambda*100;const rmsP=A*0.707;const intensity=(rmsP*rmsP)/(vSound*1.2);const dBLevel=20*Math.log10(A/20+0.001)+120;
+ const pCur=Math.sin(omega*time)*A;const period=1/f;const kVal=2*Math.PI/lambda;
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+  `<div class="ctrl-group"><label>f(Hz)</label><input type="range" id="fS" min="50" max="2000" step="5" value="${f}"><span class="val" id="fV">${f}</span></div>`+
+  `<div class="ctrl-group"><label>Amp</label><input type="range" id="aS" min="2" max="100" step="1" value="${A}"><span class="val" id="aV">${A}</span></div>`+
+  `<div class="ctrl-group"><label>v(m/s)</label><input type="range" id="vS" min="200" max="500" step="5" value="${vSound}"><span class="val" id="vV">${vSound}</span></div>`+
+  `<div class="ctrl-group"><label>Speed×</label><input type="range" id="spS" min="1" max="8" step="1" value="${speed}"><span class="val" id="spV">${speed}</span></div>`+
+  `<select id="wS"><option value="sine" ${waveType==='sine'?'selected':''}>Sine</option><option value="square" ${waveType==='square'?'selected':''}>Square</option></select>`+
+  `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`;
+ document.getElementById('fS').oninput=function(){f=+this.value;document.getElementById('fV').textContent=f;};
+ document.getElementById('aS').oninput=function(){A=+this.value;document.getElementById('aV').textContent=A;};
+ document.getElementById('vS').oninput=function(){vSound=+this.value;document.getElementById('vV').textContent=vSound;};
+ document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+ document.getElementById('wS').onchange=function(){waveType=this.value;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;pHist.length=0;tH.length=0;specH.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+}
+ document.getElementById('stats').innerHTML=
+  `<span><span class="label">f</span><span class="val">${f}</span>Hz</span>`+
+  `<span><span class="label">λ</span><span class="val">${lambdaCm.toFixed(1)}</span>cm</span>`+
+  `<span><span class="label">k</span><span class="val">${kVal.toFixed(3)}</span>rad/m</span>`+
+  `<span><span class="label">ω</span><span class="val">${omega.toFixed(1)}</span>rad/s</span>`+
+  `<span><span class="label">v</span><span class="val">${vSound}</span>m/s</span>`+
+  `<span><span class="label">A</span><span class="val">${A}</span></span>`+
+  `<span><span class="label">T</span><span class="val">${period.toFixed(4)}</span>s</span>`+
+  `<span><span class="label">Δp_max</span><span class="val">${(A*0.1).toFixed(2)}</span>Pa</span>`+
+  `<span><span class="label">Δp_rms</span><span class="val">${(rmsP*0.1).toFixed(2)}</span>Pa</span>`+
+  `<span><span class="label">I</span><span class="val">${intensity.toFixed(6)}</span>W/m²</span>`+
+  `<span><span class="label">SPL</span><span class="val">${dBLevel.toFixed(1)}</span>dB</span>`+
+  `<span><span class="label">p(0,t)</span><span class="val">${pCur.toFixed(2)}</span></span>`+
+  `<span><span class="label">t</span><span class="val">${time.toFixed(3)}s</span></span>`+
+  `<span><span class="label">Type</span><span class="val">${waveType}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

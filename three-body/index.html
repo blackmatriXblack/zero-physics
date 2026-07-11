@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Three-Body Problem · Chaotic gravitational dance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Three-Body Problem</h1>
+<p>Gravitational 3-body dance — drag bodies to reposition | E = Σ½mv² − ΣGmᵢmⱼ/r</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=500;
+let G=3,paused=false,speed=1,bodies=[],trails=[[],[],[]],simTime=0,drag=-1,hist={t:[],ke:[],pe:[],te:[],px:[],py:[],lz:[]};
+function init(p){const m=[{x:320,y:220,vx:0,vy:-1,m:5},{x:450,y:260,vx:.7,vy:.5,m:4},{x:560,y:300,vx:-.4,vy:.7,m:3}]
+  ,b=[{x:350,y:250,vx:0,vy:-.5,m:5},{x:400,y:150,vx:.6,vy:0,m:4},{x:500,y:300,vx:-.3,vy:.4,m:3}]
+  ,e=[{x:300,y:250,vx:0,vy:0,m:6},{x:450,y:200,vx:0,vy:.8,m:4},{x:600,y:300,vx:-.5,vy:-.3,m:2}];
+  bodies=[m,b,e][p]||m;trails=[[],[],[]];simTime=0;hist={t:[],ke:[],pe:[],te:[],px:[],py:[],lz:[]};
+}
+init(0);
+function E(){let ke=0,pe=0;for(let i=0;i<3;i++){ke+=.5*bodies[i].m*(bodies[i].vx**2+bodies[i].vy**2);for(let j=i+1;j<3;j++){const dx=bodies[j].x-bodies[i].x,dy=bodies[j].y-bodies[i].y,r=Math.hypot(dx,dy)||1;pe-=G*bodies[i].m*bodies[j].m/r}}return{ke,pe,te:ke+pe}}
+function L(){let lx=0;for(let i=0;i<3;i++)lx+=bodies[i].m*(bodies[i].x*bodies[i].vy-bodies[i].y*bodies[i].vx);return lx}
+function P(){let px=0,py=0;for(let i=0;i<3;i++){px+=bodies[i].m*bodies[i].vx;py+=bodies[i].m*bodies[i].vy}return{px,py}}
+function step(){if(paused)return;const n=Math.ceil(speed);for(let s=0;s<n;s++){
+  const acc=bodies.map(()=>({ax:0,ay:0}));
+  for(let i=0;i<3;i++)for(let j=i+1;j<3;j++){const dx=bodies[j].x-bodies[i].x,dy=bodies[j].y-bodies[i].y;let r2=dx*dx+dy*dy;if(r2<1)r2=1;const r=Math.sqrt(r2),F=G*bodies[i].m*bodies[j].m/r2,fx=F*dx/r,fy=F*dy/r;acc[i].ax+=fx/bodies[i].m;acc[i].ay+=fy/bodies[i].m;acc[j].ax-=fx/bodies[j].m;acc[j].ay-=fy/bodies[j].m}
+  for(let i=0;i<3;i++){bodies[i].vx+=acc[i].ax*.02;bodies[i].vy+=acc[i].ay*.02;bodies[i].x+=bodies[i].vx*.02;bodies[i].y+=bodies[i].vy*.02;trails[i].push({x:bodies[i].x,y:bodies[i].y});if(trails[i].length>600)trails[i].shift()}
+  const e=E(),p=P(),l=L();simTime+=.02;hist.t.push(simTime);hist.ke.push(e.ke);hist.pe.push(e.pe);hist.te.push(e.te);hist.px.push(p.px);hist.py.push(p.py);hist.lz.push(l);if(hist.t.length>500){for(let k in hist)hist[k].shift()}
+}}
+function reset(){const p=parseInt(document.getElementById('presetS')?.value||0);init(p);paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause'}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=.5;for(let x=0;x<=W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<=H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  const sh=['#111','#555','#999'];
+  for(let i=0;i<3;i++){
+    if(trails[i].length>2)for(let k=1;k<trails[i].length;k++){const f=k/trails[i].length;ctx.strokeStyle=`rgba(0,0,0,${.04+.12*f})`;ctx.lineWidth=.5+f*1.5;ctx.beginPath();ctx.moveTo(trails[i][k-1].x,trails[i][k-1].y);ctx.lineTo(trails[i][k].x,trails[i][k].y);ctx.stroke()}
+    const r=6+bodies[i].m*1.2,gr=ctx.createRadialGradient(bodies[i].x-r*.3,bodies[i].y-r*.3,1,bodies[i].x,bodies[i].y,r);gr.addColorStop(0,'#555');gr.addColorStop(1,sh[i]);ctx.fillStyle=gr;ctx.beginPath();ctx.arc(bodies[i].x,bodies[i].y,r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(`m${i+1}=${bodies[i].m.toFixed(1)}`,bodies[i].x,bodies[i].y-r-6)
+  }
+  const e=E(),p=P(),l=L(),totM=bodies.reduce((s,b)=>s+b.m,0),cx=(bodies.reduce((s,b)=>s+b.x*b.m,0))/totM,cy=(bodies.reduce((s,b)=>s+b.y*b.m,0))/totM;
+  ctx.fillStyle='rgba(0,0,0,.15)';ctx.beginPath();ctx.arc(cx,cy,2,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,0,0,.2)';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('COM',cx+4,cy+3);
+  const eDrift=hist.te.length>5?((Math.max(...hist.te)-Math.min(...hist.te))/Math.abs(hist.te[hist.te.length-1]||1)*100):0;
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText(`E = ${e.te.toFixed(4)} [Δ=${eDrift.toFixed(3)}%]`,10,20);ctx.fillText(`KE = ${e.ke.toFixed(4)}`,10,34);ctx.fillText(`PE = ${e.pe.toFixed(4)}`,10,48);ctx.fillText(`px = ${p.px.toFixed(4)}`,10,62);ctx.fillText(`py = ${p.py.toFixed(4)}`,10,76);ctx.fillText(`Lz = ${l.toFixed(4)}`,10,90);ctx.fillText(`t = ${simTime.toFixed(2)}s`,10,104);ctx.fillText(`G = ${G.toFixed(2)}`,10,118);
+  // Energy graph
+  const egX=700,egY=20,egW=185,egH=75;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(egX,egY,egW,egH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('E conservation',egX+3,egY+10);
+  if(hist.te.length>2){const eMax=Math.max(...hist.te)*1.1||1;ctx.beginPath();for(let i=0;i<hist.te.length;i++){const gx=egX+(i/hist.te.length)*egW,gy=egY+egH-(hist.te[i]/eMax)*egH;i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}ctx.strokeStyle='#111';ctx.lineWidth=.8;ctx.stroke()}
+  // Phase space
+  const psX=700,psY=105,psW=185,psH=100;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(psX,psY,psW,psH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('phase θ₁ vs ω₁',psX+3,psY+10);
+  if(hist.te.length>2){const th=[],om=[];for(let i=0;i<hist.te.length;i++){th.push(Math.atan2(bodies[0].y,bodies[0].x));om.push(bodies[0].vx)}const tM=Math.max(...th.map(Math.abs))*1.2||1,oM=Math.max(...om.map(Math.abs))*1.2||1;ctx.beginPath();for(let i=0;i<th.length;i++){const gx=psX+psW/2+(th[i]/tM)*(psW/2-6),gy=psY+psH/2-(om[i]/oM)*(psH/2-6);i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=.7;ctx.stroke()}
+  // Lz graph
+  const lgX=700,lgY=215,lgW=185,lgH=55;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(lgX,lgY,lgW,lgH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Lz',lgX+3,lgY+10);
+  if(hist.lz.length>2){const lMax=Math.max(...hist.lz.map(Math.abs))*1.2||1;ctx.beginPath();for(let i=0;i<hist.lz.length;i++){const gx=lgX+(i/hist.lz.length)*lgW,gy=lgY+lgH/2-(hist.lz[i]/lMax)*(lgH/2-4);i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy)}ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.6;ctx.stroke()}
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>Preset</label><select id="presetS" style="font-family:monospace;font-size:.7em;border:1px solid #000;background:#fff"><option value="0">Fig-8</option><option value="1">Butterfly</option><option value="2">Escape</option></select></div>`+
+    `<div class="ctrl-group"><label>G</label><input type="range" id="gS" min=".5" max="10" step=".5" value="${G}"><span class="val" id="gV">${G.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+  document.getElementById('gS').addEventListener('input',function(){G=parseFloat(this.value);document.getElementById('gV').textContent=G.toFixed(1)});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause'});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x'});
+  document.getElementById('presetS').addEventListener('change',function(){init(parseInt(this.value));reset()});
+  canvas.onmousedown=function(e){const r=c.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;for(let i=0;i<3;i++){if(Math.hypot(mx-bodies[i].x,my-bodies[i].y)<15){drag=i;c.style.cursor='grabbing';break}}};
+  canvas.onmousemove=function(e){if(drag<0)return;const r=c.getBoundingClientRect();bodies[drag].x=e.clientX-r.left;bodies[drag].y=e.clientY-r.top;bodies[drag].vx=0;bodies[drag].vy=0;for(let i=0;i<3;i++)trails[i]=[]};
+  canvas.onmouseup=canvas.onmouseleave=function(){drag=-1;c.style.cursor='grab'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">E =</span> <span class="val">${e.te.toFixed(4)}</span></span>`+
+    `<span><span class="label">KE =</span> <span class="val">${e.ke.toFixed(4)}</span></span>`+
+    `<span><span class="label">PE =</span> <span class="val">${e.pe.toFixed(4)}</span></span>`+
+    `<span><span class="label">px =</span> <span class="val">${p.px.toFixed(4)}</span></span>`+
+    `<span><span class="label">py =</span> <span class="val">${p.py.toFixed(4)}</span></span>`+
+    `<span><span class="label">Lz =</span> <span class="val">${l.toFixed(4)}</span></span>`+
+    `<span><span class="label">COMx =</span> <span class="val">${cx.toFixed(2)}</span></span>`+
+    `<span><span class="label">COMy =</span> <span class="val">${cy.toFixed(2)}</span></span>`+
+    `<span><span class="label">M_total =</span> <span class="val">${totM.toFixed(2)}</span></span>`+
+    `<span><span class="label">ΔE/E =</span> <span class="val">${eDrift.toFixed(4)}%</span></span>`+
+    `<span><span class="label">|p| =</span> <span class="val">${Math.hypot(p.px,p.py).toFixed(4)}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

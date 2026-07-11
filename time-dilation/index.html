@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Dilation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Time Dilation</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480;
+let paused=false, simTime=0, speed=1;
+let properTime=0, movingTime=0, beta=0.8, xPos=0;
+let historyP=[], historyM=[], historyBeta=[], historyT=[];
+let pulseCount=0, pulseTimer=0;
+
+function resetSim(){
+  simTime=0;properTime=0;movingTime=0;xPos=0;
+  historyP=[];historyM=[];historyBeta=[];historyT=[];
+  pulseCount=0;pulseTimer=0;
+}
+
+function update(){
+  if(paused)return;
+  const dt=.02*speed;
+  simTime+=dt;properTime+=dt;
+  const gamma=1/Math.sqrt(1-beta*beta);
+  movingTime+=dt/gamma;
+  xPos+=beta*2.5*speed;
+  if(xPos>300){xPos=300}
+  pulseTimer+=dt;
+  if(pulseTimer>.15){pulseTimer=0;pulseCount++}
+  historyP.push({t:simTime,val:properTime});historyM.push({t:simTime,val:movingTime});historyBeta.push({t:simTime,val:beta});historyT.push({t:simTime,val:gamma});
+  if(historyP.length>500){historyP.shift();historyM.shift();historyBeta.shift();historyT.shift()}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const gamma=1/Math.sqrt(1-beta*beta);
+
+  // light clock visualization
+  ctx.strokeStyle='#ddd';ctx.lineWidth=1;ctx.beginPath();
+  ctx.moveTo(30,50);ctx.lineTo(350,50);ctx.stroke();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(30,60,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('A',30,63);
+  const bx=30+xPos;
+  ctx.fillStyle='#666';ctx.beginPath();ctx.arc(bx,60,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('B',bx,63);
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('Earth (A) →',20,80);
+  if(xPos>=300){ctx.fillStyle='#333';ctx.font='8px monospace';ctx.fillText('(turnaround)',bx+12,55)}
+
+  // moving clock pulses
+  for(let i=0;i<3;i++){
+    const pulseAge=pulseTimer*5+i*.3;if(pulseAge>1)continue;
+    const px=250-beta*30*pulseAge;const py=120+60*i;
+    ctx.fillStyle=`rgba(0,0,0,${.15*(1-pulseAge)})`;
+    ctx.beginPath();ctx.arc(px,py,3+8*pulseAge,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.05)';ctx.beginPath();ctx.arc(px,py,8+12*pulseAge,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('Light pulses from B',10,120);
+
+  // clocks
+  const cx=400, baseY=40;
+  ctx.strokeStyle='#000';ctx.lineWidth=1;
+  for(let i=0;i<2;i++){
+    const yy=baseY+i*70;
+    ctx.beginPath();ctx.arc(cx,yy,30,0,Math.PI*2);ctx.stroke();
+    const angle=(pulseCount%60)/60*Math.PI*2-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,yy);ctx.lineTo(cx+Math.cos(angle)*20,yy+Math.sin(angle)*20);ctx.stroke();
+    ctx.fillStyle='#000';ctx.font='7px monospace';ctx.textAlign='center';
+    ctx.fillText(i===0?'Earth Clock':'Moving Clock',cx,yy+45);
+  }
+
+  // proper time display
+  ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='center';
+  ctx.fillText(`Earth proper time: ${properTime.toFixed(3)}`,350,200);
+  ctx.fillStyle='#666';
+  ctx.fillText(`Moving proper time: ${movingTime.toFixed(3)}`,350,220);
+  ctx.fillStyle='#000';ctx.font='12px monospace';
+  ctx.fillText(`Δτ = ${(properTime-movingTime).toFixed(3)}`,350,250);
+
+  // mini graph: proper time history
+  const gx=20,gy=280,gw=W-40,gh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('Proper Time τ',gx+3,gy+10);
+  if(historyP.length>3){
+    const maxT=Math.max(properTime,movingTime,.1);
+    ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath();
+    for(let i=0;i<historyP.length;i++){
+      const px=gx+(historyP[i].t/(historyP[historyP.length-1].t||1))*gw, py=gy+gh-(historyP[i].val/maxT)*gh;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)
+    }
+    ctx.stroke();
+    ctx.strokeStyle='#999';ctx.lineWidth=1;ctx.beginPath();
+    for(let i=0;i<historyM.length;i++){
+      const px=gx+(historyM[i].t/(historyM[historyM.length-1].t||1))*gw, py=gy+gh-(historyM[i].val/maxT)*gh;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)
+    }
+    ctx.stroke();
+    ctx.fillStyle='#000';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('— A',gx+10,gy+gh-4);
+    ctx.fillStyle='#999';ctx.fillText('— B',gx+50,gy+gh-4);
+  }
+
+  // mini gamma vs beta
+  const mgx=20,mgy=380,mgw=120,mgh=60;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(mgx,mgy,mgw,mgh);
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.font='7px monospace';ctx.fillText('γ(β)',mgx+3,mgy+10);
+  ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=.6;ctx.beginPath();
+  for(let i=0;i<=mgw;i++){const b=i/mgw*.95;const gg=1/Math.sqrt(1-b*b);if(i===0)ctx.moveTo(mgx+i,mgy+mgh-gg/6*mgh);else ctx.lineTo(mgx+i,mgy+mgh-gg/6*mgh)}
+  ctx.stroke();
+  const cgx=mgx+beta/.95*mgw,cgy=mgy+mgh-gamma/6*mgh;
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cgx,cgy,2.5,0,Math.PI*2);ctx.fill();
+
+  data.innerHTML=
+    `β = ${beta.toFixed(3)} | γ = ${gamma.toFixed(3)} | Earth τ = ${properTime.toFixed(3)} | Moving τ = ${movingTime.toFixed(3)}`+
+    ` | Δτ = ${(properTime-movingTime).toFixed(3)} | t' = t/γ = ${(properTime/gamma).toFixed(3)}`+
+    ` | Pulses = ${pulseCount} | x = ${xPos.toFixed(0)}`;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>β <input type="range" id="betaS" min="0.1" max="0.95" value="${beta*100}" step="1"><span id="betaD">${beta.toFixed(2)}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>`;
+
+document.getElementById('betaS').oninput=function(){beta=parseInt(this.value)/100;document.getElementById('betaD').textContent=beta.toFixed(2);resetSim()};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=resetSim;
+</script>
+</body>
+</html>

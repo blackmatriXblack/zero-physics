@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stirling Cycle</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Stirling Cycle — P-V diagram of Stirling engine</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <label>T<sub>h</sub> <input type="range" id="tHS" min="1.5" max="4" step=".05" value="2.5"><span class="v" id="tHV">2.50</span></label>
+  <label>T<sub>c</sub> <input type="range" id="tCS" min="0.5" max="2" step=".05" value="1"><span class="v" id="tCV">1.00</span></label>
+  <label>Spd <input type="range" id="sS" min="1" max="30" value="10"><span class="v" id="sV">10</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const Vmin = 0.05, Vmax = 0.25, nR = 100;
+let Th = 2.5, Tc = 1.0, speed = 0.008, running = true;
+let phase = 0, workDone = 0, cycleCount = 0, heatIn = 0, heatOut = 0;
+
+const HIST_LEN = 150;
+let histWork = [];
+
+function getState(t) {
+  const pi2 = Math.PI * 2;
+  const tt = ((t % pi2) + pi2) % pi2;
+  let V, T, proc;
+  if (tt < Math.PI / 2) {
+    const f = tt / (Math.PI / 2);
+    V = Vmax - (Vmax - Vmin) * f; T = Th; proc = 1;
+  } else if (tt < Math.PI) {
+    const f = (tt - Math.PI / 2) / (Math.PI / 2);
+    V = Vmin; T = Th - (Th - Tc) * f; proc = 2;
+  } else if (tt < 3 * Math.PI / 2) {
+    const f = (tt - Math.PI) / (Math.PI / 2);
+    V = Vmin + (Vmax - Vmin) * f; T = Tc; proc = 3;
+  } else {
+    const f = (tt - 3 * Math.PI / 2) / (Math.PI / 2);
+    V = Vmax; T = Tc + (Th - Tc) * f; proc = 4;
+  }
+  return { V, T, p: nR * T / V, proc };
+}
+
+function draw() {
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  const pvX = W * 0.06, pvY = H * 0.10;
+  const pvW = Math.min(W * 0.5, 400), pvH = Math.min(H * 0.55, 350);
+
+  function toPV(v, p) {
+    return {
+      px: pvX + (v - Vmin) / (Vmax - Vmin) * pvW,
+      py: pvY + pvH - p / (nR * Th / Vmin) * pvH
+    };
+  }
+
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(pvX, pvY, pvW, pvH);
+  cx.fillStyle = '#999'; cx.font = '7px monospace';
+  cx.fillText('P', pvX - 2, pvY - 4);
+  cx.fillText('V', pvX + pvW + 2, pvY + pvH + 2);
+
+  // Isotherms
+  const isoT = [Tc, Th], colors = ['#bbb', '#444'];
+  for (let ti = 0; ti < 2; ti++) {
+    cx.strokeStyle = colors[ti]; cx.setLineDash([3, 3]); cx.beginPath();
+    for (let i = 0; i <= 50; i++) {
+      const v = Vmin + (Vmax - Vmin) * i / 50;
+      const p = nR * isoT[ti] / v;
+      const pos = toPV(v, p);
+      if (i === 0) cx.moveTo(pos.px, pos.py); else cx.lineTo(pos.px, pos.py);
+    }
+    cx.stroke(); cx.setLineDash([]);
+  }
+
+  // Cycle path
+  cx.strokeStyle = '#000'; cx.lineWidth = 2; cx.beginPath();
+  for (let i = 0; i <= 200; i++) {
+    const s = getState(i / 200 * Math.PI * 2);
+    const pos = toPV(s.V, s.p);
+    if (i === 0) cx.moveTo(pos.px, pos.py); else cx.lineTo(pos.px, pos.py);
+  }
+  cx.closePath(); cx.stroke();
+
+  // Current state marker
+  const cur = getState(phase);
+  const cpos = toPV(cur.V, cur.p);
+  cx.fillStyle = '#000'; cx.beginPath(); cx.arc(cpos.px, cpos.py, 5, 0, Math.PI * 2); cx.fill();
+
+  // Engine schematic
+  const ex = W * 0.6, ey = H * 0.12;
+  const ew = Math.min(W * 0.35, 200), eh = Math.min(H * 0.35, 200);
+  cx.strokeStyle = '#000'; cx.lineWidth = 1.5;
+  cx.strokeRect(ex - ew / 2, ey - eh / 2, ew, eh);
+  const nV = (cur.V - Vmin) / (Vmax - Vmin);
+  const pistonY = ey + eh / 2 - 16 - nV * (eh - 32);
+  const displY = ey - eh / 2 + 16 + (1 - nV) * (eh - 32);
+  cx.fillStyle = '#000';
+  cx.fillRect(ex - ew / 2 + 4, pistonY, ew - 8, 6);
+  cx.fillRect(ex - ew / 2 - 8, pistonY - 3, 10, 12);
+  cx.fillStyle = '#ddd';
+  cx.fillRect(ex - ew / 2 + 4, ey - eh / 2 + 4, ew - 8, displY - (ey - eh / 2) - 4);
+  cx.fillStyle = '#bbb';
+  cx.fillRect(ex - ew / 2 + 4, displY + 8, ew - 8, pistonY - displY - 10);
+  cx.fillStyle = '#111'; cx.font = '7px monospace'; cx.textAlign = 'center';
+  cx.fillText('HOT', ex, ey - eh / 2 + 10);
+  cx.fillText('COLD', ex, pistonY - 5);
+  cx.fillText('PISTON', ex, pistonY + 10);
+  cx.fillText('DISPL.', ex, displY - 5);
+
+  // Mini work graph
+  const mgx = ex - ew / 2, mgy = ey + eh / 2 + 20;
+  const mgw = ew, mgh = Math.min(H * 0.12, 50);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(mgx, mgy, mgw, mgh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.font = '6px monospace'; cx.textAlign = 'left';
+  cx.fillText('Work', mgx + 2, mgy + 8);
+  if (histWork.length > 1) {
+    const wMin = Math.min(...histWork), wMax = Math.max(...histWork), wR = wMax - wMin || 1;
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histWork.length; i++) {
+      const x = mgx + (i / (HIST_LEN - 1)) * mgw;
+      const y = mgy + mgh - (histWork[i] - wMin) / wR * mgh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  const carnot = 1 - Tc / Th;
+  document.getElementById('d').innerHTML =
+    'Work=' + workDone.toFixed(2) +
+    '<br>\u03b7=' + (carnot * 100).toFixed(1) + '%' +
+    '<br>T<sub>h</sub>=' + Th.toFixed(2) +
+    '<br>T<sub>c</sub>=' + Tc.toFixed(2) +
+    '<br>V=' + cur.V.toFixed(3) +
+    '<br>P=' + cur.p.toFixed(1) +
+    '<br>T=' + cur.T.toFixed(2) +
+    '<br>Cycle=' + cycleCount +
+    '<br>\u03b7<sub>Carnot</sub>=' + (carnot * 100).toFixed(1) + '%' +
+    '<br>V<sub>min</sub>=' + Vmin.toFixed(2) +
+    '<br>V<sub>max</sub>=' + Vmax.toFixed(2) +
+    '<br>Q<sub>in</sub>=' + heatIn.toFixed(2);
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+document.getElementById('rb').onclick = () => { phase = 0; workDone = 0; cycleCount = 0; heatIn = 0; heatOut = 0; histWork = []; };
+document.getElementById('tHS').oninput = function () { Th = parseFloat(this.value); document.getElementById('tHV').textContent = Th.toFixed(2); };
+document.getElementById('tCS').oninput = function () { Tc = parseFloat(this.value); document.getElementById('tCV').textContent = Tc.toFixed(2); };
+document.getElementById('sS').oninput = function () { speed = 0.001 * parseFloat(this.value); document.getElementById('sV').textContent = parseFloat(this.value); };
+
+function loop() {
+  if (running) {
+    const s1 = getState(phase);
+    const s2 = getState(phase + speed * 0.5);
+    const dV = s2.V - s1.V;
+    const dT = s2.T - s1.T;
+    const dW = nR * dT * Math.log(s2.V / s1.V) * 0.01;
+    if (dW > 0 && Math.abs(dV) > 0.0001) { workDone += dW; heatIn += dW; }
+    else if (dW < 0 && Math.abs(dV) > 0.0001) heatOut -= dW;
+    if (phase % (Math.PI * 2) > phase - speed) cycleCount++;
+    phase += speed;
+    histWork.push(workDone);
+    if (histWork.length > HIST_LEN) histWork.shift();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resizeCanvas();
+loop();
+</script>
+</body>
+</html>

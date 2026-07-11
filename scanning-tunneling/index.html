@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>STM · Scanning Tunneling</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Scanning Tunneling Microscope</h1>
+<p>I ∝ V·exp(−2κz) · κ = √(2mφ)/ℏ</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+const sX=100,sY=300,sp=30,aR=8,aC=8,sW=sp*(aC-1)+40,sH=sp*(aR-1)+40
+let tipX=0,tipY=0,sR=0,sC=0,bias=0.5,tH=8,scan=1,done=0,img=[],atoms=[],run=1,spd=1
+let hx=[],hy=[],ht=0
+function initS(){atoms=[]
+for(let r=0;r<aR;r++)for(let c=0;c<aC;c++)atoms.push({x:sX+20+c*sp+(Math.random()-0.5)*3,y:sY+20+r*sp+(Math.random()-0.5)*3,z:0.5+Math.random()*0.3,r:5+Math.random()*2})}
+function init(){initS();sR=0;sC=0;done=0;img=[];for(let i=0;i<aH;i++){img[i]=[];for(let j=0;j<aW;j++)img[i][j]=0}
+tipX=sX+20;tipY=sY+20;hx=[];hy=[];ht=0}
+const aW=aC,aH=aR
+function tunC(x,y){let mD=Infinity,cZ=0
+for(const a of atoms){const dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy);if(d<mD){mD=d;cZ=a.z}}
+const d=Math.hypot(x-tipX,y-tipY),eH=tH+2-cZ*10;return Math.max(0,bias*Math.exp(-eH)*Math.exp(-d*d/80))}
+function step(){if(done||!scan)return
+const x=sX+20+sC*sp,y=sY+20+sR*sp;tipX=x;tipY=y;img[sR][sC]=tunC(x,y)
+sC++;if(sC>=aW){sC=0;sR++;if(sR>=aH)done=1}
+ht+=0.5*spd;if(ht<200){hx.push(ht);hy.push(img[sR]?img[sR][sC-1]||0:0);if(hx.length>150){hx.shift();hy.shift()}}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(sX,sY,sW,sH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Surface',sX+sW/2,sY-4)
+for(const a of atoms){const g=Math.round(200-a.z*80);ctx.fillStyle=`rgb(${g},${g},${g})`;ctx.beginPath();ctx.arc(a.x,a.y,a.r*(0.5+a.z*0.5),0,Math.PI*2);ctx.fill();ctx.strokeStyle='#000';ctx.lineWidth=0.5;ctx.stroke()}
+const tEX=tipX,tEY=tipY-40
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tEX-5,tEY-15);ctx.lineTo(tEX,tEY);ctx.lineTo(tEX+5,tEY-15);ctx.stroke()
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(tEX,tEY,2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#000';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('TIP',tEX+8,tEY)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.lineTo(tEX,tEY);ctx.stroke();ctx.setLineDash([])
+const cur=img[sR]&&img[sR][sC-1]!==undefined?img[sR][sC-1]:0
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('I = '+(cur*1000).toFixed(2)+' nA',530,30);ctx.fillText('V = '+bias.toFixed(2)+' V',530,50);ctx.fillText('z = '+tH.toFixed(1)+' Å',530,70)
+if(cur>0.01){ctx.fillStyle='#000';ctx.fillRect(530,80,Math.min(cur*500,150),8)}ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(530,80,150,8)
+const iX=480,iY=120,iS=280,cS=iS/aW
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(iX,iY,iS,iS);ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Topography',iX+iS/2,iY-4)
+let mV=0.001;for(let r=0;r<aH;r++)for(let c=0;c<aW;c++)if(img[r][c]>mV)mV=img[r][c]
+for(let r=0;r<aH;r++)for(let c=0;c<aW;c++){const v=img[r][c]/mV,g=Math.round(255*(1-v));ctx.fillStyle=`rgb(${g},${g},${g})`;ctx.fillRect(iX+c*cS,iY+r*cS,cS+1,cS+1)}
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(iX,iY,iS,iS)
+if(!done&&sR<aH){ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.strokeRect(iX+sC*cS,iY+sR*cS,cS,cS)}
+if(hx.length>1){const mgX=480,mgY=440,mgW=200,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('I(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+const my=Math.max(...hy,0.001);for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/200)*mgW,yy=mgY+mgH-(hy[i]/my)*mgH*0.7
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const prog=done?100:((sR*aW+sC)/(aW*aH)*100)
+document.getElementById('st').innerHTML=
+`<span><span class="l">Scan =</span> <span class="v">${prog.toFixed(1)}%</span></span>`+
+`<span><span class="l">Point =</span> <span class="v">${sR*aW+sC}/${aW*aH}</span></span>`+
+`<span><span class="l">I =</span> <span class="v">${(cur*1000).toFixed(2)}</span> nA</span>`+
+`<span><span class="l">V_bias =</span> <span class="v">${bias.toFixed(2)}</span> V</span>`+
+`<span><span class="l">Tip height =</span> <span class="v">${tH.toFixed(1)}</span> Å</span>`+
+`<span><span class="l">Max I =</span> <span class="v">${(mV*1000).toFixed(2)}</span> nA</span>`+
+`<span><span class="l">κz =</span> <span class="v">${tH.toFixed(1)}</span></span>`+
+`<span><span class="l">Exp factor =</span> <span class="v">${Math.exp(-tH).toFixed(4)}</span></span>`+
+`<span><span class="l">Rows done =</span> <span class="v">${sR}/${aH}</span></span>`+
+`<span><span class="l">Complete =</span> <span class="v">${done?'YES':'NO'}</span></span>`+
+`<span><span class="l">Grid =</span> <span class="v">${aW}×${aH}</span></span>`+
+`<span><span class="l">I/V =</span> <span class="v">${bias>0?(cur/bias*1000).toFixed(2):0}</span> nS</span>`
+}
+let paused=0
+function anim(){if(!paused&&!done)for(let i=0;i<2*spd;i++)step();drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>Bias V</label><input type="range" id="bS" min="0.05" max="2" step="0.05" value="${bias}"><span class="val" id="bV">${bias}</span></div>`+
+`<div class="ctrl-g"><label>Tip z</label><input type="range" id="hS" min="2" max="20" step="1" value="${tH}"><span class="val" id="hV">${tH}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('bS').oninput=function(){bias=+this.value;document.getElementById('bV').textContent=bias}
+document.getElementById('hS').oninput=function(){tH=+this.value;document.getElementById('hV').textContent=tH}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=init;init();anim()
+}
+</script></body></html>

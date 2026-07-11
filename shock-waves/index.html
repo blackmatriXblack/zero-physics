@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shock Waves · Mach cone, sin α = vₛ/v</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Shock Waves</h1>
+<p>sin α = vₛ/v — Mach cone at supersonic speeds</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=560;
+let vs=3,v=1,time=0,paused=false,speed=1;
+const rings=[];
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused){time+=0.016*speed;rings.push({t:time,x:120+time*vs*15,y:280});if(rings.length>60)rings.shift();}
+ const Mach=vs/v,alpha=Mach>1?Math.asin(1/Mach):0;
+ const sx=120+time*vs*15;
+ hist.push(Mach>1?Mach:1);if(hist.length>hMax)hist.shift();
+ for(let r of rings){const dt=time-r.t;if(dt<0)continue;const radius=dt*v*40;const opacity=Math.max(0.005,0.3-dt*0.03);ctx.strokeStyle=`rgba(0,0,0,${opacity})`;ctx.lineWidth=0.3+dt*0.3;ctx.beginPath();ctx.arc(r.x,280,radius,0,Math.PI*2);ctx.stroke();}
+ ctx.fillStyle='#111';ctx.beginPath();ctx.arc(sx,280,8,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('✈',sx,280);
+ ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.3;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(50,280);ctx.lineTo(sx,280);ctx.stroke();ctx.setLineDash([]);
+ if(Mach>1){
+  const coneLen=400,angle=Math.PI/2-alpha;
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sx,280);ctx.lineTo(sx-coneLen*Math.cos(angle),280-coneLen*Math.sin(angle));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(sx,280);ctx.lineTo(sx-coneLen*Math.cos(angle),280+coneLen*Math.sin(angle));ctx.stroke();
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.beginPath();ctx.moveTo(sx-380,280);ctx.lineTo(sx,280);ctx.lineTo(sx-coneLen*Math.cos(angle),280-coneLen*Math.sin(angle));ctx.closePath();ctx.fill();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`α = ${(alpha*180/Math.PI).toFixed(1)}°`,sx-100,280-80);
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.beginPath();ctx.arc(sx,280,80,-angle,0);ctx.stroke();
+ }else{ctx.fillStyle='rgba(0,0,0,0.1)';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Subsonic (no shock wave)',sx,300);}
+ const bX=150,bY=420,bW=600,bH=16;
+ ctx.fillStyle='rgba(0,0,0,0.04)';ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.fillRect(bX,bY,bW,bH);ctx.strokeRect(bX,bY,bW,bH);
+ const machPx=Math.min(bX+bW-4,bX+Math.log10(Mach+0.1)/Math.log10(5+0.1)*bW);
+ if(Mach>1){ctx.fillStyle='#111';ctx.fillRect(bX+2,bY+2,Math.max(0,machPx-bX-2),bH-4);}
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`M = ${Mach.toFixed(2)}`,bX+bW/2,bY-4);
+ ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';ctx.fillText('subsonic          transonic          supersonic',bX+bW/2,bY+bH+12);
+ const hX=40,hY=450,hW=840,hH=70;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Mach number M(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-(Math.min(hist[i],5)/5)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(`sin α = vₛ/v = ${(1/Math.max(Mach,1)).toFixed(3)}`,10,H-40);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`vₛ=${(vs*100).toFixed(0)}  v=${(v*100).toFixed(0)}  M=${Mach.toFixed(2)}  α=${Mach>1?(alpha*180/Math.PI).toFixed(1)+'°':'N/A'}`,10,H-56);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>vₛ</label><input type="range" id="vsS" min="0.3" max="6" step="0.1" value="${vs}"><span class="val" id="vsV">${vs.toFixed(1)}</span></div>`+
+ `<div class="ctrl-group"><label>v<sub>w</sub></label><input type="range" id="vwS" min="0.3" max="4" step="0.1" value="${v}"><span class="val" id="vwV">${v.toFixed(1)}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('vsS').oninput=function(){vs=+this.value;vsV.textContent=vs.toFixed(1);};
+ document.getElementById('vwS').oninput=function(){v=+this.value;vwV.textContent=v.toFixed(1);};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;rings.length=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">M = vₛ/v =</span> <span class="val">${Mach.toFixed(3)}</span></span>`+
+ `<span><span class="label">α =</span> <span class="val">${Mach>1?(alpha*180/Math.PI).toFixed(1)+'°':'N/A (sub)'}</span></span>`+
+ `<span><span class="label">sin α =</span> <span class="val">${Mach>1?(1/Mach).toFixed(4):'N/A'}</span></span>`+
+ `<span><span class="label">vₛ =</span> <span class="val">${(vs*100).toFixed(0)}</span></span>`+
+ `<span><span class="label">v<sub>w</sub> =</span> <span class="val">${(v*100).toFixed(0)}</span></span>`+
+ `<span><span class="label">Wavefronts</span> <span class="val">${rings.length}</span></span>`+
+ `<span><span class="label">Sonic boom</span> <span class="val">${Mach>1?'✓ Yes':'✗ No'}</span></span>`+
+ `<span><span class="label">Mach angle</span> <span class="val">${Mach>1?(alpha*180/Math.PI).toFixed(1)+'°':'—'}</span></span>`+
+ `<span><span class="label">Cone half-angle</span> <span class="val">${Mach>1?(90-alpha*180/Math.PI).toFixed(1)+'°':'—'}</span></span>`+
+ `<span><span class="label">M>1?</span> <span class="val">${Mach>1?'Supersonic':'Subsonic'}</span></span>`+
+ `<span><span class="label">Object pos</span> <span class="val">${sx.toFixed(0)}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

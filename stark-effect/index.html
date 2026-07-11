@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stark Effect · ΔE = −p·E = 3ea₀nE/2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;height:12px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+select{background:#fff;border:1px solid #ccc;font-family:'Courier New',monospace;font-size:0.65em;padding:1px 4px}
+.stats{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Stark Effect</h1>
+<p>ΔE = −p·E = 3ea₀nE/2 — Electric field splitting of H levels</p>
+<canvas id="c" width="920" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),cx=C.getContext('2d'),W=920,H=480;
+let Efield=1,n=2,running=1,speed=1,time=0;
+let hShifts=[];
+
+function reset(){Efield=1;n=2;time=0;hShifts=[];}
+function step(){
+ if(!running)return;
+ time+=0.02*speed;
+ if(hShifts.length>60)hShifts.shift();
+ const delta=3*n*Efield*0.5;
+ hShifts.push({t:time,e:Efield,d:delta});
+}
+
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const En=-13.6/(n*n);
+ const delta=3*n*Efield*0.5;
+ const lx=160;
+
+ // Main panel outline
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(80,30,400,400);
+ cx.fillStyle='#999';cx.font='7px monospace';cx.textAlign='center';
+ cx.fillText('Energy splitting under E-field (n='+n+')',280,20);
+
+ // Original levels
+ for(let i=1;i<=4;i++){
+  const ey=30+400-(-13.6/(i*i)+13.6)/13.6*400;
+  cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.setLineDash([3,3]);
+  cx.beginPath();cx.moveTo(lx-20,ey);cx.lineTo(lx+340,ey);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='right';
+  cx.fillText('n='+i,lx-22,ey+3);
+ }
+
+ // Level splittings
+ if(n===2){
+  const eY=30+400-(-13.6/4+13.6)/13.6*400;
+  const colors=['rgba(0,0,0,0.06)','#111','rgba(0,0,0,0.6)','#111','rgba(0,0,0,0.06)'];
+  const labels=['m=-1','m=0','m=+1'];
+  for(let m=-1;m<=1;m++){
+   const shift=m*delta*5,ey=eY-shift;
+   cx.strokeStyle=m===0?'#111':'rgba(0,0,0,0.15)';cx.lineWidth=m===0?1.2:0.6;
+   cx.beginPath();cx.moveTo(lx+50,ey);cx.lineTo(lx+300,ey);cx.stroke();
+   cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='left';
+   const label='m='+(m>0?'+':'')+m+' ΔE='+(shift*5).toFixed(2)+'eV';
+   cx.fillText(label,lx+302,ey+2);
+  }
+ }
+ if(n===3){
+  const eY=30+400-(-13.6/9+13.6)/13.6*400;
+  const delta3=3*3*Efield*0.5;
+  for(let m=-2;m<=2;m++){
+   const shift=delta3*m/2*4,ey=eY-shift;
+   cx.strokeStyle=m===0?'#111':'rgba(0,0,0,0.12)';cx.lineWidth=m===0?1.2:0.5;
+   cx.beginPath();cx.moveTo(lx+50,ey);cx.lineTo(lx+300,ey);cx.stroke();
+   cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='left';
+   cx.fillText('m='+(m>0?'+':'')+m,lx+302,ey+2);
+  }
+ }
+
+ // Energy equation display
+ cx.fillStyle='#111';cx.font='7px monospace';cx.textAlign='left';
+ cx.fillText('Eₙ = −13.6/n² = '+En.toFixed(3)+' eV',lx+30,445);
+ cx.fillText('ΔEₘ = 3e a₀ n m E / 2',lx+30,458);
+
+ // E-field arrow & potential
+ const ax=600,ay=130;
+ cx.strokeStyle='#111';cx.lineWidth=1.5;
+ cx.beginPath();cx.moveTo(ax,ay-60);cx.lineTo(ax,ay+60);cx.stroke();
+ cx.fillStyle='#111';
+ cx.beginPath();cx.moveTo(ax,ay-60);cx.lineTo(ax-6,ay-48);cx.lineTo(ax+6,ay-48);cx.fill();
+ cx.fillStyle='#999';cx.font='7px monospace';cx.textAlign='center';
+ cx.fillText('E = '+Efield.toFixed(1)+' V/m',ax,ay+80);
+
+ // Distorted potential
+ const pX=530,pY=20;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(pX,pY,350,170);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';cx.fillText('V(x) = −e²/4πε₀x − eEx',pX+3,pY+10);
+ cx.strokeStyle='#111';cx.lineWidth=0.8;cx.beginPath();
+ for(let x=0;x<=340;x++){
+  const xx=(x-170)*0.025,V=-1/Math.sqrt(xx*xx+0.08)+Efield*xx*0.3;
+  const py=pY+85-V*25;x===0?cx.moveTo(pX+x,py):cx.lineTo(pX+x,py);
+ }
+ cx.stroke();
+ // Zero field reference
+ cx.strokeStyle='rgba(0,0,0,0.08)';cx.lineWidth=0.3;cx.setLineDash([2,2]);
+ cx.beginPath();cx.moveTo(pX,pY+85);cx.lineTo(pX+340,pY+85);cx.stroke();cx.setLineDash([]);
+
+ // Shift history mini-graph
+ const ggx=530,ggy=210,ggw=350,ggh=90;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(ggx,ggy,ggw,ggh);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('ΔE vs time',ggx+3,ggy+8);
+ if(hShifts.length>1){
+  cx.strokeStyle='#111';cx.lineWidth=0.8;cx.beginPath();
+  const maxD=Math.max(...hShifts.map(s=>s.d),0.1);
+  hShifts.forEach((s,i)=>{const px=ggx+i/(hShifts.length-1)*ggw,py=ggy+ggh-s.d/maxD*(ggh-12);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+
+ // Dipole moment bar
+ const bX=530,bY=320,bW=250,bH=12;
+ const dip=3*n*Efield*0.5*0.0529*1.6e-19;
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY,Math.min(bW,Efield/5*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('E-field: '+Efield.toFixed(1)+' V/m (max 5)',bX,bY-2);
+
+ // Splitting magnitude
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY+20,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY+20,Math.min(bW,delta/8*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';
+ cx.fillText('|ΔE| = '+delta.toFixed(3)+' eV',bX,bY+18);
+
+ // Controls
+ const cS='<div class="ctrl-group"><label>E(V/m)</label><input type="range" id="eS" min="0" max="5" step="0.1" value="'+Efield+'"><span class="val" id="eV">'+Efield.toFixed(1)+'</span></div>'+
+ '<div class="ctrl-group"><label>n</label><select id="nS"><option value="2" '+(n===2?'selected':'')+'>2</option><option value="3" '+(n===3?'selected':'')+'>3</option></select></div>'+
+ '<button id="playB">'+(running?'⏸':'▶')+'</button><button id="resetB">↺</button>'+
+ '<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="1" max="10" step="1" value="'+speed+'"><span class="val" id="spdV">'+speed+'</span></div>';
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=cS;
+ document.getElementById('eS').oninput=function(){Efield=+this.value;document.getElementById('eV').textContent=Efield.toFixed(1);};
+ document.getElementById('nS').onchange=function(){n=+this.value;hShifts=[];};
+ document.getElementById('playB').onclick=function(){running=!running;this.textContent=running?'⏸':'▶';};
+ document.getElementById('resetB').onclick=function(){reset();};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;document.getElementById('spdV').textContent=speed;};
+
+ // Stats
+ const shift0=0,shiftP=n===2?delta:delta3*2/2*4,shiftM=n===2?-delta:-delta3*2/2*4;
+ const delta3=3*3*Efield*0.5;
+ const S='<span><span class="label">E =</span> <span class="val">'+Efield.toFixed(1)+'</span> V/m</span>'+
+ '<span><span class="label">n =</span> <span class="val">'+n+'</span></span>'+
+ '<span><span class="label">Eₙ₀ =</span> <span class="val">'+En.toFixed(3)+'</span> eV</span>'+
+ '<span><span class="label">|ΔE|ₘₐₓ =</span> <span class="val">'+delta.toFixed(3)+'</span> eV</span>'+
+ '<span><span class="label">ΔE(m=+1) =</span> <span class="val">'+(n===2?delta.toFixed(3):(delta3*2/2).toFixed(3))+'</span> eV</span>'+
+ '<span><span class="label">ΔE(m=-1) =</span> <span class="val">'+(n===2?(-delta).toFixed(3):(-delta3*2/2).toFixed(3))+'</span> eV</span>'+
+ '<span><span class="label">ΔE(m=0) =</span> <span class="val">0</span> eV</span>'+
+ '<span><span class="label">Dipole p =</span> <span class="val">'+(dip*1e29).toFixed(2)+'×10⁻²⁹</span> C·m</span>'+
+ '<span><span class="label">Type =</span> <span class="val">'+(n===2?'Linear':'Quadratic')+'</span></span>'+
+ '<span><span class="label">Degeneracy =</span> <span class="val">'+(n===2?3:5)+'</span></span>'+
+ '<span><span class="label">Splitting =</span> <span class="val">'+(delta*1e3).toFixed(2)+'</span> meV</span>'+
+ '<span><span class="label">Polarizability α ∝</span> <span class="val">n⁴='+(n*n*n*n)+'</span></span>'+
+ '<span><span class="label">t</span> <span class="val">'+time.toFixed(1)+'</span></span>';
+}
+ document.getElementById('stats').innerHTML=S;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

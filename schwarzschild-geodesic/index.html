@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schwarzschild Geodesic</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;font-size:10px;letter-spacing:1px;background:rgba(255,255,255,.85);padding:10px;border:1px solid #ccc;max-width:220px}
+#ui label{display:block;margin:3px 0}
+#ui input[type=range]{width:120px;accent-color:#000}
+#ui button{background:#fff;border:1px solid #000;color:#000;padding:2px 8px;font:9px monospace;cursor:pointer;margin:2px 2px 0 0;text-transform:uppercase}
+#ui button:hover{background:#000;color:#fff}
+#data{position:absolute;bottom:10px;right:10px;font-size:9px;text-align:right;line-height:1.6;background:rgba(255,255,255,.85);padding:8px;border:1px solid #ccc}
+#data .v{opacity:.55}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>
+<label>Speed <input type="range" id="speed" min="0" max="5" value="1" step="0.1"></label>
+<label>E <input type="range" id="Eslider" min="0.7" max="1.1" value="0.98" step="0.01"></label>
+<label>L <input type="range" id="Lslider" min="1" max="7" value="4" step="0.1"></label>
+<label>r₀ <input type="range" id="r0slider" min="4" max="20" value="8" step="0.5"></label>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+const rs=1, M=rs/2;
+let dt=0.03, speed=1, paused=false;
+let r0=8, phi0=0, r=r0, phi=phi0;
+let E=0.98, L=4.0, pr=0, tau=0, steps=0;
+let trail=[], VeffHistory=[], rHistory=[], tauHistory=[], phiHistory=[], dphiHistory=[];
+
+const Veff0=(1-rs/r0)*(1+L*L/(r0*r0));
+pr=E*E>Veff0?Math.sqrt(E*E-Veff0):0;
+
+function resetSim(){
+  r=r0;phi=phi0;tau=0;steps=0;
+  const V=(1-rs/r0)*(1+L*L/(r0*r0));
+  pr=E*E>V?Math.sqrt(E*E-V):0;
+  trail=[];VeffHistory=[];rHistory=[];tauHistory=[];phiHistory=[];dphiHistory=[];
+}
+
+function step(){
+  const dphidtau=L/(r*r);
+  phi+=dphidtau*dt*speed;
+  const d2r=-M/(r*r)+(r-3*M)*L*L/(r*r*r*r);
+  pr+=d2r*dt*speed;
+  r+=pr*dt*speed;
+  if(r<rs+0.02){r=rs+0.02;pr*=-0.5}
+  tau+=dt*speed;
+  if(r>r0*3||r<rs+0.03){resetSim();return}
+  steps++;
+  if(steps%2===0){
+    trail.push({r,phi});if(trail.length>2000)trail.shift()
+  }
+  rHistory.push(r);tauHistory.push(tau);phiHistory.push(phi);dphiHistory.push(dphidtau);
+  if(rHistory.length>300){rHistory.shift();tauHistory.shift();phiHistory.shift();dphiHistory.shift()}
+  if(steps%5===0){const Ve=(1-rs/r)*(1+L*L/(r*r));VeffHistory.push({r,Ve});if(VeffHistory.length>200)VeffHistory.shift()}
+}
+
+for(let i=0;i<300;i++)step();
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const cx=W*0.45, cy=H*0.5;
+  const sc=Math.min(W,H)*0.38/10;
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(cx,cy,rs*sc,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,5]);
+  ctx.beginPath();ctx.arc(cx,cy,1.5*rs*sc,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.4;ctx.setLineDash([2,4]);
+  ctx.beginPath();ctx.arc(cx,cy,3*rs*sc,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  if(trail.length>2){
+    ctx.beginPath();
+    for(let i=0;i<trail.length;i++){
+      const sx=cx+trail[i].r*Math.cos(trail[i].phi)*sc, sy=cy+trail[i].r*Math.sin(trail[i].phi)*sc;
+      i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  const crx=cx+r*Math.cos(phi)*sc, cry=cy+r*Math.sin(phi)*sc;
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(crx,cry,3.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='9px monospace';
+  ctx.fillText('EH',cx+rs*sc+4,cy-2);ctx.fillText('PS',cx+1.5*rs*sc+4,cy-14);ctx.fillText('ISCO',cx+3*rs*sc+4,cy-26);
+
+  // mini Veff graph
+  const gx=cx+sc*11+20, gy=20, gw=W-gx-15, gh=100;
+  if(gw>50){
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='7px monospace';
+    ctx.fillText('V_eff(r)',gx+3,gy+10);
+    if(VeffHistory.length>3){
+      ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.6;ctx.beginPath();
+      const minR=Math.min(...VeffHistory.map(v=>v.r)),maxR=Math.max(...VeffHistory.map(v=>v.r));
+      const rngR=Math.max(maxR-minR,1);
+      const minV=Math.min(...VeffHistory.map(v=>v.Ve)),maxV=Math.max(...VeffHistory.map(v=>v.Ve));
+      const rngV=Math.max(maxV-minV,.1);
+      for(let i=0;i<VeffHistory.length;i++){
+        const px=gx+(VeffHistory[i].r-minR)/rngR*gw, py=gy+gh-(VeffHistory[i].Ve-minV)/rngV*gh;
+        i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)
+      }
+      ctx.stroke();
+    }
+    // E line
+    const eLineY=gy+gh-(E-minV)/(rngV||1)*gh;
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.5;ctx.setLineDash([2,2]);
+    ctx.beginPath();ctx.moveTo(gx,eLineY);ctx.lineTo(gx+gw,eLineY);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='6px monospace';ctx.fillText('E',gx+gw-12,eLineY-2);
+  }
+
+  // mini r vs tau
+  const gx2=cx+sc*11+20, gy2=130, gw2=gw, gh2=80;
+  if(gw2>50&&rHistory.length>3){
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='7px monospace';
+    ctx.fillText('r(τ)',gx2+3,gy2+10);
+    const minR2=Math.min(...rHistory),maxR2=Math.max(...rHistory);const rngR2=Math.max(maxR2-minR2,.1);
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;ctx.beginPath();
+    for(let i=0;i<rHistory.length;i++){
+      const px=gx2+i/gw2*gw2, py=gy2+gh2-(rHistory[i]-minR2)/rngR2*gh2;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  const gamma=1/Math.sqrt(1-(L*L/(r*r))/(1)), betaLocal=L/r;
+  const dphi=dphiHistory.length>0?dphiHistory[dphiHistory.length-1]:0;
+  const Veff=(1-rs/r)*(1+L*L/(r*r));
+  const peri=r<6?true:false;
+  document.getElementById('data').innerHTML=
+    `<div class="v">r = ${r.toFixed(3)} r_s</div>
+     <div class="v">φ = ${(phi%(2*Math.PI)).toFixed(3)} rad</div>
+     <div class="v">dφ/dτ = ${dphi.toFixed(4)}</div>
+     <div class="v">E = ${E.toFixed(3)}</div>
+     <div class="v">L = ${L.toFixed(3)}</div>
+     <div class="v">V_eff = ${Veff.toFixed(3)}</div>
+     <div class="v">E² - V_eff = ${(E*E-Veff).toFixed(4)}</div>
+     <div class="v">τ = ${tau.toFixed(2)}</div>
+     <div class="v">p_r = ${pr.toFixed(4)}</div>
+     <div class="v">γ_local = ${gamma.toFixed(3)}</div>
+     <div class="v">β_local = ${betaLocal.toFixed(3)}</div>
+     <div class="v">Orbits = ${(phi/(2*Math.PI)).toFixed(2)}</div>
+     <div class="v">Trail = ${trail.length}</div>`;
+}
+
+let frame=0;
+function loop(){
+  if(!paused)for(let i=0;i<3;i++)step();
+  frame++;
+  if(frame%2===0)draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=()=>{r0=parseFloat(document.getElementById('r0slider').value);resetSim();for(let i=0;i<100;i++)step()};
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('Eslider').oninput=function(){E=parseFloat(this.value);resetSim();for(let i=0;i<100;i++)step()};
+document.getElementById('Lslider').oninput=function(){L=parseFloat(this.value);resetSim();for(let i=0;i<100;i++)step()};
+document.getElementById('r0slider').oninput=function(){r0=parseFloat(this.value);resetSim();for(let i=0;i<100;i++)step()};
+</script>
+</body>
+</html>

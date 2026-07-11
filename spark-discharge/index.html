@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spark Discharge · Paschen curve</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Spark Discharge</h1>
+<p>V<sub>b</sub> = B·p·d / ln(A·p·d / ln(1+1/γ)) — Paschen's law</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=900,H=500;
+let p=100,d=1,gamma=0.02,time=0,paused=false,spd=1,Vapp=1000;
+const A=10,B=273;
+const vH=[],tH=[],sH=[];const maxH=400;
+function Vb(pd){
+  if(pd<1)return 5000;
+  const denom=Math.log(A*pd/Math.log(1+1/gamma));
+  return denom>0?B*pd/denom:5000;
+}
+function step(){
+  if(paused)return;
+  time+=0.03*spd;
+  const pd=p*d,Vbreak=Vb(pd);
+  const spark=Vapp>Vbreak;
+  vH.push(Vbreak);tH.push(time);sH.push(spark?1:0);
+  if(vH.length>maxH){vH.shift();tH.shift();sH.shift();}
+}
+function reset(){time=0;vH.length=0;tH.length=0;sH.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const pd=p*d,Vbreak=Vb(pd),E=Vbreak/d,spark=Vapp>Vbreak;
+  const pdMin=(Math.E*Math.log(1+1/gamma))/A,VbMin=B*pdMin/Math.log(A*pdMin/Math.log(1+1/gamma));
+  const gX=50,gY=40,gW=600,gH=350,xMin=Math.log10(0.1),xMax=Math.log10(1000);
+  function xPos(pd){return gX+((Math.log10(pd)-xMin)/(xMax-xMin))*gW;}
+  function yPos(V){return gY+gH-(V/5000)*gH;}
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Vb vs p×d (Paschen curve)',gX+3,gY+10);
+  ctx.textAlign='center';ctx.fillText('p × d (cm·Torr)',gX+gW/2,gY+gH+16);
+  ctx.save();ctx.translate(gX-16,gY+gH/2);ctx.rotate(-Math.PI/2);ctx.fillText('Vb (V)',0,0);ctx.restore();
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(gX,gY);ctx.lineTo(gX,gY+gH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(gX,gY+gH);ctx.lineTo(gX+gW,gY+gH);ctx.stroke();
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.beginPath();let first=true;
+  for(let lx=xMin;lx<=xMax;lx+=0.005){const vpd=Math.pow(10,lx),v=Vb(vpd),px=xPos(vpd),py=yPos(v);if(py>gY&&py<gY+gH){first?ctx.moveTo(px,py):ctx.lineTo(px,py);first=false;}}
+  ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+  const opPx=xPos(pd),opPy=yPos(Vbreak);
+  ctx.beginPath();ctx.moveTo(opPx,gY+gH+4);ctx.lineTo(opPx,opPy);ctx.lineTo(gX-4,opPy);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(opPx,opPy,4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('OP',opPx,opPy-8);
+  const minPx=xPos(pdMin),minPy=yPos(VbMin);
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.beginPath();ctx.arc(minPx,minPy,3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('min: '+VbMin.toFixed(0)+'V @ '+pdMin.toFixed(2)+' cm·Torr',gX+3,gY+gH-12);
+  const ex=720,ey=100,gap=80;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.fillRect(ex-50,ey-20,100,20);ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('+',ex,ey-24);
+  ctx.fillRect(ex-50,ey+gap,100,20);ctx.fillText('−',ex,ey+gap+28);
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(ex-1,ey,gap*3/d,2);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('d='+(d*10).toFixed(0)+'mm  Vapp='+Vapp.toFixed(0)+'V',ex+40,ey+gap/2-4);
+  if(spark){
+    ctx.strokeStyle='rgba(0,0,0,'+(0.25+0.25*Math.sin(Date.now()/50))+')';ctx.lineWidth=0.5+Math.random()*2;
+    ctx.beginPath();
+    for(let i=0;i<10;i++){const ly=ey+Math.random()*gap;i===0?ctx.moveTo(ex+Math.random()*6-3,ly):ctx.lineTo(ex+Math.random()*6-3,ly);}
+    ctx.stroke();ctx.fillStyle='rgba(0,0,0,0.06)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('⚡ SPARK',ex+40,ey+gap+50);
+  }else{ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('(no breakdown)',ex+40,ey+gap+50);}
+  const gX2=30,gY2=400,gW2=840,gH2=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX2,gY2,gW2,gH2);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Vb(t) [V] —  spark flag |',gX2+3,gY2+10);
+  if(vH.length>2){
+    ctx.beginPath();
+    for(let i=0;i<vH.length;i++){const px=gX2+(i/vH.length)*gW2,py=gY2+gH2-vH[i]*(gH2-20)/5000;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+    for(let i=1;i<sH.length;i++){if(sH[i]&&!sH[i-1]){const px=gX2+(i/vH.length)*gW2;ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,gY2);ctx.lineTo(px,gY2+gH2);ctx.stroke();}}
+  }
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>p (Torr)</label><input type="range" id="pS" min="1" max="760" step="1" value="'+p+'"><span class="val" id="pV">'+p+'</span></div>'+
+    '<div class="ctrl-group"><label>d (mm)</label><input type="range" id="dS" min="0.5" max="20" step="0.5" value="'+(d*10)+'"><span class="val" id="dV">'+(d*10).toFixed(0)+'</span></div>'+
+    '<div class="ctrl-group"><label>γ</label><input type="range" id="gS" min="0.005" max="0.1" step="0.005" value="'+gamma+'"><span class="val" id="gV">'+gamma.toFixed(3)+'</span></div>'+
+    '<div class="ctrl-group"><label>V<sub>app</sub></label><input type="range" id="vS" min="100" max="5000" step="50" value="'+Vapp+'"><span class="val" id="vV">'+Vapp.toFixed(0)+'</span></div>'+
+    '<div class="ctrl-group"><label>spd</label><input type="range" id="spS" min="0" max="5" step="0.5" value="'+spd+'"><span class="val" id="spV">'+spd.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>';
+  document.getElementById('pS').oninput=function(){p=+this.value;document.getElementById('pV').textContent=p;};
+  document.getElementById('dS').oninput=function(){d=+this.value/10;document.getElementById('dV').textContent=(d*10).toFixed(0);};
+  document.getElementById('gS').oninput=function(){gamma=+this.value;document.getElementById('gV').textContent=gamma.toFixed(3);};
+  document.getElementById('vS').oninput=function(){Vapp=+this.value;document.getElementById('vV').textContent=Vapp.toFixed(0);};
+  document.getElementById('spS').oninput=function(){spd=+this.value;document.getElementById('spV').textContent=spd.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=reset;
+}
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">p·d =</span> <span class="val">'+pd.toFixed(2)+'</span> cm·Torr</span>'+
+    '<span><span class="label">V<sub>b</sub> =</span> <span class="val">'+Vbreak.toFixed(1)+'</span> V</span>'+
+    '<span><span class="label">E = V<sub>b</sub>/d =</span> <span class="val">'+E.toFixed(1)+'</span> V/cm</span>'+
+    '<span><span class="label">V<sub>b,min</sub> =</span> <span class="val">'+VbMin.toFixed(1)+'</span> V</span>'+
+    '<span><span class="label">pd<sub>min</sub> =</span> <span class="val">'+pdMin.toFixed(3)+'</span> cm·Torr</span>'+
+    '<span><span class="label">γ =</span> <span class="val">'+gamma.toFixed(3)+'</span></span>'+
+    '<span><span class="label">V<sub>app</sub> =</span> <span class="val">'+Vapp.toFixed(0)+'</span> V</span>'+
+    '<span><span class="label">V<sub>app</sub>−V<sub>b</sub> =</span> <span class="val">'+(Vapp-Vbreak).toFixed(1)+'</span> V</span>'+
+    '<span><span class="label">A =</span> <span class="val">'+A+'</span></span>'+
+    '<span><span class="label">B =</span> <span class="val">'+B+'</span></span>'+
+    '<span><span class="label">Status</span> <span class="val">'+(spark?'⚡ SPARK!':'— No breakdown')+'</span></span>'+
+    '<span><span class="label">t =</span> <span class="val">'+time.toFixed(2)+'</span> s</span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Tunneling · T ≈ exp(−2κa)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Quantum Tunneling</h1>
+<p>iℏ ∂ψ/∂t = −(ℏ²/2m)∂²ψ/∂x² + V(x)ψ — Wave packet through a barrier</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+const N=600;
+const dx=720/N;
+const dt=0.005;
+const hbar=1, m=1;
+
+let psiRe=new Float64Array(N);
+let psiIm=new Float64Array(N);
+let pot=new Float64Array(N);
+let prob=new Float64Array(N);
+let paused=false;
+let time=0;
+
+let barrierHeight=3;
+let barrierWidth=30;
+let k0=1.4;
+let showPhase=true;
+
+const history={t:[],T:[],R:[],E:[]};
+
+function init(x0,sigma,k0_){
+  for(let i=0;i<N;i++){
+    const x=40+i*dx;
+    const rel=x-80;
+    const g=Math.exp(-rel*rel/(2*sigma*sigma));
+    const norm=1/Math.sqrt(sigma*Math.sqrt(Math.PI));
+    psiRe[i]=g*Math.cos(k0_*rel)*norm;
+    psiIm[i]=g*Math.sin(k0_*rel)*norm;
+  }
+  setBarrier();
+}
+
+function setBarrier(){
+  const center=420;
+  const half=barrierWidth/2;
+  for(let i=0;i<N;i++){
+    const x=40+i*dx;
+    if(x>center-half&&x<center+half)pot[i]=barrierHeight;
+    else pot[i]=0;
+  }
+}
+
+function step(){
+  if(paused)return;
+  for(let iter=0;iter<2;iter++){
+    for(let i=1;i<N-1;i++){
+      const re=psiRe[i], im=psiIm[i];
+      const lapRe=(psiRe[i+1]-2*psiRe[i]+psiRe[i-1])/(dx*dx);
+      const lapIm=(psiIm[i+1]-2*psiIm[i]+psiIm[i-1])/(dx*dx);
+      const V=pot[i]/hbar;
+      psiRe[i]=re+dt*(hbar/(2*m))*lapIm-dt*V*im;
+      psiIm[i]=im-dt*(hbar/(2*m))*lapRe+dt*V*re;
+    }
+    psiRe[0]=0;psiRe[N-1]=0;
+    psiIm[0]=0;psiIm[N-1]=0;
+  }
+  for(let i=0;i<N;i++)prob[i]=psiRe[i]*psiRe[i]+psiIm[i]*psiIm[i];
+  time+=dt*2;
+}
+
+function computeTransmission(){
+  const rightStart=N-80;
+  let rightProb=0,totProb=0;
+  for(let i=0;i<N;i++){
+    totProb+=prob[i]*dx;
+    if(i>=rightStart)rightProb+=prob[i]*dx;
+  }
+  return{T:rightProb/(totProb||1),R:1-rightProb/(totProb||1)};
+}
+
+function resetSim(){
+  time=0;
+  init(0,10,k0);
+  setBarrier();
+  history.t.length=0;history.T.length=0;history.R.length=0;history.E.length=0;
+  paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // Border
+  ctx.strokeStyle='#000';ctx.lineWidth=0.5;
+  ctx.strokeRect(20,10,W-40,H-20);
+
+  // Potential barrier
+  for(let i=0;i<N;i++){
+    const x=40+i*dx;
+    const ph=pot[i]*12;
+    if(ph>0){
+      ctx.fillStyle='rgba(0,0,0,0.08)';
+      ctx.fillRect(x-0.5,H/3-ph,dx+1,ph);
+    }
+  }
+
+  // Barrier outline
+  for(let i=1;i<N;i++){
+    if(pot[i]!==pot[i-1]){
+      const x=40+i*dx;
+      ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(x,H/3);ctx.lineTo(x,H/3-pot[i]*12);ctx.stroke();ctx.setLineDash([]);
+    }
+  }
+
+  // Probability density
+  const maxP=Math.max(...prob)*1.05||1;
+  ctx.strokeStyle='#111';ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=2){
+    const x=40+i*dx;
+    const y=H/3-prob[i]/maxP*(H*0.45);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Real part (phase)
+  if(showPhase){
+    const maxRe=Math.max(...psiRe.map(Math.abs))*1.05||1;
+    ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.4;
+    ctx.beginPath();
+    for(let i=0;i<N;i+=4){
+      const x=40+i*dx;
+      const y=H/3-psiRe[i]/maxRe*(H*0.2);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // Imaginary part
+    ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;
+    ctx.beginPath();
+    for(let i=0;i<N;i+=4){
+      const x=40+i*dx;
+      const y=H/3-psiIm[i]/maxRe*(H*0.2);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // Labels
+  ctx.fillStyle='#666';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText('INCIDENT',100,H-15);
+  ctx.fillText('BARRIER',420,H-15);
+  ctx.fillText('TRANSMITTED',610,H-15);
+
+  // Energy level line
+  const E_particle=0.5*m*k0*k0;
+  const eLevel=Math.min(E_particle/barrierHeight,1)*100;
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.3;ctx.setLineDash([4,6]);
+  const eY=H/3-eLevel;
+  ctx.beginPath();ctx.moveTo(40,eY);ctx.lineTo(W-40,eY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+  ctx.fillText('E='+E_particle.toFixed(2),45,eY-3);
+
+  const {T,R}=computeTransmission();
+
+  // Transmission info box
+  const ix=580, iy=350;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,300,85);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('TUNNELING STATS',ix+5,iy+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`Transmission T = ${(T*100).toFixed(2)}%`,ix+5,iy+30);
+  ctx.fillText(`Reflection R = ${(R*100).toFixed(2)}%`,ix+5,iy+44);
+  ctx.fillText(`E = ${E_particle.toFixed(3)}   V₀ = ${barrierHeight.toFixed(1)}`,ix+5,iy+58);
+  ctx.fillText(`E < V₀ → tunneling ✓   κ = √(2m(V₀-E))/ℏ = ${Math.sqrt(2*m*Math.max(0,barrierHeight-E_particle)).toFixed(4)}`,ix+5,iy+72);
+
+  // T vs time mini graph
+  const tx=580, ty=30, tW=300, tH=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(tx,ty,tW,tH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('TRANSMISSION vs TIME',tx+3,ty+10);
+  if(history.T.length>2){
+    const tMax=Math.max(...history.T)||1;
+    ctx.beginPath();
+    for(let i=0;i<history.T.length;i++){
+      const gx=tx+(i/history.T.length)*tW;
+      const gy=ty+tH-(history.T[i]/tMax)*tH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+
+  // Probability check
+  let totP=0;
+  for(let i=0;i<N;i++)totP+=prob[i]*dx;
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='7px monospace';
+  ctx.fillText(`∫|ψ|²dx = ${totP.toFixed(4)} ${Math.abs(totP-1)<0.01?'✓':'⚠'}`,tx+3,ty+tH-5);
+
+  // Wave packet parameters box
+  const px=20, py=350;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(px,py,300,85);
+  ctx.fillStyle='#111';ctx.font='8px monospace';
+  ctx.fillText('WAVE PACKET',px+5,py+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`k₀ = ${k0.toFixed(2)}   λ = ${(2*Math.PI/k0).toFixed(2)}`,px+5,py+30);
+  ctx.fillText(`E = ℏ²k₀²/2m = ${E_particle.toFixed(4)}`,px+5,py+44);
+  ctx.fillText(`v_g = ℏk₀/m = ${k0.toFixed(2)} (group velocity)`,px+5,py+58);
+  ctx.fillText(`t = ${time.toFixed(2)}`,px+5,py+72);
+
+  // Store history
+  history.t.push(time);history.T.push(T);history.R.push(R);history.E.push(E_particle);
+  if(history.t.length>300){history.t.shift();history.T.shift();history.R.shift();history.E.shift();}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>V₀</label><input type="range" id="bhS" min="0.5" max="10" step="0.1" value="${barrierHeight}"><span class="val" id="bhV">${barrierHeight.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Width</label><input type="range" id="bwS" min="5" max="100" step="2" value="${barrierWidth}"><span class="val" id="bwV">${barrierWidth}</span></div>`+
+    `<div class="ctrl-group"><label>k₀</label><input type="range" id="k0S" min="0.3" max="3" step="0.05" value="${k0}"><span class="val" id="k0V">${k0.toFixed(2)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('bhS').addEventListener('input',function(){
+    barrierHeight=parseFloat(this.value);document.getElementById('bhV').textContent=barrierHeight.toFixed(1);
+    setBarrier();
+  });
+  document.getElementById('bwS').addEventListener('input',function(){
+    barrierWidth=parseFloat(this.value);document.getElementById('bwV').textContent=barrierWidth;
+    setBarrier();
+  });
+  document.getElementById('k0S').addEventListener('input',function(){
+    k0=parseFloat(this.value);document.getElementById('k0V').textContent=k0.toFixed(2);
+    resetSim();
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+resetSim();
+
+}
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

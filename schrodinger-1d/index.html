@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1D Schrödinger · −ℏ²/2m ψ″ + Vψ = iℏ∂ψ/∂t</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>1D Schrödinger Equation</h1>
+<p>−ℏ²/2m ψ″ + Vψ = iℏ∂ψ/∂t — Time evolution in an infinite well</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+const N=400,dx=1.5,hbar=1,m=1;
+let L=400,n=1,paused=false,time=0,speed=1,showPotential=true;
+let psiRe=new Float64Array(N),psiIm=new Float64Array(N),prob=new Float64Array(N);
+const history={t:[],Eexp:[],norm:[],x2:[]};
+const FLOOR=1e-10;
+
+function init(){
+  const norm=Math.sqrt(2/L);
+  for(let i=0;i<N;i++){
+    const x=i*dx;
+    if(x>=0&&x<=L){
+      psiRe[i]=norm*Math.sin(n*Math.PI*x/L)*Math.cos(n*n*Math.PI*Math.PI*hbar*time/(2*m*L*L));
+      psiIm[i]=norm*Math.sin(n*Math.PI*x/L)*Math.sin(n*n*Math.PI*Math.PI*hbar*time/(2*m*L*L));
+    }else{psiRe[i]=0;psiIm[i]=0;}
+  }
+  updateProb();
+}
+
+function updateProb(){for(let i=0;i<N;i++)prob[i]=psiRe[i]*psiRe[i]+psiIm[i]*psiIm[i];}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    for(let i=1;i<N-1;i++){
+      const x=i*dx,re=psiRe[i],im=psiIm[i];
+      if(x>0&&x<L){
+        const lapRe=(psiRe[i+1]-2*psiRe[i]+psiRe[i-1])/(dx*dx);
+        const lapIm=(psiIm[i+1]-2*psiIm[i]+psiIm[i-1])/(dx*dx);
+        psiRe[i]=re+0.005*(hbar/(2*m))*lapIm;
+        psiIm[i]=im-0.005*(hbar/(2*m))*lapRe;
+      }
+    }
+    psiRe[0]=0;psiIm[0]=0;psiRe[N-1]=0;psiIm[N-1]=0;
+    updateProb();
+    time+=0.005;
+  }
+}
+
+function energyExp(){
+  let E=0;
+  for(let i=1;i<N-1;i++){
+    const x=i*dx;
+    if(x>0&&x<L){
+      const lapRe=(psiRe[i+1]-2*psiRe[i]+psiRe[i-1])/(dx*dx);
+      const lapIm=(psiIm[i+1]-2*psiIm[i]+psiIm[i-1])/(dx*dx);
+      E+=psiRe[i]*(-hbar*hbar/(2*m)*lapRe)+psiIm[i]*(-hbar*hbar/(2*m)*lapIm);
+    }
+  }
+  return Math.abs(E)*dx;
+}
+
+function resetSim(){
+  time=0;init();paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+  history.t.length=0;history.Eexp.length=0;history.norm.length=0;history.x2.length=0;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#000';ctx.lineWidth=0.5;
+  ctx.strokeRect(20,10,W-40,H-20);
+
+  const wellLeft=80;
+
+  // Well walls
+  ctx.fillStyle='#111';
+  ctx.fillRect(wellLeft-6,30,6,H-60);ctx.fillRect(wellLeft+L,30,6,H-60);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('V=∞',wellLeft-3,55);ctx.fillText('V=∞',wellLeft+L+3,55);
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(wellLeft,30,L,H-60);
+
+  // Energy level
+  const En=n*n*Math.PI*Math.PI*hbar*hbar/(2*m*L*L);
+  const eScale=(H*0.4)/(Math.max(En,1)*0.5);
+  const eY=H-40-En*eScale;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(wellLeft+5,eY);ctx.lineTo(wellLeft+L-5,eY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';
+  ctx.fillText(`Eₙ=${En.toFixed(1)}`,wellLeft-8,eY+4);
+
+  // Wavefunction |ψ|²
+  const maxP=Math.max(...prob)*1.05||1;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=2){
+    const x=wellLeft+i*dx;
+    const y=H/2-prob[i]/maxP*(H*0.35);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Real part
+  const maxRe=Math.max(...psiRe.map(Math.abs))*1.05||1;
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.4;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=4){
+    const x=wellLeft+i*dx;
+    const y=H/2-psiRe[i]/maxRe*(H*0.15);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Imaginary part
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=4){
+    const x=wellLeft+i*dx;
+    const y=H/2-psiIm[i]/maxRe*(H*0.12);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+  ctx.fillText('|ψ|²',wellLeft+5,35);ctx.fillText('Re(ψ)',wellLeft+5,50);ctx.fillText('Im(ψ)',wellLeft+5,62);
+
+  // Node markers
+  for(let k=1;k<n;k++){const nx=wellLeft+(k/n)*L;ctx.fillStyle='rgba(0,0,0,0.08)';ctx.beginPath();ctx.arc(nx,H/2,3,0,Math.PI*2);ctx.fill();}
+
+  // Info box
+  const ix=30,iy=350;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,280,100);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('SCHRÖDINGER EIGENSTATE',ix+5,iy+14);
+  const EexpVal=energyExp();
+  const normInt=prob.reduce((s,p,i)=>s+p*dx,0);
+  const x2=prob.reduce((s,p,i)=>s+i*dx*i*dx*p*dx,0);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`Eₙ (exact) = ${En.toFixed(4)}`,ix+5,iy+28);
+  ctx.fillText(`⟨E⟩ (num) = ${EexpVal.toFixed(4)}`,ix+5,iy+42);
+  ctx.fillText(`⟨x²⟩ = ${(x2/normInt).toFixed(2)}`,ix+5,iy+56);
+  ctx.fillText(`∫|ψ|²dx = ${normInt.toFixed(4)} ${Math.abs(normInt-1)<0.01?'✓':'⚠'}`,ix+5,iy+70);
+  ctx.fillText(`t = ${time.toFixed(2)}   n = ${n}`,ix+5,iy+84);
+
+  // Mini: eigenstate formula
+  const gx=570,gy=30,gw=300,gh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('WAVEFUNCTION ψₙ(x) = √(2/L) sin(nπx/L)',gx+3,gy+10);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`kₙ = nπ/L = ${(n*Math.PI/L).toFixed(4)}`,gx+3,gy+26);
+  ctx.fillText(`λₙ = 2L/n = ${(2*L/n).toFixed(1)}`,gx+3,gy+40);
+  ctx.fillText(`Nodes = ${n-1} (excluding boundaries)`,gx+3,gy+54);
+  ctx.fillText(`ZPE: E₁ = ${(Math.PI*Math.PI*hbar*hbar/(2*m*L*L)).toFixed(4)}`,gx+3,gy+68);
+
+  // Mini graph: probability density as histogram
+  const hx=570,hy=130,hw=300,hh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(hx,hy,hw,hh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('P(x) = |ψₙ|² DENSITY',hx+3,hy+10);
+  for(let x=0;x<hw-10;x+=4){
+    const frac=x/(hw-10);
+    const probVal=Math.sin(n*Math.PI*frac)**2;
+    const barH=probVal*hh*0.65;
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.fillRect(hx+5+x,hy+hh-10-barH,3,barH);
+  }
+
+  // Store history
+  history.t.push(time);history.Eexp.push(EexpVal);history.norm.push(normInt);history.x2.push(x2/normInt);
+  if(history.t.length>300){history.t.shift();history.Eexp.shift();history.norm.shift();history.x2.shift();}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>n</label><input type="range" id="nS" min="1" max="10" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+    `<div class="ctrl-group"><label>L</label><input type="range" id="lS" min="200" max="600" step="10" value="${L}"><span class="val" id="lV">${L}</span></div>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${speed}"><span class="val" id="spV">${speed}×</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('nS').addEventListener('input',function(){n=parseInt(this.value);document.getElementById('nV').textContent=n;init();});
+  document.getElementById('lS').addEventListener('input',function(){L=parseFloat(this.value);document.getElementById('lV').textContent=L;init();});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('spV').textContent=speed+'×';});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+
+  // Stats
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">n =</span> <span class="val">${n}</span></span>`+
+    `<span><span class="label">Eₙ ∝ n² =</span> <span class="val">${(n*n).toFixed(1)}</span></span>`+
+    `<span><span class="label">Eₙ exact =</span> <span class="val">${En.toFixed(4)}</span></span>`+
+    `<span><span class="label">kₙ =</span> <span class="val">${(n*Math.PI/L).toFixed(4)}</span></span>`+
+    `<span><span class="label">λₙ =</span> <span class="val">${(2*L/n).toFixed(1)}</span></span>`+
+    `<span><span class="label">Nodes =</span> <span class="val">${n-1}</span></span>`+
+    `<span><span class="label">⟨E⟩ =</span> <span class="val">${EexpVal.toFixed(4)}</span></span>`+
+    `<span><span class="label">∫|ψ|² =</span> <span class="val">${normInt.toFixed(4)}</span></span>`+
+    `<span><span class="label">ZPE</span> <span class="val">${n===1?'✓':'E₁>0'}</span></span>`;
+}
+
+init();
+resetSim();
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Reflection · Fixed/free end boundary conditions</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:4px 0;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:2px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.ctrl-group label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:55px;accent-color:#000;height:10px}
+.ctrl-group .val{font-size:0.6em;color:#000;min-width:20px;text-align:right}
+select{font-family:'Courier New',monospace;font-size:0.6em;border:1px solid #ddd;background:#fff;padding:1px 3px}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Wave Reflection</h1>
+<p>Pulse propagation — fixed (π phase shift) vs free end (no inversion)</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const cv=document.getElementById('c'),cx=cv.getContext('2d'),W=900,H=520;
+let time=0,paused=false,cSpeed=2.5,pulseAmp=1,pulseW=250,speed=1,firePulse=false;
+let bdPos=680; // boundary position
+// Data histories
+const eH=[],tH=[],bAmpH=[],bReflH=[];
+const maxH=300;
+// Pulse shape: Gaussian
+function gauss(x,x0,w){return Math.exp(-(x-x0)*(x-x0)/(2*w*w/4));}
+// String displacement for a given boundary type
+function stringDisp(x,t,bc){
+ let y=0;
+ // Incident pulse (rightward)
+ if(firePulse){
+  const xi=x-120-cSpeed*t;
+  y+=pulseAmp*gauss(xi,0,pulseW);
+ }
+ // Reflected pulse (leftward from boundary)
+ const travelTime=(bdPos-120)/cSpeed;
+ if(t>travelTime){
+  const xr=x-bdPos; // distance from boundary (negative = left of boundary)
+  const tr=t-travelTime; // time since reflection
+  // For fixed end: pulse inverts, travels leftward
+  // For free end: pulse stays upright, travels leftward
+  const sign=bc==='fixed'?-1:1;
+  const xRefl=bdPos-cSpeed*tr;
+  y+=sign*pulseAmp*gauss(xRefl,xRefl,pulseW);
+ }
+ return y;
+}
+function step(){
+ if(paused)return;
+ for(let s=0;s<speed;s++){
+  time+=0.025;
+  // Energy estimate: integral of y²
+  let e=0,bAmp=0,bRefl=0;
+  for(let x=20;x<=bdPos;x+=2){
+   const d=stringDisp(x,time,'fixed');e+=d*d;
+   if(x>bdPos-5&&x<=bdPos){bAmp=Math.max(bAmp,Math.abs(d));}
+   const dr=stringDisp(x,time,'free');bRefl=Math.max(bRefl,Math.abs(dr));
+  }
+  if(eH.length>maxH){eH.shift();tH.shift();bAmpH.shift();bReflH.shift();}
+  eH.push(e);tH.push(time);bAmpH.push(bAmp);bReflH.push(bRefl);
+ }
+}
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const yOffsets=[90,310];const labels=['Fixed End (π phase shift)','Free End (no inversion)'];
+ for(let row=0;row<2;row++){
+  const y0=yOffsets[row],bc=row===0?'fixed':'free';
+  // Boundary wall
+  cx.strokeStyle='#111';cx.lineWidth=2;
+  if(row===0){ // fixed - solid wall
+   cx.beginPath();cx.moveTo(bdPos,y0-45);cx.lineTo(bdPos,y0+45);cx.stroke();
+  }else{ // free - ring/roller
+   cx.beginPath();cx.moveTo(bdPos-25,y0-40);cx.lineTo(bdPos+25,y0-40);cx.stroke();
+   cx.fillStyle='rgba(0,0,0,0.03)';cx.fillRect(bdPos-25,y0-43,50,18);
+   cx.strokeStyle='#999';cx.lineWidth=0.5;cx.beginPath();cx.arc(bdPos,y0-34,8,0,7);cx.stroke();
+  }
+  cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='center';cx.fillText(labels[row],400,y0-50);
+  // String line
+  cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.beginPath();cx.moveTo(20,y0);cx.lineTo(bdPos,y0);cx.stroke();
+  // Displacement
+  cx.strokeStyle='#111';cx.lineWidth=1.2;cx.beginPath();let first=true;
+  for(let x=20;x<=bdPos;x++){
+   const y=y0+12*stringDisp(x,time,bc);
+   first?cx.moveTo(x,y):cx.lineTo(x,y);first=false;
+  }
+  cx.stroke();
+  // Labels for incident / reflected
+  const travelTime=(bdPos-120)/cSpeed;
+  if(firePulse&&time<travelTime&&time>0.1){
+   cx.fillStyle='rgba(0,0,0,0.12)';cx.font='5px monospace';cx.textAlign='center';cx.fillText('→ incident',300,y0-18);
+  }
+  if(firePulse&&time>travelTime+0.1){
+   cx.fillStyle='rgba(0,0,0,0.12)';cx.font='5px monospace';cx.textAlign='center';cx.fillText('← reflected',300,y0-18);
+  }
+  // Boundary amplitude indicator
+  if(firePulse&&time>travelTime-0.5){
+   const bAmp=stringDisp(bdPos,time,bc);
+   const bY=y0+12*bAmp;
+   cx.fillStyle='rgba(0,0,0,0.15)';cx.beginPath();cx.arc(bdPos,bY,4,0,7);cx.fill();
+  }
+ }
+ // Mini graphs (right side)
+ const mgX=700,mgW=190,mgH=50,mgG=3;
+ // 1: Energy over time
+ const mgY1=20;
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY1,mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Energy ∫y²dx (fixed)',mgX+2,mgY1+8);
+ if(eH.length>2){const me=Math.max(...eH)||1;cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<eH.length;i++){const x=mgX+(i/eH.length)*mgW,y=mgY1+mgH-4-(eH[i]/me)*(mgH-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ // 2: Boundary displacement
+ const mgY2=mgY1+mgH+mgG;
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY2,mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('|u(boundary)|',mgX+2,mgY2+8);
+ if(bAmpH.length>2){const ma=Math.max(...bAmpH,0.01);cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<bAmpH.length;i++){const x=mgX+(i/bAmpH.length)*mgW,y=mgY2+mgH-4-(bAmpH[i]/ma)*(mgH-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ // 3: Phase space (position of pulse peak)
+ const mgY3=mgY2+mgH+mgG;
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY3,mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Reflection amp (free)',mgX+2,mgY3+8);
+ if(bReflH.length>2){const mr=Math.max(...bReflH,0.01);cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<bReflH.length;i++){const x=mgX+(i/bReflH.length)*mgW,y=mgY3+mgH-4-(bReflH[i]/mr)*(mgH-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ // 4: Spacetime indicator
+ const mgY4=mgY3+mgH+mgG;
+ cx.strokeStyle='#ddd';cx.strokeRect(mgX,mgY4,mgW,mgH);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Pulse pos (●=peak)',mgX+2,mgY4+8);
+ const pPos=120+cSpeed*time;const pRefl=bdPos-cSpeed*(time-(bdPos-120)/cSpeed);
+ const pPosNorm=(pPos-20)/(bdPos-20);const pReflNorm=(pRefl-20)/(bdPos-20);
+ if(firePulse&&time<(bdPos-120)/cSpeed){cx.fillStyle='#111';cx.beginPath();cx.arc(mgX+pPosNorm*mgW,mgY4+mgH-8,3,0,7);cx.fill();}
+ if(firePulse&&time>(bdPos-120)/cSpeed){cx.fillStyle='rgba(0,0,0,0.3)';cx.beginPath();cx.arc(mgX+Math.max(0,Math.min(1,pReflNorm))*mgW,mgY4+mgH-8,3,0,7);cx.fill();}
+ // Legend at bottom
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='center';
+ cx.fillText('Fixed end: reflected pulse inverts (phase shift π). Free end: reflected pulse is upright (same phase).',450,H-12);
+ // Compute stats
+ const curE=eH[eH.length-1]||0;const travelT=(bdPos-120)/cSpeed;
+ const pPeak=firePulse?120+cSpeed*time:0;const arriving=firePulse&&time<travelT;
+ const reflected=firePulse&&time>=travelT;const reflAmp=reflected?pulseAmp:0;
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+  `<div class="ctrl-group"><label>c</label><input type="range" id="cS" min="0.5" max="5" step="0.1" value="${cSpeed}"><span class="val" id="cV">${cSpeed.toFixed(1)}</span></div>`+
+  `<div class="ctrl-group"><label>Amp</label><input type="range" id="aS" min="0.2" max="2" step="0.1" value="${pulseAmp}"><span class="val" id="aV">${pulseAmp.toFixed(1)}</span></div>`+
+  `<div class="ctrl-group"><label>Width</label><input type="range" id="wS" min="50" max="500" step="10" value="${pulseW}"><span class="val" id="wV">${pulseW}</span></div>`+
+  `<div class="ctrl-group"><label>Speed×</label><input type="range" id="spS" min="1" max="5" step="1" value="${speed}"><span class="val" id="spV">${speed}</span></div>`+
+  `<button id="fireBtn">Fire Pulse</button>`+
+  `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+  `<button id="resetBtn">Reset</button>`;
+ document.getElementById('cS').oninput=function(){cSpeed=+this.value;document.getElementById('cV').textContent=cSpeed.toFixed(1);};
+ document.getElementById('aS').oninput=function(){pulseAmp=+this.value;document.getElementById('aV').textContent=pulseAmp.toFixed(1);};
+ document.getElementById('wS').oninput=function(){pulseW=+this.value;document.getElementById('wV').textContent=pulseW;};
+ document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+ document.getElementById('fireBtn').onclick=function(){time=0;eH.length=0;tH.length=0;bAmpH.length=0;bReflH.length=0;firePulse=true;paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;eH.length=0;tH.length=0;bAmpH.length=0;bReflH.length=0;firePulse=false;paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+}
+ document.getElementById('stats').innerHTML=
+  `<span><span class="label">c</span><span class="val">${cSpeed.toFixed(1)}</span>px/s</span>`+
+  `<span><span class="label">A</span><span class="val">${pulseAmp.toFixed(1)}</span></span>`+
+  `<span><span class="label">σ</span><span class="val">${pulseW}</span>px</span>`+
+  `<span><span class="label">Boundary</span><span class="val">${bdPos}</span>px</span>`+
+  `<span><span class="label">Travel T</span><span class="val">${travelT.toFixed(2)}</span>s</span>`+
+  `<span><span class="label">Energy</span><span class="val">${curE.toFixed(3)}</span></span>`+
+  `<span><span class="label">Peak pos</span><span class="val">${pPeak.toFixed(0)}</span>px</span>`+
+  `<span><span class="label">Arriving</span><span class="val">${arriving?'yes':'no'}</span></span>`+
+  `<span><span class="label">Reflected</span><span class="val">${reflected?'yes':'no'}</span></span>`+
+  `<span><span class="label">Refl A</span><span class="val">${reflAmp.toFixed(1)}</span></span>`+
+  `<span><span class="label">Fixed inv</span><span class="val">π shift</span></span>`+
+  `<span><span class="label">Free inv</span><span class="val">none</span></span>`+
+  `<span><span class="label">t</span><span class="val">${time.toFixed(2)}s</span></span>`+
+  `<span><span class="label">Hist</span><span class="val">${eH.length}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

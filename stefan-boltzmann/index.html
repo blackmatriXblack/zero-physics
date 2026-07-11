@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stefan-Boltzmann Law</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Stefan-Boltzmann Law — Blackbody radiation</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <label>T <input type="range" id="tS" min="500" max="10000" step="50" value="5000"><span class="v" id="tV">5000</span></label>
+  <label>Spd <input type="range" id="sS" min="1" max="10" value="3"><span class="v" id="sV">3</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let T = 5000, speed = 3, running = true, phase = 0;
+
+const hPlanck = 6.626e-34;
+const cLight = 3e8;
+const kBoltz = 1.381e-23;
+const sigma = 5.6704e-8;
+
+const HIST_LEN = 150;
+let histPower = [];
+
+function planckIntensity(lambda, temp) {
+  if (lambda <= 0) return 0;
+  const b = hPlanck * cLight / (lambda * kBoltz * temp);
+  if (b > 700) return 0;
+  return 2 * hPlanck * cLight * cLight / (Math.pow(lambda, 5) * (Math.exp(b) - 1));
+}
+
+function totalPower(temp) { return sigma * temp * temp * temp * temp; }
+function wienLambda(temp) { return 2.898e-3 / temp; }
+
+function draw() {
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  const gx = W * 0.10, gw = W * 0.58, gy = H * 0.12, gh = H * 0.60;
+  const lamMin = 1e-9, lamMax = 3e-6, steps = 400;
+
+  let maxI = 0;
+  const intensities = [];
+  for (let i = 0; i <= steps; i++) {
+    const lam = lamMin + (lamMax - lamMin) * i / steps;
+    const I = planckIntensity(lam, T);
+    intensities.push({ lam, I });
+    if (I > maxI) maxI = I;
+  }
+
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  for (let i = 0; i <= 5; i++) { const x = gx + i / 5 * gw; cx.beginPath(); cx.moveTo(x, gy); cx.lineTo(x, gy + gh); cx.stroke(); }
+  for (let i = 0; i <= 5; i++) { const y = gy + gh - i / 5 * gh; cx.beginPath(); cx.moveTo(gx, y); cx.lineTo(gx + gw, y); cx.stroke(); }
+
+  cx.fillStyle = '#999'; cx.font = '8px monospace'; cx.textAlign = 'center';
+  for (let i = 0; i <= 5; i++) {
+    const x = gx + i / 5 * gw;
+    cx.fillText(((lamMin + (lamMax - lamMin) * i / 5) * 1e9).toFixed(0) + 'nm', x, gy + gh + 12);
+  }
+  cx.save();
+  cx.translate(gx - 18, gy + gh / 2);
+  cx.rotate(-Math.PI / 2);
+  cx.textAlign = 'center';
+  cx.fillText('Intensity (W/sr/m\u00B2/m)', 0, 0);
+  cx.restore();
+
+  cx.strokeStyle = '#000'; cx.lineWidth = 2; cx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = gx + i / steps * gw;
+    const y = gy + gh - (intensities[i].I / maxI) * gh * 0.95;
+    if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+  }
+  cx.stroke();
+
+  const wien = wienLambda(T);
+  const wx = gx + (wien - lamMin) / (lamMax - lamMin) * gw;
+  if (wx >= gx && wx <= gx + gw) {
+    cx.strokeStyle = '#666'; cx.lineWidth = 0.5; cx.setLineDash([4, 4]);
+    cx.beginPath(); cx.moveTo(wx, gy); cx.lineTo(wx, gy + gh); cx.stroke(); cx.setLineDash([]);
+    cx.fillStyle = '#000'; cx.font = '8px monospace'; cx.textAlign = 'center';
+    cx.fillText('Wien peak', wx, gy + gh + 24);
+    cx.fillText((wien * 1e9).toFixed(0) + 'nm', wx, gy + gh + 34);
+  }
+
+  // Mini graph
+  const mgx = gx + gw + 30, mgy = gy;
+  const mgw = Math.min(W - mgx - 20, 140), mgh = Math.min(H * 0.3, 140);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(mgx, mgy, mgw, mgh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.font = '7px monospace';
+  cx.fillText('\u03c3T\u2074', mgx + 4, mgy + 10);
+  if (histPower.length > 1) {
+    const pMin = Math.min(...histPower), pMax = Math.max(...histPower), pRange = pMax - pMin || 1;
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histPower.length; i++) {
+      const x = mgx + (i / (HIST_LEN - 1)) * mgw;
+      const y = mgy + mgh - (histPower[i] - pMin) / pRange * mgh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  const peakPower = totalPower(T) / 1e7;
+  document.getElementById('d').innerHTML =
+    'T=' + T.toFixed(0) + ' K' +
+    '<br>\u03bb<sub>peak</sub>=' + (wien * 1e9).toFixed(0) + ' nm' +
+    '<br>I<sub>peak</sub>=' + (maxI / 1e13).toFixed(2) + 'e13' +
+    '<br>\u03c3T\u2074=' + peakPower.toFixed(2) + ' W/m\u00B2' +
+    '<br>\u03bd<sub>peak</sub>\u2248' + (cLight / wien / 1e14).toFixed(2) + 'e14 Hz' +
+    '<br>Wien T\u00b7\u03bb=' + (T * wien).toFixed(4) +
+    '<br>\u03c3=' + sigma.toExponential(2) +
+    '<br>h=' + hPlanck.toExponential(2) +
+    '<br>c=' + cLight.toExponential(2) +
+    '<br>k=' + kBoltz.toExponential(2) +
+    '<br>T\u2074=' + (T * T * T * T / 1e14).toFixed(3) + 'e14' +
+    '<br>RJ\u2248' + (2 * kBoltz * T / 1e22).toFixed(2) + 'e22';
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+document.getElementById('rb').onclick = () => { T = 5000; phase = 0; histPower = []; document.getElementById('tS').value = 5000; document.getElementById('tV').textContent = '5000'; };
+document.getElementById('tS').oninput = function () { T = parseFloat(this.value); document.getElementById('tV').textContent = T; };
+document.getElementById('sS').oninput = function () { speed = parseFloat(this.value); document.getElementById('sV').textContent = speed; };
+
+function loop() {
+  if (running) {
+    phase += 0.005 * speed / 3;
+    T = 2000 + 3000 * (1 + Math.sin(phase));
+    document.getElementById('tS').value = T;
+    document.getElementById('tV').textContent = T.toFixed(0);
+    histPower.push(totalPower(T));
+    if (histPower.length > HIST_LEN) histPower.shift();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+resizeCanvas(); loop();
+</script>
+</body>
+</html>

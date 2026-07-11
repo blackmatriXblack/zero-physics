@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RLC Circuit · Lq̈ + Rq̇ + q/C = 0</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden}
+  canvas{display:block}
+  .title{position:absolute;top:24px;left:24px;font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.35}
+  .panel{position:absolute;bottom:24px;left:24px;font-size:13px;line-height:1.8;pointer-events:none}
+  .eq{font-size:14px;margin-bottom:6px}
+  .val{opacity:.55}
+</style>
+</head>
+<body>
+<div class="title">RLC Circuit</div>
+<div class="panel" id="panel"></div>
+<canvas id="c"></canvas>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+window.addEventListener('resize',resize);resize();
+
+// params: underdamped by default
+let R=0.8, L=1.5, C=0.6;
+let q=2.0, i=0;
+const dt=0.012;
+let t=0;
+const hx=W*0.08, hw=W*0.84, hy=H*0.3, hh=H*0.45;
+
+const qhist=[], ihist=[];
+
+function step(){
+  const di=(-R*i-q/C)/L;
+  i+=di*dt*0.5;
+  q+=i*dt;
+  i+=di*dt*0.5;
+  t+=dt;
+  qhist.push(q);if(qhist.length>600)qhist.shift();
+  ihist.push(i);if(ihist.length>600)ihist.shift();
+}
+
+// pre-run
+for(let s=0;s<100;s++)step();
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // --- circuit diagram ---
+  const cx=W*0.52, cy=H*0.78;
+  const rw=210, rh=100;
+
+  // wire rectangle
+  ctx.strokeStyle='#111';ctx.lineWidth=1.6;
+  ctx.strokeRect(cx-rw/2,cy-rh/2,rw,rh);
+
+  // gap for capacitor (top)
+  const gx=cx, gy=cy-rh/2;
+  ctx.clearRect(gx-8,gy-2,16,4);
+  ctx.fillStyle='#fff';ctx.fillRect(gx-8,gy-2,16,4);
+
+  // capacitor plates
+  ctx.strokeStyle='#111';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(gx-6,gy-12);ctx.lineTo(gx-6,gy+12);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(gx+6,gy-12);ctx.lineTo(gx+6,gy+12);ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='10px monospace';
+  ctx.fillText('C',gx+14,gy+4);
+
+  // inductor (left side)
+  const lx=cx-rw/2, ly=cy;
+  ctx.beginPath();
+  const coils=5, cw2=18, ch=16;
+  ctx.moveTo(lx-12,ly);
+  for(let i=0;i<=coils;i++){
+    const t=i/coils;
+    ctx.lineTo(lx-12+t*cw2,ly+(i%2===0?-ch:ch));
+  }
+  ctx.stroke();
+  ctx.fillText('L',lx-30,ly-18);
+
+  // resistor (right side)
+  const rx=cx+rw/2;
+  ctx.beginPath();
+  ctx.moveTo(rx+4,ly-14);
+  for(let i=0;i<5;i++){ctx.lineTo(rx+4+6*(i%2===0?1:-1),ly-14+(i+1)*7);}
+  ctx.stroke();
+  ctx.fillText('R',rx+14,ly+2);
+
+  // --- plots ---
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;
+  ctx.strokeRect(hx,hy,hw,hh);
+  ctx.beginPath();ctx.moveTo(hx,hy+hh/2);ctx.lineTo(hx+hw,hy+hh/2);ctx.stroke();
+
+  // q(t)
+  ctx.beginPath();
+  for(let i=0;i<qhist.length;i++){
+    const sx=hx+i/qhist.length*hw;
+    const sy=hy+hh/2-qhist[i]*(hh/5);
+    if(i===0)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();
+
+  // i(t)
+  ctx.beginPath();
+  for(let i=0;i<ihist.length;i++){
+    const sx=hx+i/ihist.length*hw;
+    const sy=hy+hh/2-ihist[i]*(hh/5);
+    if(i===0)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);
+  }
+  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.7;ctx.stroke();
+
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.font='10px monospace';
+  ctx.fillText('q(t)',hx+4,hy+18);
+  ctx.fillText('i(t)',hx+4,hy+32);
+
+  const w0=1/Math.sqrt(L*C);
+  const zeta=R/(2*Math.sqrt(L/C));
+  const wd=w0*Math.sqrt(1-zeta*zeta);
+  document.getElementById('panel').innerHTML=
+    `<div class="eq">Lq̈ + Rq̇ + q/C = 0</div>
+     <div class="val">q = ${q.toFixed(3)} C</div>
+     <div class="val">i = ${i.toFixed(3)} A</div>
+     <div class="val">Vc = ${(q/C).toFixed(3)} V</div>
+     <div class="val">ω₀ = ${w0.toFixed(2)}  ζ = ${zeta.toFixed(2)}</div>
+     <div class="val">${zeta<1?'underdamped':zeta===1?'critically damped':'overdamped'}</div>`;
+}
+
+function loop(){
+  for(let i=0;i<3;i++)step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

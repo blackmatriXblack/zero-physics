@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Packet Dispersion · v_g = dω/dk</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Wave Packet Dispersion</h1>
+<p>v<sub>g</sub> = dω/dk — Spreading of a wave packet in dispersive medium</p>
+<canvas id="c" width="920" height="560"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=560;
+let k0=0.5,sigma=0.2,beta=0.02,time=0,paused=false,speed=1;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function packet(x,t){
+ const w0=k0*(1+beta*k0);
+ const arg=((x-beta*sigma*t)*2/sigma)**2*0.25/(1+beta*sigma*sigma*t);
+ const env=Math.exp(-arg)*50;
+ const phase=Math.cos(k0*x-w0*t-0.5*beta*k0*k0*t);
+ return env*phase;
+}
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const gX=40,gY=30,gW=840,gH=180;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('ψ(x,t) — wave packet',gX+3,gY+10);
+ const vg=1+2*beta*k0,w0=k0*(1+beta*k0),vp=w0/k0;
+ const x0=300+vg*time*30;
+ const spread=sigma*Math.sqrt(1+beta*sigma*sigma*time*4);
+ hist.push(spread);if(hist.length>hMax)hist.shift();
+ ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();
+ let first=true;
+ for(let x=0;x<=gW;x++){const xx=(x-gW/2)*0.05+400;const arg=((xx-time*beta*sigma)-sigma*sigma*k0*time)**2/(sigma*sigma*0.5/(1+beta*sigma*sigma*time*4));const env=Math.exp(-arg*0.5)*(gH/2-10);const py=gY+gH/2-env;first?ctx.moveTo(gX+x,py):ctx.lineTo(gX+x,py);first=false;}
+ ctx.stroke();ctx.setLineDash([]);
+ ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();first=true;
+ for(let x=0;x<=gW;x++){const xx=(x-gW/2)*0.05+400;const val=packet(xx,time);const py=gY+gH/2-val;first?ctx.moveTo(gX+x,py):ctx.lineTo(gX+x,py);first=false;}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`t=${time.toFixed(2)}s`,gX+20,gY+20);
+ const sX=40,sY=240,sW=840,sH=100;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(sX,sY,sW,sH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('ω(k) = k·c(k) — dispersion relation',sX+3,sY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();
+ for(let x=0;x<=sW;x++){const k=x/sW*1+0.1;const w=k*(1+beta*k);const py=sY+sH-w*80;x===0?ctx.moveTo(sX+x,py):ctx.lineTo(sX+x,py);}
+ ctx.stroke();
+ const k0px=sX+(k0/1.1)*sW;const w0y=sY+sH-w0*80;
+ ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(k0px,sY+sH+4);ctx.lineTo(k0px,w0y);ctx.lineTo(sX-4,w0y);ctx.stroke();
+ ctx.fillStyle='#111';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('k₀',k0px,sY+sH+14);ctx.fillText('ω(k₀)',sX-6,w0y+3);
+ const hX=40,hY=370,hW=840,hH=80;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Spread σ(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-(hist[i]||0)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+ ctx.fillText(`v_g = dω/dk = ${vg.toFixed(3)}    v_p = ω/k = ${vp.toFixed(3)}`,10,H-60);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`β=${beta.toFixed(3)}  k₀=${k0.toFixed(2)}  σ=${sigma.toFixed(2)}  t=${time.toFixed(2)}`,10,H-76);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>k₀</label><input type="range" id="kS" min="0.1" max="1" step="0.02" value="${k0}"><span class="val" id="kV">${k0.toFixed(2)}</span></div>`+
+ `<div class="ctrl-group"><label>β (disp)</label><input type="range" id="bS" min="0" max="0.1" step="0.002" value="${beta}"><span class="val" id="bV">${beta.toFixed(3)}</span></div>`+
+ `<div class="ctrl-group"><label>σ (width)</label><input type="range" id="sS" min="0.05" max="0.5" step="0.01" value="${sigma}"><span class="val" id="sV">${sigma.toFixed(2)}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('kS').oninput=function(){k0=+this.value;kV.textContent=k0.toFixed(2);};
+ document.getElementById('bS').oninput=function(){beta=+this.value;bV.textContent=beta.toFixed(3);};
+ document.getElementById('sS').oninput=function(){sigma=+this.value;sV.textContent=sigma.toFixed(2);};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">k₀ =</span> <span class="val">${k0.toFixed(2)}</span></span>`+
+ `<span><span class="label">β =</span> <span class="val">${beta.toFixed(3)}</span></span>`+
+ `<span><span class="label">σ =</span> <span class="val">${sigma.toFixed(2)}</span></span>`+
+ `<span><span class="label">v<sub>g</sub> =</span> <span class="val">${vg.toFixed(4)}</span></span>`+
+ `<span><span class="label">v<sub>p</sub> =</span> <span class="val">${vp.toFixed(4)}</span></span>`+
+ `<span><span class="label">ω₀ =</span> <span class="val">${w0.toFixed(4)}</span></span>`+
+ `<span><span class="label">Spread σ(t) =</span> <span class="val">${spread.toFixed(4)}</span></span>`+
+ `<span><span class="label">σ(0) =</span> <span class="val">${sigma.toFixed(2)}</span></span>`+
+ `<span><span class="label">Δk ≈ 1/σ =</span> <span class="val">${(1/sigma).toFixed(2)}</span></span>`+
+ `<span><span class="label">dω/dk|₀ =</span> <span class="val">${vg.toFixed(4)}</span></span>`+
+ `<span><span class="label">Disp ratio</span> <span class="val">${(beta*k0).toFixed(4)}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

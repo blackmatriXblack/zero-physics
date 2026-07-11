@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Single Slit Diffraction · I(θ) = I₀ sinc²(πa sinθ/λ)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Single Slit Diffraction</h1>
+<p>I(θ) = I₀ [sin(πa sinθ / λ) / (πa sinθ / λ)]²</p>
+<canvas id="c" width="920" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),C=c.getContext('2d'),W=c.width,H=c.height;
+let a=50,lambda=12,time=0,paused=false,speed=1,tgtY=-1;
+const slitX=90,slitY=270,screenX=720,screenW=12;
+const huygens=14,huygensOn=true;
+
+function I(theta){
+  const alpha=Math.PI*a*Math.sin(theta)/lambda;
+  return alpha===0?1:Math.pow(Math.sin(alpha)/alpha,2);
+}
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  // Incoming plane waves
+  C.strokeStyle='rgba(0,0,0,0.07)';C.lineWidth=0.5;
+  for(let x=0;x<slitX;x+=lambda){
+    const ph=(x-slitX)/lambda+time*0.03*speed;
+    C.globalAlpha=0.1+0.1*Math.sin(ph*6.28);
+    C.beginPath();C.moveTo(x,5);C.lineTo(x,H-5);C.stroke();
+  }C.globalAlpha=1;
+  // Slit barrier
+  C.fillStyle='#111';
+  C.fillRect(slitX-3,0,6,slitY-a/2);
+  C.fillRect(slitX-3,slitY+a/2,6,H-slitY-a/2);
+  // Slit opening
+  C.fillStyle='#fff';C.strokeStyle='#111';C.lineWidth=0.5;
+  C.fillRect(slitX-3,slitY-a/2,6,a);
+  C.strokeRect(slitX-3,slitY-a/2,6,a);
+  C.fillStyle='#999';C.font='7px monospace';C.textAlign='center';
+  C.fillText(`a = ${a}`,slitX-20,slitY);
+  // Huygens wavelets from slit
+  if(huygensOn)for(let i=0;i<=huygens;i++){
+    const sy=slitY-a/2+(i/huygens)*a;
+    const r=((time*0.03*speed)%1)*lambda;
+    C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.3;
+    C.beginPath();C.arc(slitX,sy,r+2,0,6.28);C.stroke();
+  }
+  // Screen
+  C.fillStyle='#111';C.fillRect(screenX-3,20,screenW+6,H-40);
+  // Diffraction pattern on screen
+  for(let y=20;y<H-20;y++){
+    const dy=y-slity;
+    const theta=Math.atan2(dy,screenX-slitX);
+    const inten=I(theta);
+    const gray=Math.min(255,Math.max(30,255-inten*225));
+    C.fillStyle=`rgb(${gray},${gray},${gray})`;
+    C.fillRect(screenX-3,y,screenW+6,1);
+  }
+  // Screen label
+  C.fillStyle='rgba(0,0,0,0.3)';C.font='7px monospace';C.textAlign='center';C.fillText('SCREEN',screenX+screenW/2,14);
+  // Central ray
+  C.strokeStyle='rgba(0,0,0,0.05)';C.lineWidth=0.3;C.setLineDash([3,3]);
+  C.beginPath();C.moveTo(slitX,slitY);C.lineTo(screenX,slitY);C.stroke();C.setLineDash([]);
+  // Intensity profile graph
+  const gX=80,gY=400,gW=780,gH=110;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(gX,gY,gW,gH);
+  C.fillStyle='#999';C.font='7px monospace';C.textAlign='left';C.fillText('I(θ) = sinc²(πa sinθ/λ)',gX+3,gY+12);
+  C.strokeStyle='rgba(0,0,0,0.1)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(gX+gW/2,gY);C.lineTo(gX+gW/2,gY+gH);C.stroke();
+  C.strokeStyle='#111';C.lineWidth=1;
+  C.beginPath();
+  for(let x=0;x<=gW;x++){
+    const theta=((x-gW/2)/gW)*0.4;
+    const inten=I(theta);
+    const py=gY+gH-inten*gH;
+    x===0?C.moveTo(gX+x,py):C.lineTo(gX+x,py);
+  }C.stroke();
+  // Minima markers
+  for(let m=1;m<=4;m++){
+    const ang=m*lambda/a;
+    if(ang<0.4){const x=gX+gW/2+(ang/0.4)*gW/2;
+      C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.3;
+      C.beginPath();C.moveTo(x,gY);C.lineTo(x,gY+gH);C.stroke();
+      C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';C.fillText(`m=${m}`,x,gY+gH-3);
+      const x2=gX+gW/2-(ang/0.4)*gW/2;
+      C.beginPath();C.moveTo(x2,gY);C.lineTo(x2,gY+gH);C.stroke();
+      C.fillText(`m=${m}`,x2,gY+gH-3);}
+  }
+  // FWHM bar
+  const halfMaxX=gX+gW/2;
+  C.strokeStyle='rgba(0,0,0,0.15)';C.lineWidth=0.5;
+  C.beginPath();C.moveTo(halfMaxX-30,gY+30);C.lineTo(halfMaxX+30,gY+30);C.stroke();
+  C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';C.fillText('FWHM',halfMaxX,gY+26);
+
+  // Mouse hover info
+  if(tgtY>20&&tgtY<H-20){
+    const dy=tgtY-slity;
+    const theta=Math.atan2(dy,screenX-slitX);
+    const inten=I(theta);
+    C.strokeStyle='rgba(0,0,0,0.15)';C.lineWidth=0.3;C.setLineDash([3,3]);
+    C.beginPath();C.moveTo(screenX+20,tgtY);C.lineTo(screenX-20,tgtY);C.stroke();C.setLineDash([]);
+    C.fillStyle='rgba(0,0,0,0.4)';C.font='6px monospace';C.textAlign='left';
+    C.fillText(`θ = ${(theta*180/Math.PI).toFixed(2)}°`,screenX+20,tgtY-4);
+    C.fillText(`I = ${(inten*100).toFixed(1)}%`,screenX+20,tgtY+10);
+  }
+
+  // Power bar
+  const totalPower=a/lambda; // proportional to slit width / wavelength
+  C.fillStyle='#eee';C.fillRect(830,30,60,8);
+  C.fillStyle='#111';C.fillRect(830,30,Math.min(60,totalPower*10),8);
+  C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';
+  C.fillText(`P ∝ a/λ = ${totalPower.toFixed(2)}`,860,25);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>a</label><input type="range" id="aS" min="10" max="150" step="1" value="${a}"><span class="val" id="aV">${a}</span></div>`+
+    `<div class="ctrl-group"><label>λ</label><input type="range" id="lS" min="2" max="40" step="1" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+    `<div class="ctrl-group"><label>spd</label><input type="range" id="spdS" min="0" max="300" step="10" value="${speed*100}"><span class="val" id="spdV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+  document.getElementById('aS').oninput=function(){a=+this.value;document.getElementById('aV').textContent=a;};
+  document.getElementById('lS').oninput=function(){lambda=+this.value;document.getElementById('lV').textContent=lambda;};
+  document.getElementById('spdS').oninput=function(){speed=this.value/100;document.getElementById('spdV').textContent=speed.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=function(){time=0;};
+}
+
+  if(!paused)time+=0.02*speed;
+  const minAng=Math.asin(lambda/a);
+  const cmw=2*lambda/a*180/Math.PI;
+  const I0=I(0);
+  const Ipeak=I(Math.asin(1.43*lambda/a)); // first side lobe ~1.43λ/a
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">a =</span> <span class="val">${a}</span> px</span>`+
+    `<span><span class="label">λ =</span> <span class="val">${lambda}</span> px</span>`+
+    `<span><span class="label">a/λ =</span> <span class="val">${(a/lambda).toFixed(2)}</span></span>`+
+    `<span><span class="label">θ₁ = arcsin(λ/a) =</span> <span class="val">${(minAng*180/Math.PI).toFixed(2)}°</span></span>`+
+    `<span><span class="label">Central max (FWHM) ≈</span> <span class="val">${(0.886*lambda/a*180/Math.PI).toFixed(2)}°</span></span>`+
+    `<span><span class="label">Fringe width ≈ λ/a</span> <span class="val">${(lambda/a*180/Math.PI).toFixed(3)}°</span></span>`+
+    `<span><span class="label">I₀ =</span> <span class="val">1.00</span></span>`+
+    `<span><span class="label">I₁/I₀ ≈</span> <span class="val">${(Ipeak*100).toFixed(1)}%</span></span>`+
+    `<span><span class="label">Power ∝ a/λ</span> <span class="val">${totalPower.toFixed(2)}</span></span>`+
+    `<span><span class="label"># minima (visible)</span> <span class="val">${Math.max(0,Math.floor(0.4*a/lambda/2)*2)}</span></span>`+
+    `<span><span class="label">a sinθ = nλ</span> <span class="val">n = 1, 2, 3, ...</span></span>`;
+  requestAnimationFrame(draw);
+}
+c.onmousemove=e=>{const r=c.getBoundingClientRect();tgtY=(e.clientY-r.top)*H/r.height;};
+c.onmouseleave=()=>{tgtY=-1;};
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Quantum Zeno Effect</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Quantum Zeno</h1>
+<p>P(|↑⟩) = cos²(Ωt) · frequent measurement → frozen evolution</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let t=0,paused=0,spd=1,measInt=50,tSince=0,meas=0,cUp=1,cDown=0,omega=0.03
+let survH=[],timeH=[],hx=[],hy=[]
+function evol(dt){const a=cUp,b=cDown;cUp=a*Math.cos(omega*dt)-b*Math.sin(omega*dt);cDown=b*Math.cos(omega*dt)+a*Math.sin(omega*dt)}
+function measF(){const p=cUp*cUp;if(Math.random()<p){cUp=1;cDown=0;return 1}else{cUp=0;cDown=1;return 0}}
+function upd(){
+if(paused)return;const dt=1*spd;evol(dt);t+=dt;tSince+=dt
+if(tSince>=measInt){measF();tSince=0;meas++}
+if(t%5<1){survH.push(cUp*cUp);timeH.push(t);if(survH.length>300){survH.shift();timeH.shift()}}
+if(t<500&&t%2<1){hx.push(t);hy.push(cUp*cUp);if(hx.length>200){hx.shift();hy.shift()}}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='left'
+ctx.fillText('t = '+t.toFixed(0),20,30);ctx.fillText('Measurements: '+meas,20,47);ctx.fillText('Interval: '+measInt.toFixed(0)+' dt',20,64)
+const pU=cUp*cUp,pD=1-pU
+ctx.fillText('P(|↑⟩)='+(pU*100).toFixed(1)+'%',20,81);ctx.fillText('P(|↓⟩)='+(pD*100).toFixed(1)+'%',20,98)
+const bX=20,bY=120,bW=300,bH=30
+ctx.fillStyle='#ddd';ctx.fillRect(bX,bY,bW,bH);ctx.fillStyle='#000';ctx.fillRect(bX,bY,bW*pU,bH)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(bX,bY,bW,bH)
+ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='center'
+ctx.fillText('|↑⟩ ('+(pU*100).toFixed(0)+'%)',bX+bW/2,bY+bH/2+3);ctx.fillText('|↓⟩ ('+(pD*100).toFixed(0)+'%)',bX+bW+30,bY+bH/2+3)
+const pX=20,pY=180,pW=860,pH=290
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(pX,pY,pW,pH)
+ctx.fillStyle='#888';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Survival P(|↑⟩)',pX+pW/2,pY-5)
+ctx.fillText('1.0',pX-5,pY+5);ctx.fillText('0.5',pX-5,pY+pH/2+3);ctx.fillText('0.0',pX-5,pY+pH-3);ctx.fillText('time',pX+pW+10,pY+pH+10)
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([3,3])
+ctx.beginPath();ctx.moveTo(pX,pY+pH/2);ctx.lineTo(pX+pW,pY+pH/2);ctx.stroke();ctx.setLineDash([])
+if(survH.length>1){ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath()
+for(let i=0;i<survH.length;i++){const x=pX+(timeH[i]/(timeH[timeH.length-1]||1))*pW,y=pY+pH-survH[i]*pH
+i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke()}
+const noM=Math.cos(omega*t)**2
+if(hx.length>1){const mgX=20,mgY=480,mgW=300,mgH=30
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='left';ctx.fillText('P↑(t) mini',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/500)*mgW,yy=mgY+mgH-hy[i]*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const freeze=meas>10?survH[survH.length-1]||0:0
+document.getElementById('st').innerHTML=
+`<span><span class="l">t =</span> <span class="v">${t.toFixed(0)}</span></span>`+
+`<span><span class="l">P(|↑⟩) =</span> <span class="v">${(pU*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">P(|↓⟩) =</span> <span class="v">${(pD*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">Measurements =</span> <span class="v">${meas}</span></span>`+
+`<span><span class="l">Interval =</span> <span class="v">${measInt.toFixed(0)}</span></span>`+
+`<span><span class="l">Ω (Rabi) =</span> <span class="v">${omega.toFixed(3)}</span></span>`+
+`<span><span class="l">No-meas P↑ =</span> <span class="v">${(noM*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">Ω·t =</span> <span class="v">${(omega*t).toFixed(2)}</span></span>`+
+`<span><span class="l">T_π = π/Ω =</span> <span class="v">${(Math.PI/omega).toFixed(1)}</span></span>`+
+`<span><span class="l">Freeze =</span> <span class="v">${freeze>0.9?'✓ ZENO':'evolving'}</span></span>`+
+`<span><span class="l">Meas rate =</span> <span class="v">${(1/measInt*spd).toFixed(3)}</span></span>`+
+`<span><span class="l">Decay suppr =</span> <span class="v">${noM>0?((1-pU)/(1-noM)).toFixed(2):'N/A'}</span></span>`
+}
+function anim(){upd();drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>Interval</label><input type="range" id="iS" min="5" max="200" step="1" value="${measInt}"><span class="val" id="iV">${measInt}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('iS').oninput=function(){measInt=+this.value;document.getElementById('iV').textContent=measInt}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){t=0;tSince=0;meas=0;cUp=1;cDown=0;survH=[];timeH=[];hx=[];hy=[]}
+}
+anim()
+</script></body></html>

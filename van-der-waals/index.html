@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Van der Waals Equation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; color: #111; font-family: 'Courier New', monospace; overflow: hidden; }
+  canvas { display: block; }
+  .title {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: .3;
+    pointer-events: none; white-space: nowrap;
+  }
+  .data {
+    position: absolute; right: 10px; top: 34px;
+    font-size: 9px; line-height: 1.6; text-align: right;
+    pointer-events: none; opacity: .75;
+  }
+  .ctrl {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,.92); padding: 5px 12px;
+    border: 1px solid #000; font-size: 9px; font-family: 'Courier New', monospace;
+  }
+  .ctrl button {
+    background: #fff; border: 1px solid #000; color: #000;
+    padding: 2px 8px; font: 8px 'Courier New'; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ctrl button:hover { background: #000; color: #fff; }
+  .ctrl label {
+    font-size: 7px; color: #666; text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ctrl input[type=range] { accent-color: #000; width: 50px; height: 14px; vertical-align: middle; }
+  .ctrl .v { min-width: 24px; display: inline-block; text-align: right; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="title">Van der Waals — (P + a/V²)(V − b) = RT</div>
+<div class="data" id="d"></div>
+<canvas id="c"></canvas>
+
+<div class="ctrl">
+  <button id="pb">PAUSE</button>
+  <button id="rb">RESET</button>
+  <label>T <input type="range" id="tS" min="200" max="500" step="2" value="400"><span class="v" id="tV">400</span></label>
+  <label>a <input type="range" id="aS" min=".1" max=".8" step=".01" value=".364"><span class="v" id="aV">0.364</span></label>
+  <label>b <input type="range" id="bS" min="2" max="6" step=".1" value="4.27"><span class="v" id="bV">4.27</span></label>
+  <label>Spd <input type="range" id="sS" min="1" max="15" value="3"><span class="v" id="sV">3</span></label>
+</div>
+
+<script>
+const c = document.getElementById('c');
+const cx = c.getContext('2d');
+let W, H;
+
+function resizeCanvas() {
+  W = c.width = window.innerWidth;
+  H = c.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let T = 400, R = 8.314, a = 0.364, b = 4.27e-5;
+let speed = 3, running = true, phase = 0;
+
+let Vc = 3 * b, Tc = 8 * a / (27 * R * b), Pc = a / (27 * b * b);
+const HIST_LEN = 150;
+let histP = [];
+
+function vdwPressure(V, temp) {
+  return R * temp / (V - b) - a / (V * V);
+}
+
+function draw() {
+  Vc = 3 * b; Tc = 8 * a / (27 * R * b); Pc = a / (27 * b * b);
+
+  cx.fillStyle = '#fff';
+  cx.fillRect(0, 0, W, H);
+
+  const gx = W * 0.08, gw = W * 0.55, gy = H * 0.10, gh = H * 0.60;
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(gx, gy, gw, gh);
+  cx.strokeStyle = 'rgba(0,0,0,0.15)'; cx.lineWidth = 0.5;
+  cx.beginPath(); cx.moveTo(gx, gy); cx.lineTo(gx, gy + gh); cx.stroke();
+  cx.beginPath(); cx.moveTo(gx, gy + gh); cx.lineTo(gx + gw, gy + gh); cx.stroke();
+
+  cx.fillStyle = '#999'; cx.font = '7px monospace'; cx.textAlign = 'center';
+  cx.fillText('V (L/mol)', gx + gw / 2, gy + gh + 14);
+  cx.save(); cx.translate(gx - 16, gy + gh / 2);
+  cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
+  cx.fillText('P (atm)', 0, 0); cx.restore();
+
+  const temps = [0.8, 0.9, 1.0, 1.1, 1.2];
+  for (let ti = 0; ti < temps.length; ti++) {
+    const tr = temps[ti], t = tr * Tc;
+    const selected = Math.abs(T - t) < 1;
+    cx.strokeStyle = selected ? '#111' : 'rgba(0,0,0,0.04)';
+    cx.lineWidth = selected ? 1.5 : 0.3;
+    cx.beginPath();
+    let first = true;
+    for (let x = 0; x <= gw; x++) {
+      const V = 0.5 * (Vc * 2) + (x / gw) * 8 * Vc;
+      const p = vdwPressure(V, t);
+      const px = gx + x, py = gy + gh - (p / 1e6 / 2) * (gh - 20);
+      if (p > 0 && py > gy && py < gy + gh) {
+        if (first) { cx.moveTo(px, py); first = false; } else cx.lineTo(px, py);
+      } else { first = true; }
+    }
+    cx.stroke();
+    if (selected) {
+      cx.fillStyle = '#999'; cx.font = '6px monospace'; cx.textAlign = 'right';
+      cx.fillText('T/Tc=' + tr.toFixed(1), gx + gw - 6, gy + 12 + ti * 14);
+    }
+  }
+
+  // Critical point marker
+  const cpX = gx + 0.5 * (Vc * 2) / (10 * Vc) * gw;
+  const cpY = gy + gh - (Pc / 1e6 / 2) * (gh - 20);
+  cx.strokeStyle = '#111'; cx.lineWidth = 0.5; cx.setLineDash([3, 3]);
+  cx.beginPath(); cx.moveTo(cpX, cpY); cx.lineTo(cpX, gy + gh); cx.stroke();
+  cx.beginPath(); cx.moveTo(gx, cpY); cx.lineTo(cpX, cpY); cx.stroke(); cx.setLineDash([]);
+  cx.fillStyle = '#111'; cx.beginPath(); cx.arc(cpX, cpY, 4, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#111'; cx.font = '7px monospace'; cx.textAlign = 'right';
+  cx.fillText('Critical', cpX - 6, cpY - 6);
+
+  const isLiquid = T < Tc;
+
+  // Mini graph
+  const mgx = gx + gw + 20, mgy = gy;
+  const mgw = Math.min(W - mgx - 20, 150), mgh = Math.min(H * 0.25, 100);
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.5;
+  cx.strokeRect(mgx, mgy, mgw, mgh);
+  cx.fillStyle = 'rgba(0,0,0,0.3)'; cx.font = '7px monospace';
+  cx.fillText('P history', mgx + 4, mgy + 10);
+  if (histP.length > 1) {
+    const pMin = Math.min(...histP), pMax = Math.max(...histP), pR = pMax - pMin || 1;
+    cx.strokeStyle = 'rgba(0,0,0,0.5)'; cx.lineWidth = 0.6; cx.beginPath();
+    for (let i = 0; i < histP.length; i++) {
+      const x = mgx + (i / (HIST_LEN - 1)) * mgw;
+      const y = mgy + mgh - (histP[i] - pMin) / pR * mgh;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  const pCur = vdwPressure(2 * Vc, T);
+  document.getElementById('d').innerHTML =
+    'T=' + T.toFixed(1) + ' K' +
+    '<br>T<sub>c</sub>=' + Tc.toFixed(1) +
+    '<br>P<sub>c</sub>=' + (Pc / 1e5).toFixed(2) + ' atm' +
+    '<br>V<sub>c</sub>=3b=' + (Vc * 1e3).toFixed(2) + ' L' +
+    '<br>T/T<sub>c</sub>=' + (T / Tc).toFixed(3) +
+    '<br>a=' + a.toFixed(3) + ' Pa\u00b7m\u2076' +
+    '<br>b=' + (b * 1e6).toFixed(2) + ' cm\u00B3' +
+    '<br>R=' + R.toFixed(2) +
+    '<br>Phase=' + (isLiquid ? 'Mixed' : 'Gas') +
+    '<br>P(2Vc)=' + (pCur / 1e5).toFixed(2) + ' atm' +
+    '<br>P<sub>red</sub>=' + (Pc > 0 ? (pCur / Pc).toFixed(3) : '0') +
+    '<br>T<sub>red</sub>=' + (T / (Tc || 1)).toFixed(3);
+}
+
+document.getElementById('pb').onclick = () => {
+  running = !running;
+  document.getElementById('pb').textContent = running ? 'PAUSE' : 'PLAY';
+};
+document.getElementById('rb').onclick = () => {
+  T = 400; a = 0.364; b = 4.27e-5; phase = 0; histP = [];
+  document.getElementById('tS').value = 400; document.getElementById('aS').value = 0.364; document.getElementById('bS').value = 4.27;
+  document.getElementById('tV').textContent = '400'; document.getElementById('aV').textContent = '0.364'; document.getElementById('bV').textContent = '4.27';
+};
+document.getElementById('tS').oninput = function () { T = parseFloat(this.value); document.getElementById('tV').textContent = T; };
+document.getElementById('aS').oninput = function () { a = parseFloat(this.value); document.getElementById('aV').textContent = a.toFixed(3); };
+document.getElementById('bS').oninput = function () { b = parseFloat(this.value) / 1e6; document.getElementById('bV').textContent = parseFloat(this.value).toFixed(2); };
+document.getElementById('sS').oninput = function () { speed = parseFloat(this.value); document.getElementById('sV').textContent = speed; };
+
+function loop() {
+  if (running) {
+    phase += 0.008 * speed / 3;
+    T = 300 + 150 * Math.sin(phase);
+    document.getElementById('tS').value = T;
+    document.getElementById('tV').textContent = T.toFixed(0);
+    histP.push(vdwPressure(2 * Vc, T));
+    if (histP.length > HIST_LEN) histP.shift();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resizeCanvas();
+loop();
+</script>
+</body>
+</html>

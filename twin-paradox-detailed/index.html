@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twin Paradox (Detailed)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:10px}
+h1{font-size:1.1em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+canvas{border:1px solid #000;display:block}
+#ctrl{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:11px}
+#ctrl button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:10px monospace;cursor:pointer;text-transform:uppercase}
+#ctrl button:hover{background:#000;color:#fff}
+#ctrl input[type=range]{accent-color:#000;width:100px;vertical-align:middle}
+#ctrl label{font-size:10px;color:#666;text-transform:uppercase}
+#data{font-size:10px;color:#555;margin-top:4px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Twin Paradox (Detailed)</h1>
+<canvas id="c" width="750" height="480"></canvas>
+<div id="ctrl"></div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),data=document.getElementById('data');
+const W=750,H=480;
+let paused=false, simTime=0, dt=0.02, speed=1;
+let twinA_Proper=0, twinB_Proper=0, twinB_Vel=0, twinB_X=0;
+let maxV=0.8, accelRate=0.006, coastDuration=400, turnDuration=60;
+let phase=0, phaseTimer=0, arrived=false, turned=false;
+// phases: 0=accel_out, 1=coast_out, 2=decel_out, 3=accel_in, 4=coast_in, 5=decel_in, 6=arrived
+let historyA=[], historyB=[], historyV=[], historyGamma=[], historyPhase=[];
+
+function resetSim(){
+  simTime=0;twinA_Proper=0;twinB_Proper=0;twinB_Vel=0;twinB_X=0;
+  phase=0;phaseTimer=0;arrived=false;turned=false;
+  historyA=[];historyB=[];historyV=[];historyGamma=[];historyPhase=[];
+}
+
+function update(){
+  if(paused)return;
+  const d=dt*speed;
+  simTime+=d;twinA_Proper+=d;
+  if(!arrived){
+    phaseTimer++;
+    if(phase===0){
+      twinB_Vel+=accelRate*speed;
+      if(twinB_Vel>=maxV){twinB_Vel=maxV;phase=1;phaseTimer=0}
+    }else if(phase===1){
+      if(phaseTimer>coastDuration/speed){phase=2;phaseTimer=0}
+    }else if(phase===2){
+      twinB_Vel-=accelRate*speed;
+      if(twinB_Vel<=0||twinB_X>260){twinB_Vel=0;phase=3;phaseTimer=0;turned=true}
+    }else if(phase===3){
+      twinB_Vel+=accelRate*speed;
+      if(twinB_Vel>=maxV){twinB_Vel=maxV;phase=4;phaseTimer=0}
+    }else if(phase===4){
+      if(phaseTimer>coastDuration/speed){phase=5;phaseTimer=0}
+    }else if(phase===5){
+      twinB_Vel-=accelRate*speed;
+      if(twinB_Vel<=0){twinB_Vel=0;twinB_X=0;arrived=true;phase=6;phaseTimer=0}
+    }
+    const gammaB=1/Math.sqrt(1-twinB_Vel*twinB_Vel);
+    twinB_X+=twinB_Vel*d*15;
+    twinB_Proper+=d/gammaB;
+    if(twinB_X>280&&!turned)twinB_Vel-=accelRate*speed*2;
+    historyA.push({t:simTime,val:twinA_Proper});historyB.push({t:simTime,val:twinB_Proper});
+    historyV.push({t:simTime,val:twinB_Vel});historyGamma.push({t:simTime,val:gammaB});
+    historyPhase.push({t:simTime,val:phase});
+    if(historyA.length>1000){historyA.shift();historyB.shift();historyV.shift();historyGamma.shift();historyPhase.shift()}
+  }
+}
+
+const phaseNames=['Accel Out','Coast Out','Decel Out','Accel In','Coast In','Decel In','Arrived'];
+const phaseColors=['#000','#333','#555','#666','#777','#888','#999'];
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const gammaB=twinB_Vel>0?1/Math.sqrt(1-twinB_Vel*twinB_Vel):1;
+
+  // trajectory visualization
+  const trackY=50;
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(40,trackY,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('A',40,trackY+3);
+  ctx.strokeStyle='#ddd';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(40,trackY-15);ctx.lineTo(340,trackY-15);ctx.stroke();
+
+  const bx=40+twinB_X;
+  ctx.fillStyle='#666';ctx.beginPath();ctx.arc(bx,trackY,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('B',bx,trackY+3);
+  if(arrived){ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('(Home!)',50,trackY-20)}
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText(`Phase: ${phaseNames[phase]} (t=${phaseTimer})`,400,trackY-20);
+  ctx.fillText(`β = ${twinB_Vel.toFixed(3)}  γ = ${gammaB.toFixed(3)}`,400,trackY);
+  ctx.fillText(`x = ${twinB_X.toFixed(0)}  τ_A = ${twinA_Proper.toFixed(2)}  τ_B = ${twinB_Proper.toFixed(2)}`,400,trackY+20);
+
+  // main proper time graph
+  const gx=30,gy=100,gw=W-60,gh=120;
+  ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('Proper Time τ (coordinate time vs proper time)',gx+5,gy+12);
+  if(historyA.length>3){
+    const maxT=Math.max(twinA_Proper,twinB_Proper,0.1);
+    ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();
+    for(let i=0;i<historyA.length;i++){
+      const px=gx+(historyA[i].t/(historyA[historyA.length-1].t||1))*gw;
+      const py=gy+gh-(historyA[i].val/maxT)*gh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+    ctx.strokeStyle='#666';ctx.lineWidth=2;ctx.beginPath();
+    for(let i=0;i<historyB.length;i++){
+      const px=gx+(historyB[i].t/(historyB[historyB.length-1].t||1))*gw;
+      const py=gy+gh-(historyB[i].val/maxT)*gh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('— Twin A (Earth)',gx+10,gy+gh-6);
+  ctx.fillStyle='#666';ctx.fillText('— Twin B (Traveler)',gx+140,gy+gh-6);
+
+  // velocity graph
+  const gx2=30,gy2=250,gw2=W-60,gh2=60;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('β(t) velocity profile',gx2+5,gy2+12);
+  if(historyV.length>3){
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=.8;ctx.beginPath();
+    for(let i=0;i<historyV.length;i++){
+      const px=gx2+i/historyV.length*gw2,py=gy2+gh2-(historyV[i].val/maxV)*gh2;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  // gamma history
+  const gx3=30,gy3=330,gw3=W-60,gh3=50;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gx3,gy3,gw3,gh3);
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('γ(t)',gx3+5,gy3+12);
+  if(historyGamma.length>3){
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=.6;ctx.beginPath();
+    const maxG=Math.max(...historyGamma.map(d=>d.val),1);
+    for(let i=0;i<historyGamma.length;i++){
+      const px=gx3+i/historyGamma.length*gw3,py=gy3+gh3-(historyGamma[i].val/maxG)*gh3;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+
+  // summary
+  ctx.fillStyle='#000';ctx.font='12px monospace';ctx.textAlign='center';
+  ctx.fillText(`Twin A (Earth): τ = ${twinA_Proper.toFixed(2)} years`,375,410);
+  ctx.fillStyle='#666';
+  ctx.fillText(`Twin B (Traveler): τ = ${twinB_Proper.toFixed(2)} years`,375,430);
+  ctx.fillStyle='#000';ctx.font='13px monospace';
+  ctx.fillText(`Δτ = ${(twinA_Proper-twinB_Proper).toFixed(3)} years`,375,455);
+  if(arrived){
+    ctx.fillStyle='#000';ctx.font='10px monospace';
+    ctx.fillText('Travel complete — traveling twin is younger!',375,475);
+  }
+
+  data.innerHTML=
+    `τ_A = ${twinA_Proper.toFixed(3)} | τ_B = ${twinB_Proper.toFixed(3)} | Δτ = ${(twinA_Proper-twinB_Proper).toFixed(3)}`+
+    ` | β_max = ${maxV.toFixed(2)} | γ_max = ${(1/Math.sqrt(1-maxV*maxV)).toFixed(2)}`+
+    ` | Phase: ${phaseNames[phase]} | t = ${simTime.toFixed(1)}`+
+    ` | x_B = ${twinB_X.toFixed(0)} | ${arrived?'ARRIVED':'TRAVELING'}`;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+loop();
+
+const ctrl=document.getElementById('ctrl');
+ctrl.innerHTML=`
+<label>β_max <input type="range" id="maxVS" min="0.3" max="0.95" value="${maxV*100}" step="1"><span id="maxVD">${maxV.toFixed(2)}</span></label>
+<label>Speed <input type="range" id="spdS" min="0" max="3" value="1" step="0.1"></label>
+<button id="playBtn">Pause</button>
+<button id="resetBtn">Reset</button>`;
+
+document.getElementById('maxVS').oninput=function(){maxV=parseInt(this.value)/100;document.getElementById('maxVD').textContent=maxV.toFixed(2);resetSim()};
+document.getElementById('spdS').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('playBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause'};
+document.getElementById('resetBtn').onclick=resetSim;
+</script>
+</body>
+</html>

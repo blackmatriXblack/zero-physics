@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thin Lens · 1/f = 1/s + 1/s'</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:ew-resize}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Thin Lens Equation</h1>
+<p>1/f = 1/s + 1/s' — Magnification M = −s'/s</p>
+<canvas id="c" width="920" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),C=c.getContext('2d'),W=c.width,H=c.height;
+let f=120,s=300,objH=80,speed=1,time=0;
+const lensX=480,lensY=280;
+let dragging=false;
+
+c.onmousedown=()=>{dragging=true;c.style.cursor='ew-resize';};
+c.onmouseup=()=>{dragging=false;c.style.cursor='ew-resize';};
+c.onmousemove=e=>{if(!dragging)return;const r=c.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*W/r.width;
+  s=Math.max(20,Math.min(700,lensX-mx));};
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  // Optical axis
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.5;C.setLineDash([4,4]);
+  C.beginPath();C.moveTo(0,lensY);C.lineTo(W,lensY);C.stroke();C.setLineDash([]);
+
+  // Lens (biconvex)
+  const lH=220,lW=f/8+8;
+  C.strokeStyle='#111';C.lineWidth=2.5;
+  C.beginPath();C.moveTo(lensX,lensY-lH/2);
+  C.quadraticCurveTo(lensX+lW,lensY-lH/2-8,lensX,lensY-lH/2);
+  C.stroke();
+  C.beginPath();C.moveTo(lensX,lensY+lH/2);
+  C.quadraticCurveTo(lensX+lW,lensY+lH/2+8,lensX,lensY+lH/2);
+  C.stroke();
+  C.beginPath();C.moveTo(lensX,lensY-lH/2);
+  C.quadraticCurveTo(lensX-lW,lensY-lH/2-8,lensX,lensY-lH/2);
+  C.stroke();
+  C.beginPath();C.moveTo(lensX,lensY+lH/2);
+  C.quadraticCurveTo(lensX-lW,lensY+lH/2+8,lensX,lensY+lH/2);
+  C.stroke();
+  C.fillStyle='#666';C.font='7px monospace';C.textAlign='center';C.fillText(`f=${f}`,lensX,lensY-lH/2-10);
+  C.fillStyle='rgba(0,0,0,0.15)';C.font='6px monospace';C.fillText('LENS',lensX,lensY+4);
+
+  // Focal points
+  C.fillStyle='rgba(0,0,0,0.12)';C.font='6px monospace';
+  C.fillText('F',lensX-f,lensY+16);C.fillText("F'",lensX+f,lensY+16);
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(lensX-f,lensY-6);C.lineTo(lensX-f,lensY+6);C.stroke();
+  C.beginPath();C.moveTo(lensX+f,lensY-6);C.lineTo(lensX+f,lensY+6);C.stroke();
+  // 2F points
+  C.strokeStyle='rgba(0,0,0,0.04)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(lensX-2*f,lensY-3);C.lineTo(lensX-2*f,lensY+3);C.stroke();
+  C.beginPath();C.moveTo(lensX+2*f,lensY-3);C.lineTo(lensX+2*f,lensY+3);C.stroke();
+  C.fillStyle='rgba(0,0,0,0.08)';C.font='5px monospace';C.fillText('2F',lensX-2*f,lensY+14);
+  C.fillText("2F'",lensX+2*f,lensY+14);
+
+  // Object
+  const objX=lensX-s;
+  C.strokeStyle='#111';C.lineWidth=2.5;
+  C.beginPath();C.moveTo(objX,lensY);C.lineTo(objX,lensY-objH);C.stroke();
+  C.beginPath();C.moveTo(objX-9,lensY-objH+14);C.lineTo(objX,lensY-objH);C.lineTo(objX+9,lensY-objH+14);C.stroke();
+  C.fillStyle='#111';C.font='7px monospace';C.textAlign='center';C.fillText('Object',objX,lensY-objH-12);
+  C.fillStyle='#999';C.font='6px monospace';C.fillText(`s = ${s}`,objX,lensY+16);
+
+  // Image calculation
+  const sP=f*s/(s-f);
+  const imgX=lensX+sP;
+  const M=-sP/s;
+  const imgH=objH*Math.abs(M);
+  const valid=sP>0&&isFinite(imgX)&&imgH<500;
+  const virtual=!valid&&s<f;
+
+  if(s>f&&valid){
+    C.strokeStyle='rgba(0,0,0,0.35)';C.lineWidth=1.5;
+    C.beginPath();C.moveTo(imgX,lensY);C.lineTo(imgX,lensY-imgH);C.stroke();
+    C.beginPath();C.moveTo(imgX-7,lensY-imgH-10);C.lineTo(imgX,lensY-imgH);C.lineTo(imgX+7,lensY-imgH-10);C.stroke();
+    C.fillStyle='rgba(0,0,0,0.35)';C.font='7px monospace';C.textAlign='center';C.fillText(`Image (real)`,imgX,lensY-imgH-12);
+    C.fillStyle='#999';C.font='6px monospace';C.fillText(`s' = ${sP.toFixed(0)}`,imgX,lensY+16);
+  }else if(virtual){
+    const sPv=f*s/(s-f);
+    if(sPv<0){const imgXv=lensX+sPv,imgHv=objH*Math.abs(sPv/s);
+      C.strokeStyle='rgba(0,0,0,0.2)';C.lineWidth=1;C.setLineDash([4,3]);
+      C.beginPath();C.moveTo(imgXv,lensY);C.lineTo(imgXv,lensY+imgHv);C.stroke();C.setLineDash([]);
+      C.beginPath();C.moveTo(imgXv-6,lensY+imgHv+10);C.lineTo(imgXv,lensY+imgHv);C.lineTo(imgXv+6,lensY+imgHv+10);C.stroke();
+      C.fillStyle='rgba(0,0,0,0.25)';C.font='7px monospace';C.textAlign='center';C.fillText(`Image (virtual)`,imgXv,lensY+imgHv+16);}
+  }else if(Math.abs(s-f)<5){C.fillStyle='#111';C.font='8px monospace';C.textAlign='center';C.fillText('Image at ∞',lensX+100,lensY-30);}
+
+  // Ray tracing
+  if(s>f&&valid&&imgH<500){
+    C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.5;
+    // Ray 1: parallel to axis
+    C.beginPath();C.moveTo(objX,lensY-objH);C.lineTo(lensX,lensY-objH);C.lineTo(imgX,lensY-imgH);C.stroke();
+    // Ray 2: through center
+    C.beginPath();C.moveTo(objX,lensY-objH);C.lineTo(lensX,lensY);C.lineTo(imgX,lensY-imgH);C.stroke();
+    // Ray 3: through F
+    C.beginPath();C.moveTo(objX,lensY-objH);C.lineTo(lensX+f,lensY-objH);C.lineTo(lensX,lensY);C.lineTo(imgX,lensY-imgH);C.stroke();
+  }else if(s<f){
+    C.strokeStyle='rgba(0,0,0,0.04)';C.lineWidth=0.4;
+    C.beginPath();C.moveTo(objX,lensY-objH);C.lineTo(lensX,lensY-objH);C.stroke();
+    C.beginPath();C.moveTo(objX,lensY-objH);C.lineTo(lensX,lensY);C.stroke();
+  }
+
+  // Magnification vs s graph
+  const gX=lensX+120,gY=30,gW=W-(lensX+140),gH=130;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(gX,gY,gW,gH);
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='left';C.fillText('|M| vs s',gX+3,gY+10);
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(gX,gY+gH/2);C.lineTo(gX+gW,gY+gH/2);C.stroke();
+  C.strokeStyle='#111';C.lineWidth=0.6;C.beginPath();
+  let first=true;
+  for(let ss=20;ss<=700;ss+=2){const sp=f*ss/(ss-f),mm=Math.abs(-sp/ss);
+    if(isFinite(mm)&&mm<5){const x=gX+(ss/700)*gW,y=gY+gH/2-mm*(gH/5);
+      first?C.moveTo(x,y):C.lineTo(x,y);first=false;}}C.stroke();
+  // Current s marker
+  const mkX=gX+(s/700)*gW;
+  C.strokeStyle='rgba(0,0,0,0.2)';C.lineWidth=0.5;
+  C.beginPath();C.moveTo(mkX,gY);C.lineTo(mkX,gY+gH);C.stroke();
+
+  // Lens power gauge
+  const pX=gX,pY=gY+gH+10,pW=gW,pH=25;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(pX,pY,pW,pH);
+  C.fillStyle='#999';C.font='5px monospace';C.textAlign='left';C.fillText(`P = 1/f = ${(1/f*1000).toFixed(2)} D`,pX+3,pY+16);
+
+  // Animation time marker
+  C.fillStyle='rgba(0,0,0,0.05)';C.font='6px monospace';C.textAlign='right';
+  C.fillText(`t = ${time.toFixed(2)}s`,W-10,lensY+40);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>f</label><input type="range" id="fS" min="30" max="280" step="5" value="${f}"><span class="val" id="fV">${f}</span></div>`+
+    `<div class="ctrl-group"><label>s</label><input type="range" id="sS" min="20" max="700" step="5" value="${s}"><span class="val" id="sV">${s}</span></div>`+
+    `<div class="ctrl-group"><label>h</label><input type="range" id="hS" min="20" max="150" step="5" value="${objH}"><span class="val" id="hV">${objH}</span></div>`+
+    `<div class="ctrl-group"><label>spd</label><input type="range" id="spdS" min="0" max="300" step="10" value="${speed*100}"><span class="val" id="spdV">${speed.toFixed(1)}</span></div>`+
+    `<button id="resetBtn">Reset</button>`;
+  document.getElementById('fS').oninput=function(){f=+this.value;document.getElementById('fV').textContent=f;};
+  document.getElementById('sS').oninput=function(){s=+this.value;document.getElementById('sV').textContent=s;};
+  document.getElementById('hS').oninput=function(){objH=+this.value;document.getElementById('hV').textContent=objH;};
+  document.getElementById('spdS').oninput=function(){speed=this.value/100;document.getElementById('spdV').textContent=speed.toFixed(1);};
+  document.getElementById('resetBtn').onclick=function(){time=0;};
+}
+
+  time+=0.02*speed;
+  const invS=1/s,invSP=sP>0?1/sP:0,invF=1/f;
+  const sumInv=invS+invSP;
+  const imgType=s>f?`Real (inverted)`:s<f?`Virtual (upright)`:`At infinity`;
+  const power=1/f*1000;
+  const lateralM=sP>0?Math.abs(sP/s):0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">f =</span> <span class="val">${f}</span> px</span>`+
+    `<span><span class="label">s =</span> <span class="val">${s}</span> px</span>`+
+    `<span><span class="label">s' = fs/(s−f) =</span> <span class="val">${valid?sP.toFixed(1):s<f?sP.toFixed(1)+' (virtual)':'∞'}</span></span>`+
+    `<span><span class="label">M = −s'/s =</span> <span class="val">${valid?M.toFixed(3):s<f?(-sP/s).toFixed(3):'∞'}</span></span>`+
+    `<span><span class="label">|M| =</span> <span class="val">${valid?lateralM.toFixed(3):s<f?lateralM.toFixed(3):'∞'}</span></span>`+
+    `<span><span class="label">1/s + 1/s' =</span> <span class="val">${valid?sumInv.toFixed(5):'N/A'}</span></span>`+
+    `<span><span class="label">1/f =</span> <span class="val">${invF.toFixed(5)}</span></span>`+
+    `<span><span class="label">Power P = 1000/f</span> <span class="val">${power.toFixed(2)}</span> D</span>`+
+    `<span><span class="label">Image type</span> <span class="val">${imgType}</span></span>`+
+    `<span><span class="label">Object height</span> <span class="val">${objH}</span> px</span>`+
+    `<span><span class="label">Image height</span> <span class="val">${valid?imgH.toFixed(1):s<f?(objH*Math.abs(sP/s)).toFixed(1):'∞'}</span> px</span>`+
+    `<span><span class="label">s/f ratio</span> <span class="val">${(s/f).toFixed(2)}</span></span>`+
+    `<span><span class="label">Lens eqn</span> <span class="val">1/${f} = 1/${s} + 1/${sP.toFixed(1)||'∞'}</span></span>`;
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

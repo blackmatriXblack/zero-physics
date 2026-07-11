@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Equation 2D · ∂²u/∂t² = c²∇²u</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:4px 0;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:2px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.ctrl-group label{font-size:0.55em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;accent-color:#000;height:10px}
+.ctrl-group .val{font-size:0.6em;color:#000;min-width:20px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>2D Wave Equation</h1>
+<p>∂²u/∂t² = c²∇²u — Finite difference simulation on 100×52 grid. Click/drag to add oscillating source.</p>
+<canvas id="c" width="900" height="460"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const cv=document.getElementById('c'),cx=cv.getContext('2d'),W=900,H=460;
+const cols=100,rows=52,cw=W/cols,ch=H/rows;
+let u=[],v=[],c1=0.5,damp=0.997,srcA=0.6,srcF=0.03,time=0,paused=false,speed=1;
+let md=false,mx=0,my=0,fps=0,fc=0,ft=0;
+const eH=[],kH=[],pH=[],tH=[],xH=[],yH=[];
+function init(){u=Array(cols).fill().map(()=>Float64Array(rows));v=Array(cols).fill().map(()=>Float64Array(rows));}
+init();
+function step(){
+ if(paused)return;
+ for(let s=0;s<speed;s++){
+  time+=0.016;
+  for(let i=1;i<cols-1;i++)for(let j=1;j<rows-1;j++){
+   const lap=u[i-1][j]+u[i+1][j]+u[i][j-1]+u[i][j+1]-4*u[i][j];
+   v[i][j]+=c1*lap;v[i][j]*=damp;
+  }
+  for(let i=1;i<cols-1;i++)for(let j=1;j<rows-1;j++)u[i][j]+=v[i][j];
+  if(md&&time%0.2<0.016*speed){
+   const ci=mx/cw|0,cj=my/ch|0;
+   if(ci>1&&ci<cols-2&&cj>1&&cj<rows-2)u[ci][cj]=-srcA*Math.sin(time*srcF*6.2832);
+  }
+ }
+ let ke=0,pe=0;
+ for(let i=1;i<cols-1;i++)for(let j=1;j<rows-1;j++){ke+=v[i][j]*v[i][j];pe+=u[i][j]*u[i][j];}
+ if(eH.length>300){eH.shift();kH.shift();pH.shift();tH.shift();}
+ eH.push(ke+pe);kH.push(ke);pH.push(pe);tH.push(time);
+ xH.push(u[cols/2|0][rows/2|0]||0);if(xH.length>300)xH.shift();
+ yH.push(u[cols/4|0][rows/4|0]||0);if(yH.length>300)yH.shift();
+ fc++;if(fc%10===0){fps=Math.round(10/((performance.now()-ft)/1000)||0);ft=performance.now();fc=0;}
+}
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const img=cx.createImageData(W,H);
+ for(let i=0;i<cols;i++)for(let j=0;j<rows;j++){
+  const val=Math.max(-1,Math.min(1,u[i][j]||0));
+  const idx=(j*ch|0)*W*4+(i*cw|0)*4,b=128+val*120;
+  for(let dy=0;dy<ch;dy++)for(let dx=0;dx<cw;dx++){
+   const p=idx+dy*W*4+dx*4;
+   img.data[p]=Math.max(0,Math.min(255,b));
+   img.data[p+1]=Math.max(0,Math.min(255,128+val*60));
+   img.data[p+2]=Math.max(0,Math.min(255,128-val*30));
+   img.data[p+3]=255;
+  }
+ }
+ cx.putImageData(img,0,0);
+ if(md){cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.5;cx.beginPath();cx.arc(mx,my,5,0,7);cx.stroke();}
+ // Color legend
+ cx.fillStyle='rgba(0,0,0,0.5)';cx.font='5px monospace';cx.textAlign='left';
+ cx.fillText('u: -1 (blue) → 0 (gray) → +1 (red)',10,H-6);
+ // Mini graph row
+ const gw=148,gh=46,gap=2,gx=W-gw-2;
+ const mgY=[2,2+gh+gap,2+2*(gh+gap),2+3*(gh+gap)];
+ // 1: Energy
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gx,mgY[0],gw,gh);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('E_total = KE + PE',gx+2,mgY[0]+8);
+ if(eH.length>2){const me=Math.max(...eH)||1;cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<eH.length;i++){const x=gx+(i/eH.length)*gw,y=mgY[0]+gh-4-(eH[i]/me)*(gh-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();
+ // KE and PE overlaid
+ cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.3;cx.beginPath();for(let i=0;i<kH.length;i++){const x=gx+(i/kH.length)*gw,y=mgY[0]+gh-4-(kH[i]/me)*(gh-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();
+ cx.strokeStyle='rgba(0,0,0,0.3)';cx.lineWidth=0.3;cx.beginPath();for(let i=0;i<pH.length;i++){const x=gx+(i/pH.length)*gw,y=mgY[0]+gh-4-(pH[i]/me)*(gh-10);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ // 2: Profile mid-row
+ cx.strokeStyle='#ddd';cx.strokeRect(gx,mgY[1],gw,gh);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Profile u(x, mid-row)',gx+2,mgY[1]+8);
+ const mr=rows/2|0;cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<cols;i++){const x=gx+(i/cols)*gw,y=mgY[1]+gh/2-(u[i][mr]||0)*(gh/2-6);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();
+ cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.beginPath();cx.moveTo(gx,mgY[1]+gh/2);cx.lineTo(gx+gw,mgY[1]+gh/2);cx.stroke();
+ // 3: Profile mid-col
+ cx.strokeStyle='#ddd';cx.strokeRect(gx,mgY[2],gw,gh);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('Profile u(mid-col, y)',gx+2,mgY[2]+8);
+ const mc=cols/2|0;cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let j=0;j<rows;j++){const x=gx+(j/rows)*gw,y=mgY[2]+gh/2-(u[mc][j]||0)*(gh/2-6);j===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();
+ cx.strokeStyle='rgba(0,0,0,0.06)';cx.lineWidth=0.3;cx.beginPath();cx.moveTo(gx,mgY[2]+gh/2);cx.lineTo(gx+gw,mgY[2]+gh/2);cx.stroke();
+ // 4: Two-point displacement
+ cx.strokeStyle='#ddd';cx.strokeRect(gx,mgY[3],gw,gh);
+ cx.fillStyle='#999';cx.font='5px monospace';cx.fillText('u(center) & u(1/4)',gx+2,mgY[3]+8);
+ if(xH.length>2){const mxv=Math.max(...xH.map(Math.abs))||1;cx.strokeStyle='#111';cx.lineWidth=0.5;cx.beginPath();for(let i=0;i<xH.length;i++){const x=gx+(i/xH.length)*gw,y=mgY[3]+gh/2-(xH[i]/mxv)*(gh/2-6);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();
+ cx.strokeStyle='rgba(0,0,0,0.25)';cx.lineWidth=0.3;cx.beginPath();for(let i=0;i<yH.length;i++){const x=gx+(i/yH.length)*gw,y=mgY[3]+gh/2-(yH[i]/mxv)*(gh/2-6);i===0?cx.moveTo(x,y):cx.lineTo(x,y);}cx.stroke();}
+ // Compute stats
+ let maxA=0,meanA=0,cnt=0;for(let i=1;i<cols-1;i++)for(let j=1;j<rows-1;j++){const a=Math.abs(u[i][j]);maxA=Math.max(maxA,a);meanA+=a;cnt++;}meanA/=cnt||1;
+ const ce=kH[kH.length-1]||0,cp=pH[pH.length-1]||0,ct=ce+cp;
+ const wv=u[cols/2|0][rows/2|0]||0,grd=cols*rows;
+ const lapMax=0; // placeholder
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+  `<div class="ctrl-group"><label>c</label><input type="range" id="cS" min="0.05" max="1.5" step="0.05" value="${c1}"><span class="val" id="cV">${c1.toFixed(2)}</span></div>`+
+  `<div class="ctrl-group"><label>Damp</label><input type="range" id="dS" min="0.95" max="1" step="0.002" value="${damp}"><span class="val" id="dV">${damp.toFixed(3)}</span></div>`+
+  `<div class="ctrl-group"><label>Src A</label><input type="range" id="aS" min="0.05" max="1" step="0.05" value="${srcA}"><span class="val" id="aV">${srcA.toFixed(2)}</span></div>`+
+  `<div class="ctrl-group"><label>Src f</label><input type="range" id="fS" min="0.002" max="0.12" step="0.002" value="${srcF}"><span class="val" id="fV">${srcF.toFixed(3)}</span></div>`+
+  `<div class="ctrl-group"><label>Speed×</label><input type="range" id="spS" min="1" max="8" step="1" value="${speed}"><span class="val" id="spV">${speed}</span></div>`+
+  `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`;
+ document.getElementById('cS').oninput=function(){c1=+this.value;document.getElementById('cV').textContent=c1.toFixed(2);};
+ document.getElementById('dS').oninput=function(){damp=+this.value;document.getElementById('dV').textContent=damp.toFixed(3);};
+ document.getElementById('aS').oninput=function(){srcA=+this.value;document.getElementById('aV').textContent=srcA.toFixed(2);};
+ document.getElementById('fS').oninput=function(){srcF=+this.value;document.getElementById('fV').textContent=srcF.toFixed(3);};
+ document.getElementById('spS').oninput=function(){speed=+this.value;document.getElementById('spV').textContent=speed;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){init();eH.length=0;kH.length=0;pH.length=0;tH.length=0;xH.length=0;yH.length=0;time=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+ cv.onmousedown=function(e){const r=cv.getBoundingClientRect();mx=e.clientX-r.left;my=e.clientY-r.top;md=true;};
+ cv.onmousemove=function(e){if(!md)return;const r=cv.getBoundingClientRect();mx=e.clientX-r.left;my=e.clientY-r.top;};
+ cv.onmouseup=function(){md=false;};cv.onmouseleave=function(){md=false;};
+}
+ document.getElementById('stats').innerHTML=
+  `<span><span class="label">E</span><span class="val">${ct.toFixed(4)}</span></span>`+
+  `<span><span class="label">KE</span><span class="val">${ce.toFixed(4)}</span></span>`+
+  `<span><span class="label">PE</span><span class="val">${cp.toFixed(4)}</span></span>`+
+  `<span><span class="label">E_ratio</span><span class="val">${ct>0?(ce/ct).toFixed(3):'—'}</span></span>`+
+  `<span><span class="label">Max|u|</span><span class="val">${maxA.toFixed(4)}</span></span>`+
+  `<span><span class="label">⟨|u|⟩</span><span class="val">${meanA.toFixed(4)}</span></span>`+
+  `<span><span class="label">u(c)</span><span class="val">${wv.toFixed(4)}</span></span>`+
+  `<span><span class="label">c</span><span class="val">${c1.toFixed(2)}</span></span>`+
+  `<span><span class="label">damp</span><span class="val">${damp.toFixed(4)}</span></span>`+
+  `<span><span class="label">Src A</span><span class="val">${srcA.toFixed(2)}</span></span>`+
+  `<span><span class="label">Src f</span><span class="val">${srcF.toFixed(3)}Hz</span></span>`+
+  `<span><span class="label">t</span><span class="val">${time.toFixed(2)}s</span></span>`+
+  `<span><span class="label">FPS</span><span class="val">${fps}</span></span>`+
+  `<span><span class="label">Grid</span><span class="val">${cols}×${rows}</span></span>`+
+  `<span><span class="label">Points</span><span class="val">${grd}</span></span>`+
+  `<span><span class="label">Hist</span><span class="val">${eH.length}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

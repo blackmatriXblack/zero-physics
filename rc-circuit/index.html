@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RC Circuit · V̇ = (V₀−V)/τ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>RC Circuit</h1>
+<p>dV/dt = (V₀−V)/τ — Charging & discharging dynamics</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+let R=10e3, C=10e-6, V0=5;
+let V=0, time=0;
+let charging=false;
+let paused=false, speed=1;
+const history={t:[],v:[],i:[]};
+const maxT=0.02;
+const dt=0.00005;
+
+function tau(){return R*C;}
+const analytical=(t,ch)=>ch?V0*(1-Math.exp(-t/tau())):V0*Math.exp(-t/tau());
+const current=(t,ch)=>ch?(V0/R)*Math.exp(-t/tau()):-(V0/R)*Math.exp(-t/tau());
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed*10;s++){
+    if(charging){
+      V+=(V0-V)/tau()*dt;
+    }else{
+      V-=V/tau()*dt;
+    }
+    time+=dt;
+    history.t.push(time);history.v.push(V);history.i.push(charging?(V0-V)/R:-V/R);
+    if(history.t.length>2000){history.t.shift();history.v.shift();history.i.shift();}
+    if(time>maxT){
+      if(charging){V=V0;charging=false;document.getElementById('modeBtn').textContent='CHARGE';}
+      else{V=0;charging=true;document.getElementById('modeBtn').textContent='DISCHARGE';}
+      time=0;history.t.length=0;history.v.length=0;history.i.length=0;
+    }
+  }
+}
+
+function resetSim(){
+  V=0;time=0;charging=false;
+  history.t.length=0;history.v.length=0;history.i.length=0;
+  paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+  document.getElementById('modeBtn').textContent='CHARGE';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Circuit schematic (left)
+  const bx=30, by=250;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.fillStyle='#111';
+
+  // Battery
+  ctx.beginPath();ctx.moveTo(bx,by-50);ctx.lineTo(bx,by+50);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bx-12,by-18);ctx.lineTo(bx+12,by-18);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bx-12,by+18);ctx.lineTo(bx+12,by+18);ctx.stroke();
+  ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText(V0+'V',bx,by-62);
+
+  // Wire to R
+  ctx.beginPath();ctx.moveTo(bx+12,by);ctx.lineTo(130,by);ctx.stroke();
+
+  // Resistor (zigzag)
+  const rz=8;
+  ctx.beginPath();ctx.moveTo(130,by);
+  for(let i=0;i<6;i++){
+    const xx=130+i*9;
+    ctx.lineTo(xx+2,by-rz);ctx.lineTo(xx+7,by+rz);
+  }
+  ctx.lineTo(195,by);ctx.stroke();
+  ctx.fillText('R='+(R/1e3).toFixed(0)+'kΩ',162,by-22);
+
+  // Wire to C
+  ctx.beginPath();ctx.moveTo(195,by);ctx.lineTo(230,by);ctx.stroke();
+
+  // Capacitor
+  ctx.beginPath();ctx.moveTo(230,by-25);ctx.lineTo(230,by+25);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(240,by-25);ctx.lineTo(240,by+25);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(240,by);ctx.lineTo(280,by);ctx.stroke();
+  ctx.fillText('C='+(C*1e6).toFixed(0)+'μF',260,by-22);
+
+  // Wire back
+  ctx.beginPath();ctx.moveTo(280,by);ctx.lineTo(280,360);ctx.lineTo(bx,360);ctx.lineTo(bx,by+50);ctx.stroke();
+
+  // Voltage labels
+  ctx.font='8px monospace';ctx.textAlign='left';ctx.fillStyle='#666';
+  ctx.fillText('Vc = '+V.toFixed(3)+' V',bx+5,by+75);
+  ctx.fillText('τ = '+(tau()*1000).toFixed(2)+' ms',bx+5,by+90);
+  ctx.fillText('t = '+(time*1000).toFixed(2)+' ms',bx+5,by+105);
+  const I=charging?(V0-V)/R:-V/R;
+  ctx.fillText('I = '+(I*1000).toFixed(3)+' mA',bx+5,by+120);
+
+  // Voltage graph
+  const gx=340, gy=40, gW=530, gH=180;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gx,gy,gW,gH);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('V(t)',gx+5,gy+12);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('Voltage',gx+gW-50,gy+12);
+
+  // Axes
+  ctx.strokeStyle='#111';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(gx,gy+gH);ctx.lineTo(gx+gW,gy+gH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(gx,gy+gH);ctx.stroke();
+
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText(V0.toFixed(1)+'V',gx-22,gy+8);
+  ctx.fillText('0',gx-10,gy+gH+10);
+  ctx.fillText('t',gx+gW-6,gy+gH+12);
+
+  // Data
+  if(history.v.length>1){
+    // Analytical curve overlay
+    ctx.beginPath();
+    for(let i=0;i<history.t.length;i++){
+      const gx_=gx+(history.t[i]/maxT)*gW;
+      const gy_=gy+gH-(history.v[i]/V0)*gH;
+      i===0?ctx.moveTo(gx_,gy_):ctx.lineTo(gx_,gy_);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=1.8;ctx.stroke();
+
+    // Theoretical
+    ctx.beginPath();
+    for(let i=0;i<history.t.length;i++){
+      const gx_=gx+(history.t[i]/maxT)*gW;
+      const vTh=analytical(history.t[i],charging);
+      const gy_=gy+gH-(vTh/V0)*gH;
+      i===0?ctx.moveTo(gx_,gy_):ctx.lineTo(gx_,gy_);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
+
+    // Markers at τ, 2τ, 3τ
+    for(let n=1;n<=5;n++){
+      const tx=n*tau();
+      if(tx<maxT){
+        const gx_=gx+(tx/maxT)*gW;
+        ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.3;ctx.setLineDash([1,3]);
+        ctx.beginPath();ctx.moveTo(gx_,gy);ctx.lineTo(gx_,gy+gH);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='6px monospace';ctx.textAlign='center';
+        ctx.fillText(n+'τ',gx_,gy+gH+10);
+      }
+    }
+  }
+
+  // Current graph
+  const ix=340, iy=240, iW=530, iH=90;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,iW,iH);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('I(t)',ix+5,iy+12);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('Current',ix+iW-50,iy+12);
+
+  ctx.strokeStyle='#111';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(ix,iy+iH);ctx.lineTo(ix+iW,iy+iH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ix,iy);ctx.lineTo(ix,iy+iH);ctx.stroke();
+
+  if(history.i.length>1){
+    const iMax=Math.max(...history.i.map(Math.abs))*1.1||0.001;
+    ctx.beginPath();
+    for(let i=0;i<history.i.length;i++){
+      const gx_=ix+(history.t[i]/maxT)*iW;
+      const gy_=iy+iH/2-(history.i[i]/iMax)*(iH/2-5);
+      i===0?ctx.moveTo(gx_,gy_):ctx.lineTo(gx_,gy_);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='6px monospace';
+    ctx.fillText((iMax*1000).toFixed(1)+'mA',ix+iW-40,iy+10);
+    ctx.fillText(-(iMax*1000).toFixed(1)+'mA',ix+iW-40,iy+iH-3);
+  }
+
+  // Bode plot approximation (magnitude)
+  const bx_=340, by_=360, bW=530, bH=120;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(bx_,by_,bW,bH);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('FREQUENCY RESPONSE |H(jω)| = 1/√(1+(ωRC)²)',bx_+5,by_+12);
+
+  // Log frequency axis
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(bx_,by_+bH);ctx.lineTo(bx_+bW,by_+bH);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';
+  const fc=1/(2*Math.PI*tau());
+  for(let dec=-2;dec<=4;dec++){
+    const f=10**dec;
+    const gx_=bx_+(Math.log10(f)+2)/6*bW;
+    if(gx_>bx_&&gx_<bx_+bW){
+      ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.3;
+      ctx.beginPath();ctx.moveTo(gx_,by_);ctx.lineTo(gx_,by_+bH);ctx.stroke();
+      ctx.fillStyle='#999';ctx.textAlign='center';
+      ctx.fillText(f+'Hz',gx_,by_+bH+10);
+    }
+  }
+  // Transfer function
+  ctx.beginPath();
+  for(let i=0;i<=200;i++){
+    const f=10**(-2+i*6/200);
+    const omega=2*Math.PI*f;
+    const Hmag=1/Math.sqrt(1+(omega*R*C)**2);
+    const gx_=bx_+(Math.log10(f)+2)/6*bW;
+    const gy_=by_+bH-Hmag*bH;
+    i===0?ctx.moveTo(gx_,gy_):ctx.lineTo(gx_,gy_);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+
+  // fc marker
+  const fcX=bx_+(Math.log10(fc)+2)/6*bW;
+  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(fcX,by_);ctx.lineTo(fcX,by_+bH);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#111';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText('fc='+fc.toFixed(1)+'Hz',fcX,by_-3);
+
+  // -3dB line
+  const dB3=by_+bH*(1-1/Math.SQRT2);
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.3;ctx.setLineDash([2,4]);
+  ctx.beginPath();ctx.moveTo(bx_,dB3);ctx.lineTo(bx_+bW,dB3);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';
+  ctx.fillText('-3dB',bx_+bW-5,dB3+3);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>R (kΩ)</label><input type="range" id="rS" min="1" max="200" step="1" value="${R/1e3}"><span class="val" id="rV">${(R/1e3).toFixed(0)}</span></div>`+
+    `<div class="ctrl-group"><label>C (μF)</label><input type="range" id="cS" min="0.1" max="50" step="0.1" value="${C*1e6}"><span class="val" id="cV">${(C*1e6).toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>V₀ (V)</label><input type="range" id="v0S" min="1" max="20" step="0.5" value="${V0}"><span class="val" id="v0V">${V0.toFixed(1)}</span></div>`+
+    `<button id="modeBtn">${charging?'DISCHARGE':'CHARGE'}</button>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="10" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('rS').addEventListener('input',function(){
+    R=parseFloat(this.value)*1e3;document.getElementById('rV').textContent=(R/1e3).toFixed(0);
+    history.t.length=0;history.v.length=0;history.i.length=0;time=0;
+  });
+  document.getElementById('cS').addEventListener('input',function(){
+    C=parseFloat(this.value)*1e-6;document.getElementById('cV').textContent=(C*1e6).toFixed(1);
+    history.t.length=0;history.v.length=0;history.i.length=0;time=0;
+  });
+  document.getElementById('v0S').addEventListener('input',function(){
+    V0=parseFloat(this.value);document.getElementById('v0V').textContent=V0.toFixed(1);
+    history.t.length=0;history.v.length=0;history.i.length=0;time=0;
+  });
+  document.getElementById('modeBtn').addEventListener('click',function(){
+    charging=!charging;this.textContent=charging?'DISCHARGE':'CHARGE';
+    if(charging)V=0;else V=V0;
+    time=0;history.t.length=0;history.v.length=0;history.i.length=0;
+  });
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';
+  });
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">Vc =</span> <span class="val">${V.toFixed(4)}</span> V</span>`+
+    `<span><span class="label">τ = RC =</span> <span class="val">${(tau()*1000).toFixed(2)}</span> ms</span>`+
+    `<span><span class="label">I =</span> <span class="val">${(I*1000).toFixed(4)}</span> mA</span>`+
+    `<span><span class="label">t =</span> <span class="val">${(time*1000).toFixed(2)}</span> ms</span>`+
+    `<span><span class="label">V₀−Vc =</span> <span class="val">${(V0-V).toFixed(4)}</span> V</span>`+
+    `<span><span class="label">Vc/V₀ =</span> <span class="val">${(V/V0*100).toFixed(2)}%</span></span>`+
+    `<span><span class="label">fc =</span> <span class="val">${fc.toFixed(2)}</span> Hz</span>`;
+}
+
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

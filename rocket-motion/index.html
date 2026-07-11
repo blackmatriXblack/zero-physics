@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocket Motion · Δv = v<sub>e</sub> ln(m₀/m)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Rocket Motion</h1>
+<p>Δv = v<sub>e</sub> ln(m₀/m) — Variable-mass system: T = v<sub>e</sub>·ṁ, F = ma</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=500,g=9.81,gnd=460,sc=2;
+let ve=300,mD=20,mF=100,m=mD+mF,y=0,v=0,fuelB=0,thrust=false,paused=false,speed=1,simTime=0,launched=false;
+const hist={t:[],y:[],v:[],m:[],ke:[],pe:[],te:[],thrust:[],acc:[]};
+function E(){const ke=.5*m*v*v,pe=m*g*y;return{ke,pe,te:ke+pe}}
+function step(){if(paused||!launched)return;const n=Math.ceil(speed);for(let s=0;s<n;s++){
+  const dt=.005;let a=-g;
+  if(thrust&&fuelB<mF){const dm=.5*.008,burn=Math.min(dm,mF-fuelB),th=ve*burn/.008;a+=th/m;m-=burn;fuelB+=burn}else if(fuelB>=mF)thrust=false;
+  v+=a*dt;y+=v*dt;if(y<0){y=0;v=0}
+  const e=E();simTime+=dt;hist.t.push(simTime);hist.y.push(y);hist.v.push(v);hist.m.push(m);hist.ke.push(e.ke);hist.pe.push(e.pe);hist.te.push(e.te);hist.thrust.push(thrust?1:0);hist.acc.push(a);
+  if(hist.t.length>500)for(let k in hist)hist[k].shift()
+}}
+function launch(){if(y<=0){launched=true;thrust=true}}
+function reset(){m=mD+mF;y=0;v=0;fuelB=0;thrust=false;launched=false;simTime=0;for(let k in hist)hist[k]=[];paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause'}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,.04)';ctx.fillRect(0,gnd,W,H-gnd);ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,gnd);ctx.lineTo(W,gnd);ctx.stroke();
+  for(let i=0;i<W;i+=20){ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(i,gnd+2,8,1)}
+  const rX=180,rBot=gnd-y*sc,rTop=rBot-50,rW=22;
+  if(thrust&&fuelB<mF){const fl=.8+Math.random()*.4;ctx.fillStyle='rgba(0,0,0,.12)';ctx.beginPath();ctx.moveTo(rX-8,rBot);ctx.lineTo(rX,rBot+35*fl);ctx.lineTo(rX+8,rBot);ctx.fill();ctx.fillStyle='rgba(0,0,0,.06)';ctx.beginPath();ctx.moveTo(rX-4,rBot);ctx.lineTo(rX,rBot+20*fl*1.5);ctx.lineTo(rX+4,rBot);ctx.fill()}
+  ctx.fillStyle='#111';ctx.fillRect(rX-rW/2,rTop,rW,50);ctx.beginPath();ctx.moveTo(rX-rW/2,rTop);ctx.lineTo(rX,rTop-14);ctx.lineTo(rX+rW/2,rTop);ctx.fill();
+  ctx.fillStyle='#fff';ctx.fillRect(rX-rW/2+3,rTop+5,rW-6,6);ctx.fillRect(rX-rW/2+3,rTop+14,rW-6,6);ctx.fillRect(rX-rW/2+3,rTop+23,rW-6,6);
+  if(y>2){ctx.strokeStyle='rgba(0,0,0,.06)';ctx.lineWidth=.5;ctx.setLineDash([3,6]);ctx.beginPath();ctx.moveTo(rX,gnd);ctx.lineTo(rX,rBot);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(0,0,0,.2)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(`${y.toFixed(0)}m`,rX-20,(rBot+gnd)/2)}
+  // Altitude graph
+  const gX=420,gY=20,gW=460,gH=120;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gX,gY,gW,gH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('altitude vs time',gX+3,gY+10);
+  if(hist.y.length>2){const yMax=Math.max(...hist.y)*1.1||1;ctx.beginPath();for(let i=0;i<hist.y.length;i++){const px=gX+(i/hist.y.length)*gW,py=gY+gH-(hist.y[i]/yMax)*gH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=.8;ctx.stroke();ctx.lineTo(gX+gW,gY+gH);ctx.lineTo(gX,gY+gH);ctx.closePath();ctx.fillStyle='rgba(0,0,0,.04)';ctx.fill()}
+  // Velocity
+  const vgX=420,vgY=150,vgW=460,vgH=70;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(vgX,vgY,vgW,vgH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('velocity vs time',vgX+3,vgY+10);
+  if(hist.v.length>2){const vMax=Math.max(...hist.v.map(Math.abs))*1.1||1;ctx.beginPath();for(let i=0;i<hist.v.length;i++){const px=vgX+(i/hist.v.length)*vgW,py=vgY+vgH/2-(hist.v[i]/vMax)*(vgH/2-4);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.7;ctx.stroke()}
+  // Energy graph
+  const egX=420,egY=230,egW=460,egH=60;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(egX,egY,egW,egH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('E = KE + PE',egX+3,egY+10);
+  if(hist.te.length>2){const eMax=Math.max(...hist.te)*1.1||1;ctx.beginPath();for(let i=0;i<hist.ke.length;i++){const px=egX+(i/hist.ke.length)*egW,py=egY+egH-(hist.ke[i]/eMax)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.7;ctx.stroke();ctx.beginPath();for(let i=0;i<hist.pe.length;i++){const px=egX+(i/hist.pe.length)*egW,py=egY+egH-(hist.pe[i]/eMax)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=.5;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([])}
+  // Tsiolkovsky
+  const m0=mD+mF,mt=mD+(fuelB<mF?mF-fuelB:0),dV=ve*Math.log(m0/(mt||1)),TWR=thrust&&m>0?(ve*.5/(m*9.81)):0;
+  const e=E();ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText(`y=${y.toFixed(1)}m | v=${v.toFixed(2)}m/s | m=${m.toFixed(1)}kg`,420,320);
+  ctx.fillText(`Δv=${dV.toFixed(1)}m/s | TWR=${TWR.toFixed(2)} | a=${hist.acc.length?hist.acc[hist.acc.length-1].toFixed(2):0}m/s²`,420,336);
+  ctx.fillText(`KE=${e.ke.toFixed(1)}J | PE=${e.pe.toFixed(1)}J | E=${e.te.toFixed(1)}J`,420,352);
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>v<sub>e</sub></label><input type="range" id="veS" min="50" max="800" step="10" value="${ve}"><span class="val" id="veV">${ve}</span></div>`+
+    `<div class="ctrl-group"><label>Fuel</label><input type="range" id="mfS" min="20" max="300" step="10" value="${mF}"><span class="val" id="mfV">${mF}</span></div>`+
+    `<div class="ctrl-group"><label>Dry</label><input type="range" id="mdS" min="5" max="80" step="5" value="${mD}"><span class="val" id="mdV">${mD}</span></div>`+
+    `<div class="ctrl-group"><label>g</label><input type="range" id="gravS" min="1" max="30" step=".5" value="${g}"><span class="val" id="gravV">${g.toFixed(1)}</span></div>`+
+    `<button id="launchBtn">Launch</button><button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+  document.getElementById('veS').addEventListener('input',function(){ve=parseFloat(this.value);document.getElementById('veV').textContent=ve});
+  document.getElementById('mfS').addEventListener('input',function(){mF=parseFloat(this.value);document.getElementById('mfV').textContent=mF;reset()});
+  document.getElementById('mdS').addEventListener('input',function(){mD=parseFloat(this.value);document.getElementById('mdV').textContent=mD;reset()});
+  document.getElementById('gravS').addEventListener('input',function(){const val=parseFloat(this.value);document.getElementById('gravV').textContent=val.toFixed(1);window.g=val});
+  document.getElementById('launchBtn').addEventListener('click',launch);
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause'});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x'});
+}
+  const estE=hist.te.length>2?((Math.max(...hist.te)-Math.min(...hist.te))/(Math.abs(Math.max(...hist.te))||1)*100):0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">y =</span> <span class="val">${y.toFixed(2)}</span> m</span>`+
+    `<span><span class="label">v =</span> <span class="val">${v.toFixed(2)}</span> m/s</span>`+
+    `<span><span class="label">a =</span> <span class="val">${hist.acc.length?hist.acc[hist.acc.length-1].toFixed(2):0}</span> m/s²</span>`+
+    `<span><span class="label">m =</span> <span class="val">${m.toFixed(2)}</span> kg</span>`+
+    `<span><span class="label">Fuel%</span> <span class="val">${mF>0?((mF-fuelB)/mF*100).toFixed(1):0}%</span></span>`+
+    `<span><span class="label">Δv =</span> <span class="val">${dV.toFixed(1)}</span> m/s</span>`+
+    `<span><span class="label">TWR =</span> <span class="val">${TWR.toFixed(3)}</span></span>`+
+    `<span><span class="label">KE =</span> <span class="val">${e.ke.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">PE =</span> <span class="val">${e.pe.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">E =</span> <span class="val">${e.te.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">m₀/m =</span> <span class="val">${(m0/(m||1)).toFixed(2)}</span></span>`+
+    `<span><span class="label">ΔE/E =</span> <span class="val">${estE.toFixed(3)}%</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

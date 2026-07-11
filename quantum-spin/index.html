@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Quantum Spin · Bloch Sphere</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Quantum Spin</h1>
+<p>|ψ⟩ = cos(θ/2)|↑⟩ + e^{iφ}sin(θ/2)|↓⟩</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let th=Math.PI/4,ph=Math.PI/3,paused=0,spd=1,prec=0.02
+let hx=[],hy=[],hxt=[]
+const cx=300,cy=260,R=180
+function upd(){
+if(paused)return
+ph+=prec*spd;hx.push(ph);hy.push(th);hxt.push(Date.now())
+if(hx.length>200){hx.shift();hy.shift();hxt.shift()}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke()
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI);ctx.stroke()
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.setLineDash([3,3])
+ctx.beginPath();ctx.moveTo(cx-R,cy);ctx.lineTo(cx+R,cy);ctx.moveTo(cx,cy-R);ctx.lineTo(cx,cy+R);ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#666';ctx.font='9px monospace';ctx.textAlign='center'
+ctx.fillText('|↑⟩',cx,cy-R-8);ctx.fillText('|↓⟩',cx,cy+R+15);ctx.fillText('|+⟩',cx+R+30,cy+4);ctx.fillText('|−⟩',cx-R-30,cy+4)
+const sx=R*Math.sin(th)*Math.cos(ph),sy=-R*Math.cos(th),sz=R*Math.sin(th)*Math.sin(ph)
+const px=cx+sx,py=cy-sy
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(px,py);ctx.stroke()
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill()
+const proj=R*Math.sin(th),pX=proj*Math.cos(ph),pY=-proj*Math.sin(ph)
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([2,3])
+ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(cx+pX,cy);ctx.stroke();ctx.setLineDash([])
+const pUp=Math.cos(th/2)**2,pDn=Math.sin(th/2)**2
+const Bx=0.6,Bz=0.8,bAng=Math.atan2(Bz,Bx),bEX=cx+R*0.7*Math.cos(bAng),bEY=cy-R*0.7*Math.sin(bAng)
+ctx.strokeStyle='#888';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(bEX,bEY);ctx.stroke()
+ctx.fillStyle='#888';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('B',bEX+5,bEY+3)
+ctx.fillStyle='#000';ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText('Bloch Sphere',cx,25)
+if(hx.length>1){const mgX=620,mgY=440,mgW=260,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('θ(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(i/hx.length)*mgW,yy=mgY+mgH-(hy[i]/Math.PI)*mgH*0.7
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const pUpPct=(pUp*100).toFixed(1),pDnPct=(pDn*100).toFixed(1)
+const thD=(th*180/Math.PI).toFixed(1),phD=(ph*180/Math.PI%360).toFixed(1)
+const s_x=Math.sin(th)*Math.cos(ph),s_y=Math.sin(th)*Math.sin(ph),s_z=Math.cos(th)
+document.getElementById('st').innerHTML=
+`<span><span class="l">θ =</span> <span class="v">${thD}°</span></span>`+
+`<span><span class="l">φ =</span> <span class="v">${phD}°</span></span>`+
+`<span><span class="l">P(↑) =</span> <span class="v">${pUpPct}%</span></span>`+
+`<span><span class="l">P(↓) =</span> <span class="v">${pDnPct}%</span></span>`+
+`<span><span class="l">⟨S_x⟩ =</span> <span class="v">${(s_x*0.5).toFixed(3)}</span></span>`+
+`<span><span class="l">⟨S_y⟩ =</span> <span class="v">${(s_y*0.5).toFixed(3)}</span></span>`+
+`<span><span class="l">⟨S_z⟩ =</span> <span class="v">${(s_z*0.5).toFixed(3)}</span></span>`+
+`<span><span class="l">|S| =</span> <span class="v">½</span></span>`+
+`<span><span class="l">Phase φ =</span> <span class="v">${phD}°</span></span>`+
+`<span><span class="l">σ²_z =</span> <span class="v">${(0.25-s_z*s_z*0.25).toFixed(3)}</span></span>`+
+`<span><span class="l">B angle =</span> <span class="v">${(bAng*180/Math.PI).toFixed(1)}°</span></span>`+
+`<span><span class="l">State =</span> <span class="v">${pUp>0.99?'|↑⟩':pDn>0.99?'|↓⟩':'superposition'}</span></span>`
+}
+function anim(){upd();drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>θ</label><input type="range" id="thS" min="0" max="180" value="45" step="1"><span class="val" id="thV">45°</span></div>`+
+`<div class="ctrl-g"><label>φ</label><input type="range" id="phS" min="0" max="360" value="60" step="1"><span class="val" id="phV">60°</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('thS').oninput=function(){th=+this.value*Math.PI/180;document.getElementById('thV').textContent=this.value+'°'}
+document.getElementById('phS').oninput=function(){ph=+this.value*Math.PI/180;document.getElementById('phV').textContent=this.value+'°'}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){th=Math.PI/4;ph=Math.PI/3;document.getElementById('thS').value=45;document.getElementById('phS').value=60;document.getElementById('thV').textContent='45°';document.getElementById('phV').textContent='60°';hx=[];hy=[]}
+}
+anim()
+</script></body></html>

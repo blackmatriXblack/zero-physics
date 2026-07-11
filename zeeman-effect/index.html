@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeeman Effect · ΔE = μ<sub>B</sub>·B·m<sub>l</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;height:12px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+select{background:#fff;border:1px solid #ccc;font-family:'Courier New',monospace;font-size:0.65em;padding:1px 4px}
+.stats{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Zeeman Effect</h1>
+<p>ΔE = μ<sub>B</sub>·B·m<sub>l</sub> — Normal Zeeman splitting</p>
+<canvas id="c" width="920" height="490"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),cx=C.getContext('2d'),W=920,H=490;
+let B=2,l=1,running=1,speed=1,time=0;
+const muB=5.79e-5; // eV/T
+let hSplit=[];
+
+function reset(){B=2;l=1;time=0;hSplit=[];}
+function step(){
+ if(!running)return;
+ time+=0.02*speed;
+ const delta=muB*B;
+ hSplit.push({t:time,b:B,d:delta});
+ if(hSplit.length>60)hSplit.shift();
+ if(Math.random()<0.01)B+=(-0.1+Math.random()*0.2);
+ B=Math.max(0,Math.min(5,B));
+}
+
+function draw(){
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const delta=muB*B;
+ const cx0=250,y0=200;
+
+ // Main panel
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(80,20,360,400);
+ cx.fillStyle='#999';cx.font='7px monospace';cx.textAlign='center';
+ cx.fillText('Magnetic splitting: ΔE = μB·B·ml',260,14);
+
+ // Original level (B=0)
+ const eY=y0+100;
+ cx.strokeStyle='rgba(0,0,0,0.08)';cx.lineWidth=0.3;cx.setLineDash([3,3]);
+ cx.beginPath();cx.moveTo(cx0-60,eY);cx.lineTo(cx0+200,eY);cx.stroke();cx.setLineDash([]);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='right';
+ cx.fillText('B=0 (no field)',cx0-62,eY+3);
+
+ // Split levels
+ if(B>0){
+  for(let ml=-l;ml<=l;ml++){
+   const shift=ml*delta*3000,ey=eY-shift;
+   cx.strokeStyle=ml===0?'#111':'rgba(0,0,0,0.5)';cx.lineWidth=ml===0?0.8:0.5;
+   cx.beginPath();cx.moveTo(cx0+10,ey);cx.lineTo(cx0+250,ey);cx.stroke();
+   cx.fillStyle='#111';cx.font='5px monospace';cx.textAlign='left';
+   const label='ml='+(ml>0?'+':'')+ml+' ΔE='+(ml*delta*1e6).toFixed(1)+' μeV';
+   cx.fillText(label,cx0+252,ey+2);
+  }
+ }
+
+ // Energy equation
+ cx.fillStyle='#111';cx.font='7px monospace';cx.textAlign='left';
+ cx.fillText('ΔE = μB·B·ml = '+delta.toFixed(2)+' × ml eV',cx0-60,420);
+ cx.fillText('μB = 5.79×10⁻⁵ eV/T',cx0-60,434);
+ cx.fillText('B = '+B.toFixed(2)+' T',cx0-60,448);
+
+ // Spectrum
+ const sX=520,sY=50,sW=50,sH=250;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(sX,sY,sW,sH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='center';
+ cx.fillText('Spectrum',sX+sW/2,sY-4);
+ const nLines=B>0?2*l+1:1;
+ const sep=lMax=2*l;
+ const lineSpacing=nLines>1?sH/(nLines+1):0;
+ for(let i=0;i<nLines;i++){
+  const y=sY+(i+1)*lineSpacing;
+  const intensity=i%2===0?1:0.4;
+  const w=10*intensity+4;
+  cx.fillStyle='#111';cx.fillRect(sX+sW/2-w/2,y-1,w,3);
+  cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='center';
+  cx.fillText(i===0?'σ⁺':i===1?'π':'σ⁻',sX+sW/2,y-7);
+ }
+
+ // Splitting vs B graph
+ const gX=590,gY=40,gW=280,gH=130;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(gX,gY,gW,gH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';cx.fillText('ΔE vs B (linear)',gX+3,gY+10);
+ cx.strokeStyle='rgba(0,0,0,0.1)';cx.lineWidth=0.5;
+ cx.beginPath();cx.moveTo(gX,gY+gH/2);cx.lineTo(gX+gW,gY+gH/2);cx.stroke();
+ cx.beginPath();cx.moveTo(gX,gY);cx.lineTo(gX,gY+gH);cx.stroke();
+ for(let ml=-l;ml<=l;ml++){
+  cx.strokeStyle='rgba(0,0,0,0.2)';cx.lineWidth=0.5;cx.beginPath();
+  for(let x=0;x<=gW;x++){const bb=(x/gW)*5,shift=ml*muB*bb*2500;const py=gY+gH/2-shift;x===0?cx.moveTo(gX+x,py):cx.lineTo(gX+x,py);}
+  cx.stroke();
+ }
+ const opXX=gX+(B/5)*gW,opYY=gY+gH/2;
+ cx.fillStyle='#111';cx.beginPath();cx.arc(opXX,opYY,3,0,Math.PI*2);cx.fill();
+ cx.fillStyle='#999';cx.font='5px monospace';cx.textAlign='center';
+
+ // Larmor frequency bar
+ const bX=590,bY=190,bW=280,bH=12;
+ const larmor=muB*B/4.1357e-15*1e-9; // freq in GHz
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY,Math.min(bW,B/5*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';
+ cx.fillText('B field strength: '+B.toFixed(2)+' T (max 5)',bX,bY-2);
+
+ // Splitting magnitude
+ cx.fillStyle='rgba(0,0,0,0.06)';cx.fillRect(bX,bY+20,bW,bH);
+ cx.fillStyle='#111';cx.fillRect(bX,bY+20,Math.min(bW,delta/3e-4*bW),bH);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.fillText('|ΔE| = '+(delta*1e6).toFixed(1)+' μeV',bX,bY+18);
+
+ // Split history mini-graph
+ const ggx=590,ggy=250,ggw=280,ggh=80;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(ggx,ggy,ggw,ggh);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.textAlign='left';cx.fillText('ΔE history',ggx+3,ggy+8);
+ if(hSplit.length>1){
+  cx.strokeStyle='#111';cx.lineWidth=0.8;cx.beginPath();
+  const maxD=Math.max(...hSplit.map(s=>s.d),1e-10);
+  hSplit.forEach((s,i)=>{const px=ggx+i/(hSplit.length-1)*ggw,py=ggy+ggh-s.d/maxD*(ggh-12);i===0?cx.moveTo(px,py):cx.lineTo(px,py);});
+  cx.stroke();
+ }
+
+ // Larmor freq mini-graph
+ const ggx2=590,ggy2=340,ggw2=280,ggh2=60;
+ cx.strokeStyle='#ddd';cx.lineWidth=0.5;cx.strokeRect(ggx2,ggy2,ggw2,ggh2);
+ cx.fillStyle='#999';cx.font='6px monospace';cx.fillText('Larmor freq νL = μBB/h',ggx2+3,ggy2+8);
+ cx.fillStyle='#111';cx.font='5px monospace';
+ cx.fillText('νL = '+(larmor).toFixed(2)+' GHz',ggx2+3,ggy2+28);
+ cx.fillText('ωL = 2πνL = '+(larmor*2*Math.PI).toFixed(2)+' Grad/s',ggx2+3,ggy2+42);
+
+ // Controls
+ const cS='<div class="ctrl-group"><label>B(T)</label><input type="range" id="bS" min="0" max="5" step="0.05" value="'+B.toFixed(2)+'"><span class="val" id="bV">'+B.toFixed(2)+'</span></div>'+
+ '<div class="ctrl-group"><label>l</label><select id="lS"><option value="1" '+(l===1?'selected':'')+'>1 (p)</option><option value="2" '+(l===2?'selected':'')+'>2 (d)</option></select></div>'+
+ '<button id="playB">'+(running?'⏸':'▶')+'</button><button id="resetB">↺</button>'+
+ '<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="1" max="10" step="1" value="'+speed+'"><span class="val" id="spdV">'+speed+'</span></div>';
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=cS;
+ document.getElementById('bS').oninput=function(){B=+this.value;document.getElementById('bV').textContent=B.toFixed(2);};
+ document.getElementById('lS').onchange=function(){l=+this.value;hSplit=[];};
+ document.getElementById('playB').onclick=function(){running=!running;this.textContent=running?'⏸':'▶';};
+ document.getElementById('resetB').onclick=function(){reset();};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;document.getElementById('spdV').textContent=speed;};
+
+}
+  document.getElementById('stats').innerHTML=
+  '<span><span class="label">B =</span> <span class="val">'+B.toFixed(3)+'</span> T</span>'+
+  '<span><span class="label">l =</span> <span class="val">'+l+'</span></span>'+
+  '<span><span class="label">μB =</span> <span class="val">'+muB.toExponential(2)+'</span> eV/T</span>'+
+  '<span><span class="label">ΔE = μB·B =</span> <span class="val">'+(delta*1e6).toFixed(3)+'</span> μeV</span>'+
+  '<span><span class="label">Lines =</span> <span class="val">'+(B>0?2*l+1:1)+'</span></span>'+
+  '<span><span class="label">νL = μBB/h =</span> <span class="val">'+larmor.toFixed(3)+'</span> GHz</span>'+
+  '<span><span class="label">ωL = 2πνL =</span> <span class="val">'+(larmor*2*Math.PI).toFixed(3)+'</span> Grad/s</span>'+
+  '<span><span class="label">ΔE(m=+1) =</span> <span class="val">'+(delta*1e6).toFixed(2)+'</span> μeV</span>'+
+  '<span><span class="label">ΔE(m=-1) =</span> <span class="val">'+(-delta*1e6).toFixed(2)+'</span> μeV</span>'+
+  '<span><span class="label">ΔE(m=0) =</span> <span class="val">0</span></span>'+
+  '<span><span class="label">Splitting/Lande =</span> <span class="val">Normal (g=1)</span></span>'+
+  '<span><span class="label">Bohr magneton</span> <span class="val">9.274×10⁻²⁴ J/T</span></span>'+
+  '<span><span class="label">t =</span> <span class="val">'+time.toFixed(1)+'</span></span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

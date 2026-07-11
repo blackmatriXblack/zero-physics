@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thin Film Interference · 2nt = (m+½)λ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Thin Film Interference</h1>
+<p>2nt cos θ = (m+½)λ for constructive — Colored fringes in soap film</p>
+<canvas id="c" width="920" height="580"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=580;
+let t=500,lambda=550,angle=30,paused=false,speed=1,time=0;
+const n=1.33;
+const hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ if(!paused)time+=0.016*speed;
+ const rad=angle*Math.PI/180,pathDiff=2*n*t*Math.cos(rad);
+ const m=pathDiff/lambda,I=Math.cos(Math.PI*pathDiff/lambda)**2;
+ hist.push(I);if(hist.length>hMax)hist.shift();
+ const filmX=250,filmY=100,filmW=300,filmH=200;
+ for(let y=0;y<filmH;y++){const thickness=t*(1-y/filmH*0.3);const pd=2*n*thickness*Math.cos(rad);const phase=pd/lambda%1;const r=Math.round(128+127*Math.cos(2*Math.PI*phase));const g=Math.round(128+127*Math.cos(2*Math.PI*phase+2.094));const b=Math.round(128+127*Math.cos(2*Math.PI*phase+4.189));ctx.fillStyle=`rgb(${Math.min(255,r)},${Math.min(255,g)},${Math.min(255,b)})`;ctx.fillRect(filmX,filmY+y,filmW,1);}
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.strokeRect(filmX,filmY,filmW,filmH);
+ ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(filmX-100,filmY+filmH/2);ctx.lineTo(filmX,filmY+filmH/2);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(filmX+filmW,filmY+filmH/2);ctx.lineTo(filmX+filmW+100,filmY+filmH/2);ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('incident',filmX-50,filmY+filmH/2-10);ctx.fillText('reflected',filmX+filmW+50,filmY+filmH/2-10);
+ ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(filmX-20,filmY+filmH+10,filmW+40,20);ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText('air',filmX+filmW/2,filmY+filmH+24);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.3;ctx.beginPath();ctx.moveTo(filmX+filmW+20,filmY);ctx.lineTo(filmX+filmW+20,filmY+filmH);ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(`t = ${t} nm`,filmX+filmW+24,filmY+10);ctx.fillText(`n = ${n.toFixed(2)}`,filmX+filmW+24,filmY+24);
+ const sX=50,sY=350,sW=500,sH=50;
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Reflected spectrum (λ)',sX,sY-4);
+ for(let x=0;x<sW;x++){const l=x/sW*400+380;const pd=2*n*t*Math.cos(rad);const phase=pd/l%1;const Ix=Math.cos(Math.PI*pd/l)**2;const r=Math.round(128+127*Math.cos(2*Math.PI*phase))*Ix;const g=Math.round(128+127*Math.cos(2*Math.PI*phase+2.094))*Ix;const b=Math.round(128+127*Math.cos(2*Math.PI*phase+4.189))*Ix;ctx.fillStyle=`rgb(${Math.min(255,r)},${Math.min(255,g)},${Math.min(255,b)})`;ctx.fillRect(sX+x,sY,1,sH);}
+ const hX=570,hY=330,hW=320,hH=120;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('I(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-(hist[i]||0)*(hH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+ ctx.fillText(`2nt cosθ = ${pathDiff.toFixed(0)} nm  m = ${m.toFixed(2)}  I = ${I.toFixed(3)}`,10,H-40);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`Condition: ${Math.abs(m-Math.round(m))<0.25?'✓ Constructive (bright)':'✗ Destructive (dark)'}`,10,H-56);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>t (nm)</label><input type="range" id="tS" min="80" max="1200" step="10" value="${t}"><span class="val" id="tV">${t}</span></div>`+
+ `<div class="ctrl-group"><label>λ (nm)</label><input type="range" id="lS" min="380" max="780" step="5" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+ `<div class="ctrl-group"><label>Angle</label><input type="range" id="aS" min="0" max="85" step="1" value="${angle}"><span class="val" id="aV">${angle}°</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('tS').oninput=function(){t=+this.value;tV.textContent=t;};
+ document.getElementById('lS').oninput=function(){lambda=+this.value;lV.textContent=lambda;};
+ document.getElementById('aS').oninput=function(){angle=+this.value;aV.textContent=angle+'°';};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">t =</span> <span class="val">${t}</span> nm</span>`+
+ `<span><span class="label">λ =</span> <span class="val">${lambda}</span> nm</span>`+
+ `<span><span class="label">n =</span> <span class="val">${n.toFixed(2)}</span></span>`+
+ `<span><span class="label">θ =</span> <span class="val">${angle}°</span></span>`+
+ `<span><span class="label">2nt cosθ =</span> <span class="val">${pathDiff.toFixed(1)}</span> nm</span>`+
+ `<span><span class="label">m = Δ/λ =</span> <span class="val">${m.toFixed(3)}</span></span>`+
+ `<span><span class="label">I =</span> <span class="val">${I.toFixed(4)}</span></span>`+
+ `<span><span class="label">cosθ =</span> <span class="val">${Math.cos(rad).toFixed(4)}</span></span>`+
+ `<span><span class="label">2nt =</span> <span class="val">${(2*n*t).toFixed(0)}</span></span>`+
+ `<span><span class="label">Film type</span> <span class="val">soap (n=1.33)</span></span>`+
+ `<span><span class="label">Result</span> <span class="val">${Math.abs(m-Math.round(m))<0.25?'C(+), bright':'D(-), dark'}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

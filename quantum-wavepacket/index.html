@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Wave Packet · Split-step Fourier method</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Quantum Wave Packet</h1>
+<p>iℏ∂ψ/∂t = −(ℏ²/2m)∇²ψ + Vψ — Split-step Fourier propagation</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+const N=512,dx=0.08,dt=0.002,hbar=1,m=1;
+let V=new Float64Array(N),psiR=new Float64Array(N),psiI=new Float64Array(N);
+let sig=1.2,k0=8,barrierH=50,barrierW=2,barrierPos=0.58,paused=false,time=0,speed=1;
+const FLOOR=1e-10;
+
+function init(){
+  const x0=N*dx*0.25;
+  for(let i=0;i<N;i++){
+    const x=i*dx;
+    const env=Math.exp(-(x-x0)*(x-x0)/(2*sig*sig));
+    const norm=1/Math.sqrt(sig*Math.sqrt(Math.PI));
+    psiR[i]=env*Math.cos(k0*x)*norm;
+    psiI[i]=env*Math.sin(k0*x)*norm;
+  }
+  setBarrier();
+}
+
+function setBarrier(){
+  const p1=Math.floor(N*barrierPos);
+  const half=barrierW/2;
+  for(let i=0;i<N;i++){
+    const x=i*dx;
+    if((x>N*dx*0.52&&x<N*dx*0.54)||(x>N*dx*0.72&&x<N*dx*0.74)||(i>p1-half&&i<p1+half))V[i]=barrierH;
+    else V[i]=0;
+  }
+}
+
+function fft(re,im,inverse){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit=n>>1;
+    for(;j&bit;bit>>=1)j^=bit;
+    j^=bit;
+    if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}
+  }
+  for(let len=2;len<=n;len<<=1){
+    const ang=2*Math.PI/len*(inverse?1:-1);
+    const wR=Math.cos(ang),wI=Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let cR=1,cI=0;
+      for(let j=0;j<len/2;j++){
+        const uR=re[i+j],uI=im[i+j];
+        const vR=re[i+j+len/2]*cR-im[i+j+len/2]*cI;
+        const vI=re[i+j+len/2]*cI+im[i+j+len/2]*cR;
+        re[i+j]=uR+vR;im[i+j]=uI+vI;
+        re[i+j+len/2]=uR-vR;im[i+j+len/2]=uI-vI;
+        const tR=cR*wR-cI*wI;
+        cI=cR*wI+cI*wR;
+        cR=tR;
+      }
+    }
+  }
+  if(inverse){for(let i=0;i<n;i++){re[i]/=n;im[i]/=n;}}
+}
+
+const kR=new Float64Array(N),kI=new Float64Array(N);
+const dk=2*Math.PI/(N*dx);
+for(let i=0;i<N;i++){
+  const k=i<=N/2?i*dk:(i-N)*dk;
+  kR[i]=Math.cos(-k*k*hbar*dt/(2*m));
+  kI[i]=Math.sin(-k*k*hbar*dt/(2*m));
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    const tr=new Float64Array(psiR),ti=new Float64Array(psiI);
+    fft(tr,ti,false);
+    for(let i=0;i<N;i++){
+      const rr=tr[i]*kR[i]-ti[i]*kI[i];
+      const ii=tr[i]*kI[i]+ti[i]*kR[i];
+      tr[i]=rr;ti[i]=ii;
+    }
+    fft(tr,ti,true);
+    for(let i=0;i<N;i++){
+      const phi=-V[i]*dt/hbar;
+      const rr=tr[i]*Math.cos(phi)-ti[i]*Math.sin(phi);
+      const ii=tr[i]*Math.sin(phi)+ti[i]*Math.cos(phi);
+      psiR[i]=rr;psiI[i]=ii;
+    }
+    const reflect=0.01/(1+Math.exp((N*dx*0.9-N*dx*0.96)/0.1));
+    for(let i=N-20;i<N;i++){psiR[i]*=reflect;psiI[i]*=reflect;}
+    time+=dt;
+  }
+}
+
+function computeTransmission(){
+  const rightStart=Math.floor(N*0.75);
+  let rightProb=0,totProb=0;
+  const prob=new Float64Array(N);
+  for(let i=0;i<N;i++){prob[i]=psiR[i]*psiR[i]+psiI[i]*psiI[i];totProb+=prob[i]*dx;}
+  for(let i=rightStart;i<N;i++)rightProb+=prob[i]*dx;
+  return{T:rightProb/(totProb||1),R:1-rightProb/(totProb||1)};
+}
+
+function resetSim(){
+  time=0;init();paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#000';ctx.lineWidth=0.5;
+  ctx.strokeRect(20,10,W-40,H-20);
+
+  const mh=H*0.5,gx=60,gy=40,gw=W-120,gh=H-100;
+
+  // Border
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;
+  ctx.strokeRect(gx,gy,gw,gh);
+
+  // Axis line
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;
+  ctx.beginPath();ctx.moveTo(gx,mh);ctx.lineTo(gx+gw,mh);ctx.stroke();
+
+  // |ψ|²
+  const prob=new Float32Array(N);
+  let maxP=0;
+  for(let i=0;i<N;i++){prob[i]=psiR[i]*psiR[i]+psiI[i]*psiI[i];if(prob[i]>maxP)maxP=prob[i];}
+  const scale=gh*0.45/Math.max(maxP,FLOOR);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=2){
+    const sx=gx+i/N*gw;
+    const sy=mh-prob[i]*scale;
+    i===0||i===1?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();
+
+  // Potential (scaled)
+  const vscale=gh*0.45/Math.max(barrierH,1);
+  ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.7;ctx.setLineDash([2,3]);
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    const sx=gx+i/N*gw;
+    const sy=mh-V[i]*vscale;
+    i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();ctx.setLineDash([]);
+
+  // Re(ψ)
+  ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=0.4;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=4){
+    const sx=gx+i/N*gw;
+    const sy=mh-psiR[i]*scale*0.4;
+    i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('|ψ|²',gx+6,gy+14);
+  ctx.fillText('Re(ψ)',gx+6,gy+28);
+  ctx.fillText('V(x)',gx+6,gy+42);
+
+  const {T,R}=computeTransmission();
+
+  // Info box left
+  const ix=30,iy=370;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,280,90);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('WAVE PACKET PARAMETERS',ix+5,iy+14);
+  const E0=0.5*m*k0*k0;
+  let totP=0;for(let i=0;i<N;i++)totP+=prob[i]*dx;
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`k₀ = ${k0.toFixed(2)}   λ = ${(2*Math.PI/k0).toFixed(2)}`,ix+5,iy+28);
+  ctx.fillText(`E = ℏ²k₀²/2m = ${E0.toFixed(4)}`,ix+5,iy+42);
+  ctx.fillText(`σ (width) = ${sig.toFixed(2)}   t = ${time.toFixed(2)}`,ix+5,iy+56);
+  ctx.fillText(`∫|ψ|²dx = ${totP.toFixed(4)} ${Math.abs(totP-1)<0.01?'✓':'⚠'}`,ix+5,iy+70);
+  ctx.fillText(`T = ${(T*100).toFixed(1)}%   R = ${(R*100).toFixed(1)}%`,ix+5,iy+84);
+
+  // Mini graph: transmission over time
+  const hx=570,hy=30,hw=300,hh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(hx,hy,hw,hh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('T vs TIME',hx+3,hy+10);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText(`T=${(T*100).toFixed(1)}%`,hx+3,hy+22);
+
+  // Momentum space mini graph
+  const mx=570,my=130,mw=300,mh2=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(mx,my,mw,mh2);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('MOMENTUM SPACE |ψ(k)|²',mx+3,my+10);
+  // compute FFT of wavefunction for momentum distribution
+  const ftR=new Float64Array(psiR),ftI=new Float64Array(psiI);
+  fft(ftR,ftI,false);
+  let maxK=0;
+  const kProb=new Float32Array(N);
+  for(let i=0;i<N;i++){kProb[i]=ftR[i]*ftR[i]+ftI[i]*ftI[i];if(kProb[i]>maxK)maxK=kProb[i];}
+  const kScale=mh2*0.7/Math.max(maxK,FLOOR);
+  ctx.strokeStyle='#111';ctx.lineWidth=0.6;
+  ctx.beginPath();
+  for(let i=0;i<N;i+=4){
+    const sx=mx+(i/N)*mw;
+    const sy=my+mh2-5-kProb[i]*kScale;
+    i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#666';ctx.font='5px monospace';ctx.textAlign='center';
+  ctx.fillText(`k₀=${k0.toFixed(1)}`,mx+k0/(N*dk/2)*mw*0.5,my+mh2-2);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>k₀</label><input type="range" id="kS" min="2" max="16" step="0.5" value="${k0}"><span class="val" id="kV">${k0.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>σ</label><input type="range" id="sigS" min="0.4" max="3" step="0.1" value="${sig}"><span class="val" id="sigV">${sig.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>V₀</label><input type="range" id="bS" min="10" max="100" step="5" value="${barrierH}"><span class="val" id="bV">${barrierH}</span></div>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="spS" min="1" max="8" step="1" value="${speed}"><span class="val" id="spV">${speed}×</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('kS').addEventListener('input',function(){k0=parseFloat(this.value);document.getElementById('kV').textContent=k0.toFixed(1);resetSim();});
+  document.getElementById('sigS').addEventListener('input',function(){sig=parseFloat(this.value);document.getElementById('sigV').textContent=sig.toFixed(1);resetSim();});
+  document.getElementById('bS').addEventListener('input',function(){barrierH=parseFloat(this.value);document.getElementById('bV').textContent=barrierH;setBarrier();});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('spV').textContent=speed+'×';});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+
+  // Stats
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">k₀ =</span> <span class="val">${k0.toFixed(2)}</span></span>`+
+    `<span><span class="label">E₀ =</span> <span class="val">${E0.toFixed(4)}</span></span>`+
+    `<span><span class="label">σ =</span> <span class="val">${sig.toFixed(2)}</span></span>`+
+    `<span><span class="label">V₀ =</span> <span class="val">${barrierH}</span></span>`+
+    `<span><span class="label">T =</span> <span class="val">${(T*100).toFixed(1)}%</span></span>`+
+    `<span><span class="label">R =</span> <span class="val">${(R*100).toFixed(1)}%</span></span>`+
+    `<span><span class="label">v₉ = ℏk₀/m =</span> <span class="val">${k0.toFixed(2)}</span></span>`+
+    `<span><span class="label">∫|ψ|² =</span> <span class="val">${totP.toFixed(4)}</span></span>`+
+    `<span><span class="label">Method</span> <span class="val">Split-step FFT</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+
+init();
+resetSim();
+function loop(){
+  for(let i=0;i<6;i++)step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
