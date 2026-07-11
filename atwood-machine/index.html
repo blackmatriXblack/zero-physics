@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atwood Machine · a = (m₁−m₂)/(m₁+m₂)·g</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}p{font-size:0.75em;color:#666;margin-bottom:10px}canvas{border:1px solid #000;display:block}.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}.ctrl-group input[type=range]{width:70px;accent-color:#000}.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}button:hover{background:#000;color:#fff}.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}</style>
+</head>
+<body>
+<h1>Atwood Machine</h1>
+<p>a = (m₁−m₂)/(m₁+m₂)·g — Tension & acceleration analysis</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+let m1=5,m2=3;const g=9.81;
+let y1=150,y2=150;
+let v=0;let paused=false,speed=1;
+const pulleyX=450,pulleyY=80;
+const leftX=370,rightX=530;
+const history={t:[],v:[],y1:[],y2:[],a:[]};
+let simTime=0;
+
+function getA(){return (m1-m2)/(m1+m2)*g;}
+function getT(){return (2*m1*m2*g)/(m1+m2);}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    const a=getA();
+    const dt=0.005;
+    v+=a*dt;y1+=v*dt;y2-=v*dt;
+    simTime+=dt;
+    if(y1<30||y1>H-30){v=0;if(y1<30)y1=30;if(y1>H-30)y1=H-30;}
+    if(y2<30||y2>H-30){v=0;if(y2<30)y2=30;if(y2>H-30)y2=H-30;}
+    history.t.push(simTime);history.v.push(v);history.y1.push(y1);history.y2.push(y2);history.a.push(a);
+    if(history.t.length>400){history.t.shift();history.v.shift();history.y1.shift();history.y2.shift();history.a.shift();}
+  }
+}
+
+function resetSim(){
+  y1=150;y2=150;v=0;simTime=0;
+  history.t.length=0;history.v.length=0;history.y1.length=0;history.y2.length=0;history.a.length=0;
+  paused=false;document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Pulley
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(pulleyX,pulleyY,35,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(pulleyX,pulleyY,7,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.arc(pulleyX,pulleyY,32,0,Math.PI*2);ctx.stroke();
+
+  // Strings
+  ctx.strokeStyle='#111';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(leftX,pulleyY+35);ctx.lineTo(leftX,y1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(rightX,pulleyY+35);ctx.lineTo(rightX,y2);ctx.stroke();
+
+  // String on pulley
+  ctx.beginPath();
+  ctx.arc(pulleyX,pulleyY,35,0.2*Math.PI,0.8*Math.PI);
+  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
+
+  // Mass 1 (left)
+  const m1h=Math.max(25,m1*9);
+  const grad1=ctx.createLinearGradient(leftX-22,y1-m1h,leftX+22,y1);
+  grad1.addColorStop(0,'#333');grad1.addColorStop(1,'#000');
+  ctx.fillStyle=grad1;ctx.fillRect(leftX-22,y1-m1h,44,m1h);
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=0.5;ctx.strokeRect(leftX-18,y1-m1h+4,36,m1h-8);
+  ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText('m₁='+m1.toFixed(1),leftX,y1-8);
+
+  // Mass 2 (right)
+  const m2h=Math.max(25,m2*9);
+  const grad2=ctx.createLinearGradient(rightX-22,y2-m2h,rightX+22,y2);
+  grad2.addColorStop(0,'#555');grad2.addColorStop(1,'#222');
+  ctx.fillStyle=grad2;ctx.fillRect(rightX-22,y2-m2h,44,m2h);
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=0.5;ctx.strokeRect(rightX-18,y2-m2h+4,36,m2h-8);
+  ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText('m₂='+m2.toFixed(1),rightX,y2-8);
+
+  // Support
+  ctx.strokeStyle='#111';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(pulleyX-80,pulleyY-40);ctx.lineTo(pulleyX+80,pulleyY-40);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pulleyX,pulleyY-40);ctx.lineTo(pulleyX,pulleyY-35);ctx.stroke();
+  for(let x=-70;x<=70;x+=20){
+    ctx.beginPath();ctx.moveTo(pulleyX+x,pulleyY-40);ctx.lineTo(pulleyX+x,pulleyY-55);ctx.stroke();
+  }
+
+  // Velocity & acceleration graph
+  const gx=580,gy=30,gW=300,gH=120;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gW,gH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('v(t)',gx+3,gy+10);
+  if(history.v.length>2){
+    const vMax=Math.max(...history.v.map(Math.abs))*1.1||1;
+    const tMin=Math.max(0,simTime-2);
+    ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.3;
+    ctx.beginPath();ctx.moveTo(gx,gy+gH/2);ctx.lineTo(gx+gW,gy+gH/2);ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<history.v.length;i++){const sx=gx+(history.t[i]-tMin)/2*gW;const sy=gy+gH/2-(history.v[i]/vMax)*(gH/2-4);i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+
+  // Energy graph
+  const ex=580,ey=170,eW=300,eH=100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(ex,ey,eW,eH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('ENERGY',ex+3,ey+10);
+  if(history.v.length>2){
+    const y0=150;
+    let maxE=1;
+    const keHist=history.v.map(vi=>0.5*(m1+m2)*vi*vi);
+    const peHist=history.y1.map((y,i)=>(m1*g*(y0-y)+m2*g*(y-history.y2[i])));
+    const eHist=keHist.map((k,i)=>k+peHist[i]);
+    maxE=Math.max(...eHist)*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<keHist.length;i++){const sx=ex+(i/keHist.length)*eW;const sy=ey+eH-(keHist[i]/maxE)*eH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.6;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<peHist.length;i++){const sx=ex+(i/peHist.length)*eW;const sy=ey+eH-(peHist[i]/maxE)*eH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.4;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();
+    for(let i=0;i<eHist.length;i++){const sx=ex+(i/eHist.length)*eW;const sy=ey+eH-(eHist[i]/maxE)*eH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.3;ctx.stroke();
+  }
+
+  const a=getA();
+  const T=getT();
+  const KE=0.5*(m1+m2)*v*v;
+  const PE=m1*g*(150-y1)+m2*g*(y2-150);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>m₁</label><input type="range" id="m1S" min="0.3" max="15" step="0.1" value="${m1}"><span class="val" id="m1V">${m1.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m₂</label><input type="range" id="m2S" min="0.3" max="15" step="0.1" value="${m2}"><span class="val" id="m2V">${m2.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="10" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('m1S').addEventListener('input',function(){m1=parseFloat(this.value);document.getElementById('m1V').textContent=m1.toFixed(1);});
+  document.getElementById('m2S').addEventListener('input',function(){m2=parseFloat(this.value);document.getElementById('m2V').textContent=m2.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">v =</span> <span class="val">${v.toFixed(4)}</span> m/s</span>`+
+    `<span><span class="label">a =</span> <span class="val">${a.toFixed(4)}</span> m/s²</span>`+
+    `<span><span class="label">T =</span> <span class="val">${T.toFixed(4)}</span> N</span>`+
+    `<span><span class="label">Δm =</span> <span class="val">${(m1-m2).toFixed(2)}</span> kg</span>`+
+    `<span><span class="label">Σm =</span> <span class="val">${(m1+m2).toFixed(2)}</span> kg</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${KE.toFixed(3)}</span> J</span>`+
+    `<span><span class="label">PE =</span> <span class="val">${PE.toFixed(3)}</span> J</span>`+
+    `<span><span class="label">E =</span> <span class="val">${(KE+PE).toFixed(3)}</span> J</span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

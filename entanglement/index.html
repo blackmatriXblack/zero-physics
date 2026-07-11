@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entanglement · Bell state |Φ⁺⟩ = (|00⟩+|11⟩)/√2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+p{font-size:0.7em;color:#666;margin:5px 0 10px;text-align:center;max-width:920px;line-height:1.5}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px;cursor:pointer}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right;font-weight:700}
+.ctrl-group select{font:0.65em 'Courier New',monospace;border:1px solid #ddd;padding:1px 4px;background:#fff}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:0.65em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.1s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 16px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Entanglement</h1>
+<p>|Φ⟩ = α|00⟩ + β|11⟩ &nbsp; C = 2|αβ| &nbsp; S = −Σ pᵢlog₂pᵢ &nbsp; Bell CHSH estimate: S = 2√2·C</p>
+<canvas id="c" width="920" height="530"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const ca = document.getElementById('c')
+const cx = ca.getContext('2d')
+const W = 920
+const H = 530
+let alp = 45
+let st = 'bell'
+let sp = 1
+let pl = true
+let an = 0
+let ti = 0
+const hC = []
+const hE = []
+function dr(){
+  cx.fillStyle = '#fff'
+  cx.fillRect(0, 0, W, H)
+  if (pl) {
+    ti += sp * 0.016
+    if (an) alp = 30 + 30 * Math.sin(ti * 0.3)
+  }
+  const a = alp * Math.PI / 180
+  let a00, a01, a10, a11
+  if (st === 'bell') { a00 = Math.cos(a); a01 = 0; a10 = 0; a11 = Math.sin(a) }
+  else if (st === 'psi+') { a00 = 0; a01 = Math.cos(a); a10 = Math.sin(a); a11 = 0 }
+  else { a00 = 1; a01 = 0; a10 = 0; a11 = 0 }
+  const nrm = Math.hypot(a00, a01, a10, a11)
+  a00 /= nrm; a01 /= nrm; a10 /= nrm; a11 /= nrm
+  const mX = 70
+  const mY = 60
+  const mW = 280
+  const mH = 280
+  const labels = ['|00⟩', '|01⟩', '|10⟩', '|11⟩']
+  const amps = [a00, a01, a10, a11]
+  cx.strokeStyle = '#ddd'
+  cx.lineWidth = 0.5
+  cx.strokeRect(mX, mY, mW, mH)
+  cx.fillStyle = '#999'
+  cx.font = '8px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('Two-qubit state amplitudes', mX + mW / 2, mY - 8)
+  const cw = mW / 2
+  const rh = mH / 2
+  for (let i = 0; i < 4; i++) {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    const x = mX + col * cw
+    const y = mY + row * rh
+    cx.fillStyle = 'rgba(0,0,0,' + (0.03 + amps[i] * amps[i] * 0.25) + ')'
+    cx.fillRect(x, y, cw, rh)
+    cx.strokeStyle = 'rgba(0,0,0,0.06)'
+    cx.lineWidth = 0.3
+    cx.strokeRect(x, y, cw, rh)
+    cx.fillStyle = '#111'
+    cx.font = '11px monospace'
+    cx.textAlign = 'center'
+    cx.textBaseline = 'middle'
+    cx.fillText(labels[i], x + cw / 2, y + rh / 2 - 10)
+    cx.fillStyle = '#999'
+    cx.font = '8px monospace'
+    cx.fillText('|α|² = ' + (amps[i] * amps[i] * 100).toFixed(1) + '%', x + cw / 2, y + rh / 2 + 14)
+  }
+  const conc = 2 * Math.abs(a00 * a11 - a01 * a10)
+  const sep = conc < 0.01
+  const ent = -amps.reduce(function(s, am) {
+    const pp = am * am
+    return pp > 0 ? s - pp * Math.log2(pp) : s
+  }, 0)
+  const bellS = 2 * Math.sqrt(2) * conc
+  const cX = 420
+  const cY = 130
+  cx.strokeStyle = '#111'
+  cx.lineWidth = 1.5
+  cx.beginPath()
+  cx.arc(cX, cY, 35, 0, Math.PI * 2)
+  cx.stroke()
+  cx.fillStyle = '#111'
+  cx.font = '8px monospace'
+  cx.textAlign = 'center'
+  cx.textBaseline = 'middle'
+  cx.fillText('Alice', cX, cY)
+  cx.beginPath()
+  cx.arc(cX + 260, cY, 35, 0, Math.PI * 2)
+  cx.stroke()
+  cx.fillText('Bob', cX + 260, cY)
+  cx.strokeStyle = sep ? 'rgba(0,0,0,0.05)' : '#111'
+  cx.lineWidth = sep ? 0.3 : 1.8
+  cx.setLineDash(sep ? [] : [5, 3])
+  cx.beginPath()
+  cx.moveTo(cX + 35, cY)
+  cx.lineTo(cX + 225, cY)
+  cx.stroke()
+  cx.setLineDash([])
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'center'
+  cx.fillText(sep ? 'no correlation' : 'entangled correlation', cX + 130, cY - 16)
+  if (!sep) cx.fillText('Bell state', cX + 130, cY + 16)
+  const outcomes = [
+    { a: 0, b: 0, p: a00 * a00 },
+    { a: 0, b: 1, p: a01 * a01 },
+    { a: 1, b: 0, p: a10 * a10 },
+    { a: 1, b: 1, p: a11 * a11 }
+  ]
+  const nS = 120
+  const results = []
+  for (let i = 0; i < nS; i++) {
+    let rr = Math.random()
+    let cum = 0
+    for (let o of outcomes) {
+      cum += o.p
+      if (rr < cum) { results.push(o); break }
+    }
+  }
+  const sX = 420
+  const sY = 215
+  const sW = 300
+  const sH = 180
+  cx.strokeStyle = '#ddd'
+  cx.lineWidth = 0.5
+  cx.strokeRect(sX, sY, sW, sH)
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('Alice vs Bob measurement outcomes', sX + 4, sY + 12)
+  for (let r of results) {
+    const ax = sX + 30 + r.a * (sW - 60)
+    const ay = sY + 30 + r.b * (sH - 60)
+    cx.fillStyle = 'rgba(0,0,0,0.5)'
+    cx.beginPath()
+    cx.arc(ax, ay, 4, 0, Math.PI * 2)
+    cx.fill()
+  }
+  cx.fillStyle = '#999'
+  cx.font = '6px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('Alice: 0', sX + 30, sY + sH - 3)
+  cx.fillText('Alice: 1', sX + sW - 30, sY + sH - 3)
+  cx.fillText('Bob: 0', sX - 2, sY + 30)
+  cx.fillText('Bob: 1', sX - 2, sY + sH - 30)
+  hC.push(conc)
+  hE.push(ent)
+  if (hC.length > 85) { hC.shift(); hE.shift() }
+  const mgX = 760
+  const mgY = 40
+  const mgW = 145
+  const mgH = 200
+  for (let k = 0; k < 2; k++) {
+    const arr = k ? hE : hC
+    const my = mgY + k * 105
+    cx.strokeStyle = '#ddd'
+    cx.lineWidth = 0.5
+    cx.strokeRect(mgX, my, mgW, mgH)
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? 'Entropy S' : 'Concurrence C', mgX + 3, my + 12)
+    if (arr.length > 1) {
+      const mx = Math.max(...arr)
+      const mn = Math.min(...arr)
+      const rg = mx - mn || 1
+      cx.strokeStyle = k ? 'rgba(0,0,0,0.5)' : '#111'
+      cx.lineWidth = 0.9
+      cx.beginPath()
+      for (let i = 0; i < arr.length; i++) {
+        const x = mgX + i / (arr.length - 1) * mgW
+        const y = my + mgH - (arr[i] - mn) / rg * (mgH - 16)
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      cx.stroke()
+    }
+  }
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><label>STATE</label><select id="stS">' +
+      '<option value="bell"' + (st==='bell'?' selected':'') + '>|Φ⟩ = α|00⟩+β|11⟩</option>' +
+      '<option value="psi+"' + (st==='psi+'?' selected':'') + '>|Ψ⁺⟩ = α|01⟩+β|10⟩</option>' +
+      '<option value="prod"' + (st==='prod'?' selected':'') + '>|00⟩ product state</option></select></div>' +
+    '<div class="ctrl-group"><label>α(°)</label><input type="range" id="aS" min="0" max="90" step="1" value="' + alp + '"><span class="val" id="aV">' + alp + '</span></div>' +
+    '<div class="ctrl-group"><label>SPEED</label><input type="range" id="spS" min="0" max="5" step="0.1" value="' + sp + '"><span class="val" id="spV">' + sp.toFixed(1) + '</span></div>' +
+    '<button id="plBtn">' + (pl ? '⏸PAUSE' : '▶PLAY') + '</button>' +
+    '<button id="rsBtn">↺RESET</button>' +
+    '<button id="anBtn">' + (an ? '⊙SWEEP' : '○SWEEP') + '</button>'
+  document.getElementById('stS').onchange = function(){ st = this.value }
+  document.getElementById('aS').oninput = function(){ alp = +this.value; aV.textContent = alp }
+  document.getElementById('spS').oninput = function(){ sp = +this.value; spV.textContent = sp.toFixed(1) }
+  document.getElementById('plBtn').onclick = function(){ pl = !pl; this.textContent = pl ? '⏸PAUSE' : '▶PLAY' }
+  document.getElementById('rsBtn').onclick = function(){ alp = 45; st = 'bell'; ti = 0; hC.length = 0; hE.length = 0 }
+  document.getElementById('anBtn').onclick = function(){ an = 1 - an; this.textContent = an ? '⊙SWEEP' : '○SWEEP' }
+}
+  const p00 = a00 * a00
+  const p01 = a01 * a01
+  const p10 = a10 * a10
+  const p11 = a11 * a11
+  document.getElementById('stats').innerHTML =
+    '<span><span class="label">α =</span> <span class="val">' + alp + '°</span></span>' +
+    '<span><span class="label">cosα =</span> <span class="val">' + Math.cos(a).toFixed(3) + '</span></span>' +
+    '<span><span class="label">sinα =</span> <span class="val">' + Math.sin(a).toFixed(3) + '</span></span>' +
+    '<span><span class="label">P(00) =</span> <span class="val">' + (p00*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">P(11) =</span> <span class="val">' + (p11*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">P(01) =</span> <span class="val">' + (p01*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">P(10) =</span> <span class="val">' + (p10*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">Entangled =</span> <span class="val">' + (sep ? 'No' : 'Yes') + '</span></span>' +
+    '<span><span class="label">Concurrence =</span> <span class="val">' + conc.toFixed(3) + '</span></span>' +
+    '<span><span class="label">S(Shannon) =</span> <span class="val">' + ent.toFixed(3) + '</span> bits</span>' +
+    '<span><span class="label">CHSH S =</span> <span class="val">' + bellS.toFixed(3) + '</span></span>' +
+    '<span><span class="label">Bell viol. =</span> <span class="val">' + (bellS > 2 ? 'Yes (S>2)' : 'No (S≤2)') + '</span></span>' +
+    '<span><span class="label">|αβ| =</span> <span class="val">' + Math.abs(Math.cos(a) * Math.sin(a)).toFixed(3) + '</span></span>' +
+    '<span><span class="label">State =</span> <span class="val">' + (st==='bell'?'|Φ⟩':st==='psi+'?'|Ψ⁺⟩':'|00⟩') + '</span></span>'
+}
+setInterval(dr, 16)
+</script>
+</body>
+</html>

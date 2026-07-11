@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Charged Particle in B · F = qv × B</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+canvas:active{cursor:crosshair}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.graph-container{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.graph-box{border:1px solid #ddd;position:relative}
+.graph-box .gtitle{position:absolute;top:3px;left:6px;font-size:0.6em;color:#999;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Charged Particle in B-Field</h1>
+<p>F = qv × B — Click canvas to set new particle position</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<div class="graph-container" id="graphs"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+let B=1.2, v0=2.5, q=1.6, m=1;
+let px=200, py=250, vx=0, vy=-v0;
+let trail=[], paused=false, simTime=0;
+const tHist=[], xHist=[], yHist=[], vxHist=[], vyHist=[], keHist=[];
+const maxHist=600;
+let speed=1;
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    const dt=0.006;
+    const ax=q/m*vy*B, ay=-q/m*vx*B;
+    vx+=ax*dt; vy+=ay*dt;
+    px+=vx*dt; py+=vy*dt;
+    if(px<0||px>W||py<0||py>H){px=200;py=250;vx=0;vy=-v0;trail=[];tHist.length=0;xHist.length=0;yHist.length=0;vxHist.length=0;vyHist.length=0;keHist.length=0;}
+    trail.push({x:px,y:py});
+    if(trail.length>maxHist)trail.shift();
+    const ke=0.5*m*(vx*vx+vy*vy);
+    tHist.push(simTime);xHist.push(px);yHist.push(py);vxHist.push(vx);vyHist.push(vy);keHist.push(ke);
+    if(tHist.length>maxHist){tHist.shift();xHist.shift();yHist.shift();vxHist.shift();vyHist.shift();keHist.shift();}
+    simTime+=dt;
+  }
+}
+
+function resetSim(){px=200;py=250;vx=0;vy=-v0;trail=[];simTime=0;tHist.length=0;xHist.length=0;yHist.length=0;vxHist.length=0;vyHist.length=0;keHist.length=0;paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // B field dots
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;
+  for(let y=30;y<H;y+=35)for(let x=30;x<W;x+=35){
+    ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fill();
+  }
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='10px monospace';ctx.textAlign='center';ctx.fillText('B ⊙ (out of page)',450,18);
+
+  // Trail with fade
+  if(trail.length>2){
+    for(let i=1;i<trail.length;i+=2){
+      const frac=i/trail.length;
+      ctx.fillStyle=`rgba(0,0,0,${0.02+0.1*frac})`;
+      ctx.beginPath();ctx.arc(trail[i].x,trail[i].y,1.5+frac*2,0,Math.PI*2);ctx.fill();
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+    ctx.beginPath();
+    for(let i=0;i<trail.length;i++){i===0?ctx.moveTo(trail[i].x,trail[i].y):ctx.lineTo(trail[i].x,trail[i].y);}
+    ctx.stroke();
+  }
+
+  // Particle
+  const grad=ctx.createRadialGradient(px-3,py-3,1,px,py,7);
+  grad.addColorStop(0,'#555');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('+',px,py+2);
+
+  const speedV=Math.hypot(vx,vy);
+  if(speedV>0.1){
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+vx*4,py+vy*4);ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.fillText('v',px+vx*4+4,py+vy*4+4);
+  }
+
+  const r=m*v0/(q*B), wc=q*B/m, T=2*Math.PI/wc, f=wc/(2*Math.PI);
+  const r_px=r*100;
+
+  // Theoretical radius circle
+  ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.5;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.arc(200,250,r_px,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+
+  // Force vector
+  if(speedV>0.1){
+    const fMag=Math.abs(q*speedV*B);
+    const fScale=Math.min(fMag*0.15,60);
+    const fx=-vy*B/Math.hypot(-vy*B,vx*B)*fScale;
+    const fy=vx*B/Math.hypot(-vy*B,vx*B)*fScale;
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+fx,py+fy);ctx.stroke();
+  }
+
+  // Graphs
+  // Trajectory
+  const gX=530,gY=20,gW=350,gH=180;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('trajectory x vs y',gX+3,gY+10);
+  if(xHist.length>2){
+    const xMin=Math.min(...xHist),xMax=Math.max(...xHist),xR=xMax-xMin||1;
+    const yMin=Math.min(...yHist),yMax=Math.max(...yHist),yR=yMax-yMin||1;
+    ctx.beginPath();
+    for(let i=0;i<xHist.length;i++){
+      const px2=gX+(xHist[i]-xMin)/xR*gW,py2=gY+gH-(yHist[i]-yMin)/yR*gH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // KE vs time
+  const egX=530,egY=210,egW=350,egH=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(egX,egY,egW,egH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('KE vs time',egX+3,egY+10);
+  if(keHist.length>2){
+    const keMax=Math.max(...keHist)*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<keHist.length;i++){
+      const px2=egX+(i/keHist.length)*egW,py2=egY+egH-(keHist[i]/keMax)*egH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // Phase space (vx vs vy)
+  const psX=530,psY=300,psW=350,psH=120;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(psX,psY,psW,psH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('velocity space vx vs vy',psX+3,psY+10);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(psX+psW/2,psY);ctx.lineTo(psX+psW/2,psY+psH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(psX,psY+psH/2);ctx.lineTo(psX+psW,psY+psH/2);ctx.stroke();
+  if(vxHist.length>2){
+    const vMax=Math.max(...vxHist.map(Math.abs),...vyHist.map(Math.abs))*1.2||1;
+    ctx.beginPath();
+    for(let i=0;i<vxHist.length;i++){
+      const px2=psX+psW/2+(vxHist[i]/vMax)*(psW/2-6),py2=psY+psH/2-(vyHist[i]/vMax)*(psH/2-6);
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // Mouse click to reposition
+  canvas.onmousedown=function(e){
+    if(dragging)return;
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left, my_=e.clientY-rect.top;
+    if(my_<430){
+      px=mx; py=my_; vx=0; vy=-v0;
+      trail=[]; tHist.length=0; xHist.length=0; yHist.length=0; vxHist.length=0; vyHist.length=0; keHist.length=0;
+    }
+  };
+
+  const ke=0.5*m*speedV*speedV;
+  const aMag=Math.abs(q/m*speedV*B);
+  const L=m*(px*vx+py*vy);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>B</label><input type="range" id="bS" min="0.2" max="4" step="0.1" value="${B}"><span class="val" id="bV">${B.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>v₀</label><input type="range" id="vS" min="0.5" max="6" step="0.2" value="${v0}"><span class="val" id="vV">${v0.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>q</label><input type="range" id="qS" min="0.5" max="4" step="0.1" value="${q}"><span class="val" id="qV">${q.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m</label><input type="range" id="mS" min="0.2" max="3" step="0.1" value="${m}"><span class="val" id="mV">${m.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('bS').addEventListener('input',function(){B=parseFloat(this.value);document.getElementById('bV').textContent=B.toFixed(1);});
+  document.getElementById('vS').addEventListener('input',function(){v0=parseFloat(this.value);document.getElementById('vV').textContent=v0.toFixed(1);resetSim();});
+  document.getElementById('qS').addEventListener('input',function(){q=parseFloat(this.value);document.getElementById('qV').textContent=q.toFixed(1);});
+  document.getElementById('mS').addEventListener('input',function(){m=parseFloat(this.value);document.getElementById('mV').textContent=m.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">r =</span> <span class="val">${r.toFixed(3)}</span> m</span>`+
+    `<span><span class="label">ω<sub>c</sub> =</span> <span class="val">${wc.toFixed(3)}</span> rad/s</span>`+
+    `<span><span class="label">T =</span> <span class="val">${T.toFixed(3)}</span> s</span>`+
+    `<span><span class="label">f =</span> <span class="val">${f.toFixed(3)}</span> Hz</span>`+
+    `<span><span class="label">|v| =</span> <span class="val">${speedV.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${ke.toFixed(3)}</span> J</span>`+
+    `<span><span class="label">|a| =</span> <span class="val">${aMag.toFixed(3)}</span> m/s²</span>`+
+    `<span><span class="label">|F| =</span> <span class="val">${(Math.abs(q*speedV*B)).toFixed(3)}</span> N</span>`+
+    `<span><span class="label">p =</span> <span class="val">${(m*speedV).toFixed(3)}</span> kg·m/s</span>`+
+    `<span><span class="label">L =</span> <span class="val">${L.toFixed(2)}</span></span>`+
+    `<span><span class="label">B =</span> <span class="val">${B.toFixed(2)}</span> T</span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

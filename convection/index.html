@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convection · Rayleigh–Bénard cellular flow</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+p{font-size:0.7em;color:#666;margin:5px 0 10px;text-align:center;max-width:920px;line-height:1.5}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px;cursor:pointer}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:0.65em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.1s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 16px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Convection (Rayleigh–Bénard)</h1>
+<p>Buoyancy-driven cellular flow &nbsp; Ra = gβΔT L³/(να) &nbsp; Ra<sub>c</sub> ≈ 1708 &nbsp; Nu = −⟨∂T/∂z⟩/(ΔT/L)</p>
+<canvas id="c" width="920" height="530"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const ca = document.getElementById('c')
+const cx = ca.getContext('2d')
+const W = 920
+const H = 530
+const cols = 60
+const rows = 40
+let psi = []
+let om = []
+let Tg = []
+let Ra = 2000
+let Pr = 1
+let pl = true
+let sp = 1
+const hNu = []
+const hV = []
+function init(){
+  for (let i = 0; i < cols; i++) {
+    psi[i] = new Float64Array(rows)
+    om[i] = new Float64Array(rows)
+    Tg[i] = new Float64Array(rows)
+  }
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      Tg[i][j] = 1 - j / (rows - 1)
+    }
+  }
+  hNu.length = 0
+  hV.length = 0
+}
+init()
+function step(){
+  if (!pl) return
+  const dt = 0.0005 * sp
+  for (let i = 1; i < cols - 1; i++) {
+    for (let j = 1; j < rows - 1; j++) {
+      const d2Tx = Tg[i+1][j] + Tg[i-1][j] - 2 * Tg[i][j]
+      const d2Ty = Tg[i][j+1] + Tg[i][j-1] - 2 * Tg[i][j]
+      Tg[i][j] += dt * (d2Tx + d2Ty)
+      const d2ox = om[i+1][j] + om[i-1][j] - 2 * om[i][j]
+      const d2oy = om[i][j+1] + om[i][j-1] - 2 * om[i][j]
+      const dTx = (Tg[i+1][j] - Tg[i-1][j]) / 2
+      om[i][j] += dt * (Pr * (d2ox + d2oy) + Ra * Pr * dTx)
+    }
+  }
+  for (let it = 0; it < 50; it++) {
+    for (let i = 1; i < cols - 1; i++) {
+      for (let j = 1; j < rows - 1; j++) {
+        psi[i][j] = ((psi[i+1][j] + psi[i-1][j] + psi[i][j+1] + psi[i][j-1]) + om[i][j]) / 4
+      }
+    }
+  }
+  for (let i = 0; i < cols; i++) {
+    psi[i][0] = 0
+    psi[i][rows-1] = 0
+    om[i][0] = 0
+    om[i][rows-1] = 0
+    Tg[i][0] = 1
+    Tg[i][rows-1] = 0
+  }
+  for (let j = 0; j < rows; j++) {
+    psi[0][j] = 0
+    psi[cols-1][j] = 0
+    om[0][j] = 0
+    om[cols-1][j] = 0
+  }
+}
+function dr(){
+  step()
+  cx.fillStyle = '#fff'
+  cx.fillRect(0, 0, W, H)
+  const cw = W / cols
+  const ch = H / rows
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const g = 255 - Math.round(Tg[i][j] * 200)
+      cx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')'
+      cx.fillRect(i * cw, j * ch, cw + 0.5, ch + 0.5)
+    }
+  }
+  const stepQ = 5
+  cx.strokeStyle = 'rgba(0,0,0,0.07)'
+  cx.lineWidth = 0.4
+  for (let i = stepQ; i < cols - stepQ; i += stepQ) {
+    for (let j = stepQ; j < rows - stepQ; j += stepQ) {
+      const vx = -(psi[i][j+1] - psi[i][j-1]) / 2
+      const vy = (psi[i+1][j] - psi[i-1][j]) / 2
+      const m = Math.hypot(vx, vy)
+      if (m > 0.005) {
+        const l = Math.min(m * 8, 14)
+        cx.beginPath()
+        cx.moveTo(i * cw, j * ch)
+        cx.lineTo(i * cw + vx / m * l, j * ch + vy / m * l)
+        cx.stroke()
+      }
+    }
+  }
+  cx.fillStyle = 'rgba(0,0,0,0.3)'
+  cx.font = '7px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('Temperature: white=hot(bottom) black=cold(top) | Arrows=flow direction', 10, 12)
+  let Nu = 0
+  let vMax = 0
+  let KE = 0
+  for (let i = 0; i < cols; i++) Nu += Tg[i][1] - Tg[i][0]
+  for (let i = 1; i < cols - 1; i++) {
+    for (let j = 1; j < rows - 1; j++) {
+      const vx = -(psi[i][j+1] - psi[i][j-1]) / 2
+      const vy = (psi[i+1][j] - psi[i-1][j]) / 2
+      const m = Math.hypot(vx, vy)
+      vMax = Math.max(vMax, m)
+      KE += m * m
+    }
+  }
+  hNu.push(Nu)
+  hV.push(vMax)
+  if (hNu.length > 85) { hNu.shift(); hV.shift() }
+  const mgX = 630
+  const mgY = 25
+  const mgW = 270
+  const mgH = 110
+  for (let k = 0; k < 2; k++) {
+    const arr = k ? hV : hNu
+    const my = mgY + k * 125
+    cx.strokeStyle = '#ddd'
+    cx.lineWidth = 0.5
+    cx.strokeRect(mgX, my, mgW, mgH)
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? 'Max flow speed |v| history' : 'Nusselt number Nu history', mgX + 4, my + 12)
+    if (arr.length > 1) {
+      const mx = Math.max(...arr)
+      const mn = Math.min(...arr)
+      const rg = mx - mn || 1
+      cx.strokeStyle = k ? 'rgba(0,0,0,0.5)' : '#111'
+      cx.lineWidth = 0.9
+      cx.beginPath()
+      for (let i = 0; i < arr.length; i++) {
+        const x = mgX + i / (arr.length - 1) * mgW
+        const y = my + mgH - (arr[i] - mn) / rg * (mgH - 16)
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      cx.stroke()
+    }
+  }
+  let avgT = 0
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) avgT += Tg[i][j]
+  avgT /= (cols * rows)
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><label>Ra(×10³)</label><input type="range" id="raS" min="0.5" max="10" step="0.1" value="' + (Ra/1000) + '"><span class="val" id="raV">' + (Ra/1000).toFixed(1) + '</span></div>' +
+    '<div class="ctrl-group"><label>Pr</label><input type="range" id="prS" min="0.1" max="10" step="0.1" value="' + Pr + '"><span class="val" id="prV">' + Pr.toFixed(1) + '</span></div>' +
+    '<div class="ctrl-group"><label>SPEED</label><input type="range" id="spS" min="0" max="3" step="0.1" value="' + sp + '"><span class="val" id="spV">' + sp.toFixed(1) + '</span></div>' +
+    '<button id="plBtn">' + (pl ? '⏸PAUSE' : '▶PLAY') + '</button>' +
+    '<button id="rsBtn">↺RESET</button>'
+  document.getElementById('raS').oninput = function(){ Ra = +this.value * 1000; raV.textContent = (Ra/1000).toFixed(1) }
+  document.getElementById('prS').oninput = function(){ Pr = +this.value; prV.textContent = Pr.toFixed(1) }
+  document.getElementById('spS').oninput = function(){ sp = +this.value; spV.textContent = sp.toFixed(1) }
+  document.getElementById('plBtn').onclick = function(){ pl = !pl; this.textContent = pl ? '⏸PAUSE' : '▶PLAY' }
+  document.getElementById('rsBtn').onclick = function(){ init() }
+}
+  document.getElementById('stats').innerHTML =
+    '<span><span class="label">Ra =</span> <span class="val">' + Ra.toFixed(0) + '</span></span>' +
+    '<span><span class="label">Pr =</span> <span class="val">' + Pr.toFixed(2) + '</span></span>' +
+    '<span><span class="label">Nu ≈</span> <span class="val">' + Nu.toFixed(3) + '</span></span>' +
+    '<span><span class="label">|v|_max =</span> <span class="val">' + vMax.toFixed(4) + '</span></span>' +
+    '<span><span class="label">KE =</span> <span class="val">' + KE.toFixed(4) + '</span></span>' +
+    '<span><span class="label">⟨T⟩ =</span> <span class="val">' + avgT.toFixed(3) + '</span></span>' +
+    '<span><span class="label">T_bot =</span> <span class="val">1.000</span></span>' +
+    '<span><span class="label">T_top =</span> <span class="val">0.000</span></span>' +
+    '<span><span class="label">Grid =</span> <span class="val">' + cols + '×' + rows + '</span></span>' +
+    '<span><span class="label">Regime =</span> <span class="val">' + (Ra > 1708 ? 'Convection' : 'Conduction') + '</span></span>' +
+    '<span><span class="label">Ra/Ra_c =</span> <span class="val">' + (Ra/1708).toFixed(2) + '</span></span>' +
+    '<span><span class="label">Δt =</span> <span class="val">' + (0.0005*sp).toFixed(5) + '</span></span>' +
+    '<span><span class="label">Cells ≈</span> <span class="val">' + (Ra > 1708 ? Math.round(cols/4) : '0') + '</span></span>' +
+    '<span><span class="label">BC =</span> <span class="val">T fix, ψ=0</span></span>'
+}
+setInterval(dr, 16)
+</script>
+</body>
+</html>

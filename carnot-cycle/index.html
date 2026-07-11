@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Carnot Cycle · η = 1 − T<sub>C</sub>/T<sub>H</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:60px;accent-color:#000}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:4px;font-size:0.62em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Carnot Cycle</h1>
+<p>η = 1 − T<sub>C</sub>/T<sub>H</sub> — Reversible heat engine</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+const W=900,H=520,R=8.314;
+let TH=600,TC=300,VA=1,VB=4,n=1,gamma=5/3;
+let paused=false,speed=1,phase=0;
+let hist={w:[],eff:[]};
+
+function resetSim(){
+  TH=parseFloat(document.getElementById('thS')?.value)||600;
+  TC=parseFloat(document.getElementById('tcS')?.value)||300;
+  VA=parseFloat(document.getElementById('vaS')?.value)||1;
+  VB=parseFloat(document.getElementById('vbS')?.value)||4;
+  n=parseFloat(document.getElementById('nS')?.value)||1;
+  phase=0;paused=false;hist={w:[],eff:[]};
+  const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';
+}
+
+function getCycle(ph){
+  const PA=n*R*TH/VA,PB=n*R*TH/VB;
+  const PC=n*R*TC/VB,PD=n*R*TC/VA;
+  const VC=VB*Math.pow(TH/TC,1/(gamma-1)),VD=VA*Math.pow(TH/TC,1/(gamma-1));
+  const kB=PB*Math.pow(VB,gamma),kD=PD*Math.pow(VA,gamma);
+  function adP(V,k){return k/Math.pow(V,gamma);}
+  let V,P,lab='';
+  if(ph<1){const t=ph;V=VA+t*(VB-VA);P=n*R*TH/V;lab='A->B isoT';}
+  else if(ph<2){const t=ph-1;V=VB+t*(VC-VB);P=adP(V,kB);lab='B->C adiab';}
+  else if(ph<3){const t=ph-2;V=VC+t*(VD-VC);P=n*R*TC/V;lab='C->D isoT';}
+  else{const t=ph-3;V=VD+t*(VA-VD);P=adP(V,kD);lab='D->A adiab';}
+  return {V,P,lab,VC,VD,PA,PB,PC,PD};
+}
+
+function buildPts(){
+  const PP=getCycle(0);
+  const VC=PP.VC,VD=PP.VD;
+  const kB=PP.PB*Math.pow(VB,gamma),kD=PP.PD*Math.pow(VA,gamma);
+  function adP(V,k){return k/Math.pow(V,gamma);}
+  const pts=[];
+  for(let i=0;i<=40;i++){const t=i/40,V=VA+t*(VB-VA);pts.push({V,P:n*R*TH/V});}
+  for(let i=1;i<=40;i++){const t=i/40,V=VB+t*(VC-VB);pts.push({V,P:adP(V,kB)});}
+  for(let i=1;i<=40;i++){const t=i/40,V=VC+t*(VD-VC);pts.push({V,P:n*R*TC/V});}
+  for(let i=1;i<40;i++){const t=i/40,V=VD+t*(VA-VD);pts.push({V,P:adP(V,kD)});}
+  return pts;
+}
+
+function step(){
+  if(paused)return;
+  phase+=0.002*speed;if(phase>=4)phase-=4;
+  const pts=buildPts();let work=0;
+  for(let i=1;i<pts.length;i++)work+=(pts[i].P+pts[i-1].P)/2*(pts[i].V-pts[i-1].V);
+  const QH=n*R*TH*Math.log(VB/VA);const eff=work/(QH||1);
+  hist.w.push(work);hist.eff.push(eff);
+  if(hist.w.length>100){hist.w.shift();hist.eff.shift();}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const PP=getCycle(0),VC=PP.VC,VD=PP.VD,PA=PP.PA,PB=PP.PB,PC=PP.PC,PD=PP.PD;
+  const eta=1-TC/TH;
+  const pts=buildPts();
+  const Vmax=Math.max(VC,VB)*1.15,Vmin=Math.min(VA,VD)*0.85;
+  const Pmax=Math.max(PA,PB,PC,PD)*1.15,pVmin=Math.max(0.1,Math.min(PA,PB,PC,PD)*0.85);
+  const gX=60,gY=30,gW=460,gH=380;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('PV DIAGRAM',gX+3,gY+10);
+  ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(gX,gY);ctx.lineTo(gX,gY+gH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(gX,gY+gH);ctx.lineTo(gX+gW,gY+gH);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';
+  ctx.fillText('V',gX+gW/2,gY+gH+12);ctx.fillText('P',gX-10,gY+gH/2);
+
+  function vx(v){return gX+((v-Vmin)/(Vmax-Vmin))*gW;}
+  function py(p){return gY+gH-((p-pVmin)/(Pmax-pVmin))*gH;}
+
+  ctx.beginPath();for(let i=0;i<pts.length;i++){const sx=vx(pts[i].V),sy=py(pts[i].P);i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+  ctx.closePath();ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fill();
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.stroke();
+
+  const ii={A:{V:VA,P:PA},B:{V:VB,P:PB},C:{V:VC,P:PC},D:{V:VD,P:PD}};
+  ctx.font='8px monospace';ctx.textAlign='left';
+  for(const[l,p]of Object.entries(ii)){ctx.fillStyle='#111';ctx.fillText(l,vx(p.V)+2,py(p.P)-2);}
+  ctx.fillStyle='#999';ctx.font='5px monospace';ctx.fillText('T_H='+TH+'K',vx(VA)+10,py(PA)-14);ctx.fillText('T_C='+TC+'K',vx(VA)+10,py(PD)+14);
+  ctx.fillStyle='#c00';const cp=getCycle(phase);
+  ctx.beginPath();ctx.arc(vx(cp.V),py(cp.P),5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#c00';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(cp.lab,vx(cp.V)+6,py(cp.P)-6);
+
+  // T-s diagram
+  const tX=560,tY=30,tW=300,tH=150;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(tX,tY,tW,tH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('T-s DIAGRAM',tX+3,tY+10);
+  const stX=tX+30,stY=tY+20,stW=tW-50,stH=tH-40;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.strokeRect(stX,stY,stW,stH);
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(stX,stY,stW,stH);
+  ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';
+  ctx.fillText('s',stX+stW/2,stY+stH+10);ctx.fillText('T',stX-8,stY+8);
+  ctx.fillStyle='#111';ctx.font='5px monospace';ctx.textAlign='left';
+  ctx.fillText('TH',stX+2,stY+8);ctx.fillText('TC',stX+2,stY+stH-2);
+
+  // Energy flow
+  const eX=560,eY=200,eW=300,eH=250;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(eX,eY,eW,eH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('ENERGY & EFFICIENCY',eX+3,eY+10);
+  const QH=n*R*TH*Math.log(VB/VA),QC=n*R*TC*Math.log(VB/VA),W_net=QH-QC;
+  ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(eX+40,eY+25,220,30);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('Q_H = '+QH.toFixed(1)+' J  (T_H='+TH+'K)',eX+150,eY+44);
+  ctx.fillStyle='rgba(0,0,0,0.03)';ctx.strokeStyle='#111';ctx.lineWidth=0.5;
+  ctx.fillRect(eX+40,eY+80,220,35);ctx.strokeRect(eX+40,eY+80,220,35);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('ENGINE  η = '+(eta*100).toFixed(2)+'%',eX+150,eY+102);
+  ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(eX+40,eY+140,220,30);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('Q_C = '+QC.toFixed(1)+' J  (T_C='+TC+'K)',eX+150,eY+159);
+  ctx.strokeStyle='#111';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(eX+150,eY+55);ctx.lineTo(eX+150,eY+80);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(eX+150,eY+115);ctx.lineTo(eX+150,eY+140);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(eX+150,eY+97);ctx.lineTo(eX+260,eY+97);ctx.lineTo(eX+260,eY+55);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';ctx.fillText('W = '+W_net.toFixed(1)+' J',eX+265,eY+82);
+  ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';
+  ctx.fillText('Q_H-Q_C-W = '+(QH-QC-W_net).toExponential(2),eX+150,eY+190);
+  // Carnot formula
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.font='6px monospace';
+  ctx.fillText('Carnot: 1 - T_C/T_H = '+(1-TC/TH).toFixed(4),eX+150,eY+215);
+  ctx.fillText('W = nR(T_H-T_C)ln(V_B/V_A)',eX+150,eY+230);
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>T_H (K)</label><input type="range" id="thS" min="300" max="1000" step="10" value="'+TH+'"><span class="val" id="thV">'+TH+'</span></div>'+
+    '<div class="ctrl-group"><label>T_C (K)</label><input type="range" id="tcS" min="100" max="500" step="10" value="'+TC+'"><span class="val" id="tcV">'+TC+'</span></div>'+
+    '<div class="ctrl-group"><label>V_A</label><input type="range" id="vaS" min="0.5" max="5" step="0.1" value="'+VA.toFixed(1)+'"><span class="val" id="vaV">'+VA.toFixed(1)+'</span></div>'+
+    '<div class="ctrl-group"><label>V_B</label><input type="range" id="vbS" min="1" max="10" step="0.5" value="'+VB.toFixed(1)+'"><span class="val" id="vbV">'+VB.toFixed(1)+'</span></div>'+
+    '<div class="ctrl-group"><label>n</label><input type="range" id="nS" min="0.5" max="3" step="0.5" value="'+n.toFixed(1)+'"><span class="val" id="nV">'+n.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>'+
+    '<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="10" step="1" value="'+speed+'"><span class="val" id="speedV">'+speed+'x</span></div>';
+
+  document.getElementById('thS')?.addEventListener('input',function(){TH=parseFloat(this.value);document.getElementById('thV').textContent=TH;});
+  document.getElementById('tcS')?.addEventListener('input',function(){TC=parseFloat(this.value);document.getElementById('tcV').textContent=TC;});
+  document.getElementById('vaS')?.addEventListener('input',function(){VA=parseFloat(this.value);document.getElementById('vaV').textContent=VA.toFixed(1);});
+  document.getElementById('vbS')?.addEventListener('input',function(){VB=parseFloat(this.value);document.getElementById('vbV').textContent=VB.toFixed(1);});
+  document.getElementById('nS')?.addEventListener('input',function(){n=parseFloat(this.value);document.getElementById('nV').textContent=n.toFixed(1);});
+  document.getElementById('pauseBtn')?.addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn')?.addEventListener('click',resetSim);
+  document.getElementById('speedS')?.addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">T_H =</span> <span class="val">'+TH+'</span> K</span>'+
+    '<span><span class="label">T_C =</span> <span class="val">'+TC+'</span> K</span>'+
+    '<span><span class="label">η =</span> <span class="val">'+(eta*100).toFixed(2)+'%</span></span>'+
+    '<span><span class="label">Q_H =</span> <span class="val">'+QH.toFixed(2)+'</span> J</span>'+
+    '<span><span class="label">Q_C =</span> <span class="val">'+QC.toFixed(2)+'</span> J</span>'+
+    '<span><span class="label">W =</span> <span class="val">'+W_net.toFixed(2)+'</span> J</span>'+
+    '<span><span class="label">P_A =</span> <span class="val">'+PA.toFixed(1)+'</span></span>'+
+    '<span><span class="label">P_B =</span> <span class="val">'+PB.toFixed(1)+'</span></span>'+
+    '<span><span class="label">P_C =</span> <span class="val">'+PC.toFixed(1)+'</span></span>'+
+    '<span><span class="label">P_D =</span> <span class="val">'+PD.toFixed(1)+'</span></span>'+
+    '<span><span class="label">V_C =</span> <span class="val">'+VC.toFixed(2)+'</span></span>'+
+    '<span><span class="label">V_D =</span> <span class="val">'+VD.toFixed(2)+'</span></span>'+
+    '<span><span class="label">γ =</span> <span class="val">'+gamma+'</span></span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

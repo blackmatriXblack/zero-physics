@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blackbody · Planck's law, Wien displacement</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+p{font-size:0.7em;color:#666;margin:5px 0 10px;text-align:center;max-width:920px;line-height:1.5}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px;cursor:pointer}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:0.65em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.1s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 16px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Blackbody Radiation</h1>
+<p>B(λ,T) = 2hc²/λ⁵ · 1/(e^(hc/λkT)−1) &nbsp; &nbsp; λ<sub>max</sub>T = 2.898 mm·K &nbsp; &nbsp; P = σT⁴</p>
+<canvas id="c" width="920" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const ca = document.getElementById('c')
+const cx = ca.getContext('2d')
+const W = 920
+const H = 500
+let T = 5000
+let sc = 1.5
+let sp = 1
+let pl = true
+let an = 0
+let ti = 0
+const h = 6.626e-34
+const c = 3e8
+const k = 1.381e-23
+const s = 5.67e-8
+function plB(l, T) {
+  const a = 2 * h * c * c / Math.pow(l, 5)
+  return a / (Math.exp(h * c / (l * k * T)) - 1)
+}
+const hP = []
+const hPow = []
+function dr(){
+  cx.fillStyle = '#fff'
+  cx.fillRect(0, 0, W, H)
+  const gX = 70
+  const gY = 25
+  const gW = 520
+  const gH = 290
+  if (pl) {
+    ti += sp * 0.016
+    if (an) T = 3000 + 4000 * Math.sin(ti * 0.3)
+  }
+  cx.strokeStyle = '#ddd'
+  cx.lineWidth = 0.5
+  cx.strokeRect(gX, gY, gW, gH)
+  cx.fillStyle = '#999'
+  cx.font = '8px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('Spectral radiance B(λ,T) vs wavelength λ', gX + 4, gY + 12)
+  cx.textAlign = 'center'
+  cx.fillText('Wavelength λ (μm)', gX + gW / 2, gY + gH + 14)
+  cx.save()
+  cx.translate(gX - 18, gY + gH / 2)
+  cx.rotate(-Math.PI / 2)
+  cx.fillText('B(λ,T) (W/m³)', 0, 0)
+  cx.restore()
+  cx.strokeStyle = 'rgba(0,0,0,0.08)'
+  cx.lineWidth = 0.6
+  cx.beginPath()
+  cx.moveTo(gX, gY)
+  cx.lineTo(gX, gY + gH)
+  cx.stroke()
+  cx.beginPath()
+  cx.moveTo(gX, gY + gH)
+  cx.lineTo(gX + gW, gY + gH)
+  cx.stroke()
+  const lM = 2898 / T
+  const refs = [3000, 4000, 5000, 6000]
+  for (let i = 0; i < refs.length; i++) {
+    const t = refs[i]
+    const sl = Math.abs(t - T) < 50
+    cx.strokeStyle = sl ? '#111' : 'rgba(0,0,0,' + (0.02 + i * 0.02) + ')'
+    cx.lineWidth = sl ? 1.5 : 0.4
+    cx.beginPath()
+    let f = true
+    for (let x = 0; x <= gW; x++) {
+      const l = 0.1 + x / gW * 3.9
+      const bv = plB(l * 1e-6, t)
+      const py = gY + gH - bv / sc / 2.5e13 * (gH - 25)
+      if (f) {
+        cx.moveTo(gX + x, py)
+        f = false
+      } else {
+        cx.lineTo(gX + x, py)
+      }
+    }
+    cx.stroke()
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'right'
+    cx.fillText(t + 'K', gX + gW - 3, gY + 14 + i * 13)
+  }
+  const lPx = gX + (lM - 0.1) / 3.9 * gW
+  const bM = plB(lM * 1e-6, T)
+  const bPy = gY + gH - bM / sc / 2.5e13 * (gH - 25)
+  cx.strokeStyle = 'rgba(0,0,0,0.15)'
+  cx.lineWidth = 0.6
+  cx.setLineDash([4, 3])
+  cx.beginPath()
+  cx.moveTo(lPx, gY)
+  cx.lineTo(lPx, gY + gH)
+  cx.stroke()
+  cx.setLineDash([])
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('λ_max=' + lM.toFixed(1) + 'μm', lPx, gY + gH - 5)
+  cx.fillStyle = '#111'
+  cx.beginPath()
+  cx.arc(lPx, bPy, 4, 0, Math.PI * 2)
+  cx.fill()
+  const bX = 70
+  const bY = 345
+  const bW = 520
+  const bH = 20
+  for (let x = 0; x < bW; x++) {
+    const p = x / bW
+    let r = 1, g = 1, b = 1
+    if (p < 0.25) { r = 1; g = 4 * p; b = 0 }
+    else if (p < 0.5) { r = 1 - 4 * (p - 0.25); g = 1; b = 0 }
+    else if (p < 0.75) { r = 0; g = 1 - 4 * (p - 0.5); b = 4 * (p - 0.5) }
+    else { r = 0; g = 0; b = 1 - 4 * (p - 0.75) }
+    cx.fillStyle = 'rgb(' + (255 * Math.max(0, Math.min(1, r)) | 0) + ',' + (255 * Math.max(0, Math.min(1, g)) | 0) + ',' + (255 * Math.max(0, Math.min(1, b)) | 0) + ')'
+    cx.fillRect(bX + x, bY, 1, bH)
+  }
+  cx.strokeStyle = '#ddd'
+  cx.lineWidth = 0.5
+  cx.strokeRect(bX, bY, bW, bH)
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('Visible spectrum 380-760 nm', bX + bW / 2, bY - 4)
+  cx.fillText('380nm', bX, bY + bH + 12)
+  cx.fillText('760nm', bX + bW, bY + bH + 12)
+  const mX = 620
+  const mY = 25
+  const mW = 270
+  const mH = 100
+  hP.push(lM)
+  hPow.push(s * T ** 4)
+  if (hP.length > 85) { hP.shift(); hPow.shift() }
+  for (let k = 0; k < 2; k++) {
+    const arr = k ? hPow : hP
+    const my = mY + k * 120
+    cx.strokeStyle = '#ddd'
+    cx.lineWidth = 0.5
+    cx.strokeRect(mX, my, mW, mH)
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? 'Power P = σT⁴ history' : 'Peak λ_max history', mX + 4, my + 12)
+    cx.fillStyle = '#ccc'
+    cx.font = '6px monospace'
+    cx.fillText(k ? '· MW/m²' : '· μm', mX + 4, my + 24)
+    if (arr.length > 1) {
+      const mx = Math.max(...arr)
+      const mn = Math.min(...arr)
+      const rg = mx - mn || 1
+      cx.strokeStyle = k ? 'rgba(0,0,0,0.5)' : '#111'
+      cx.lineWidth = 0.9
+      cx.beginPath()
+      for (let i = 0; i < arr.length; i++) {
+        const x = mX + i / (arr.length - 1) * mW
+        const y = my + mH - (arr[i] - mn) / rg * (mH - 20)
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      cx.stroke()
+    }
+  }
+  const P = s * T ** 4
+  const pW = 2898 / T
+  const pF = 5.879e10 * T
+  const rj = lM * 1e-6 * k * T / (2 * c * c) * 1e-12
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><label>T(K)</label><input type="range" id="tS" min="500" max="10000" step="50" value="' + T + '"><span class="val" id="tV">' + T + '</span></div>' +
+    '<div class="ctrl-group"><label>SCALE</label><input type="range" id="scS" min="0.2" max="5" step="0.1" value="' + sc + '"><span class="val" id="scV">' + sc.toFixed(1) + '</span></div>' +
+    '<div class="ctrl-group"><label>SPEED</label><input type="range" id="spS" min="0" max="5" step="0.1" value="' + sp + '"><span class="val" id="spV">' + sp.toFixed(1) + '</span></div>' +
+    '<button id="plBtn">' + (pl ? '⏸PAUSE' : '▶PLAY') + '</button>' +
+    '<button id="rsBtn">↺RESET</button>' +
+    '<button id="anBtn">' + (an ? '⊙SWEEP' : '○SWEEP') + '</button>'
+  document.getElementById('tS').oninput = function(){ T = +this.value; tV.textContent = T }
+  document.getElementById('scS').oninput = function(){ sc = +this.value; scV.textContent = sc.toFixed(1) }
+  document.getElementById('spS').oninput = function(){ sp = +this.value; spV.textContent = sp.toFixed(1) }
+  document.getElementById('plBtn').onclick = function(){ pl = !pl; this.textContent = pl ? '⏸PAUSE' : '▶PLAY' }
+  document.getElementById('rsBtn').onclick = function(){ T = 5000; ti = 0; hP.length = 0; hPow.length = 0 }
+  document.getElementById('anBtn').onclick = function(){ an = 1 - an; this.textContent = an ? '⊙SWEEP' : '○SWEEP' }
+}
+  document.getElementById('stats').innerHTML =
+    '<span><span class="label">T =</span> <span class="val">' + T + '</span> K</span>' +
+    '<span><span class="label">λ_max =</span> <span class="val">' + pW.toFixed(2) + '</span> μm</span>' +
+    '<span><span class="label">ν_max =</span> <span class="val">' + (pF/1e12).toFixed(2) + '</span> THz</span>' +
+    '<span><span class="label">P = σT⁴ =</span> <span class="val">' + (P/1e6).toFixed(3) + '</span> MW/m²</span>' +
+    '<span><span class="label">B(λ_max) =</span> <span class="val">' + (bM/1e13).toFixed(3) + '</span> ×10¹³ W/m³</span>' +
+    '<span><span class="label">σ =</span> <span class="val">' + s.toExponential(3) + '</span> W/m²K⁴</span>' +
+    '<span><span class="label">h =</span> <span class="val">' + h.toExponential(2) + '</span> J·s</span>' +
+    '<span><span class="label">c =</span> <span class="val">' + c.toExponential(2) + '</span> m/s</span>' +
+    '<span><span class="label">k_B =</span> <span class="val">' + k.toExponential(3) + '</span> J/K</span>' +
+    '<span><span class="label">Radiance L =</span> <span class="val">' + (P/Math.PI/1e6).toFixed(3) + '</span> MW/m²·sr</span>' +
+    '<span><span class="label">R-J @ λ_max ≈</span> <span class="val">' + rj.toFixed(2) + '</span> ×10¹² W/m³</span>' +
+    '<span><span class="label">λ_max·T =</span> <span class="val">' + (pW*T).toFixed(1) + '</span> μm·K</span>' +
+    '<span><span class="label">hc/k =</span> <span class="val">' + (h*c/k*1e6).toFixed(1) + '</span> μm·K</span>' +
+    '<span><span class="label">F_tot = σT⁴/π =</span> <span class="val">' + (P/Math.PI/1e6).toFixed(3) + '</span> MW/m²·sr</span>'
+}
+setInterval(dr, 16)
+</script>
+</body>
+</html>

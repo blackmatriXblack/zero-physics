@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BB84 · Quantum Key Distribution</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>BB84 QKD</h1>
+<p>|↔⟩,|↕⟩ (+ basis) · |↗⟩,|↘⟩ (× basis) · Mismatch → discard</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+const bases=['+','×'],bits=[0,1]
+let aB=[],aBt=[],bb=[],br=[],eB=[],eR=[],sK=[],bS=[],err=0,tot=0,eve=0,run=1
+let disp=[],paused=0,spd=1,hx=[],hy=[],ht=0
+function pol(basis,bit){if(basis==='+')return bit===0?{a:0,l:'↔'}:{a:Math.PI/2,l:'↕'}
+return bit===0?{a:Math.PI/4,l:'↗'}:{a:-Math.PI/4,l:'↘'}}
+function send(){const ab=bases[Math.random()<0.5?0:1],abt=bits[Math.random()<0.5?0:1]
+let mb=abt,eb=null,er=null
+if(eve){eb=bases[Math.random()<0.5?0:1];er=eb===ab?abt:bits[Math.random()<0.5?0:1];mb=er}
+const bb2=bases[Math.random()<0.5?0:1],bt2=bb2===(eve?eb:ab)?mb:bits[Math.random()<0.5?0:1]
+aB.push(ab);aBt.push(abt);eB.push(eb);eR.push(er);bb.push(bb2);br.push(bt2);tot++
+if(ab===bb2){sK.push(abt);bS.push(bt2);if(abt!==bt2)err++}
+disp.push({ab,abt,eb,er,bb:bb2,bt:bt2,mt:ab===bb2});if(disp.length>14)disp.shift()
+ht+=0.1*spd;if(ht<500){hx.push(ht);hy.push(sK.length);if(hx.length>200){hx.shift();hy.shift()}}}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const aX=100,bX=W-100,eX=W/2,yS=40,ySt=32,mS=Math.min(disp.length,12)
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('Alice',aX,18);ctx.fillText('Bob',bX,18)
+if(eve){ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Eve (eavesdropping)',eX,18)}else{ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Eve',eX,18)}
+for(let i=0;i<mS;i++){const d=disp[disp.length-1-i];if(!d)continue;const y=yS+i*ySt,ap=pol(d.ab,d.abt),bp=pol(d.bb,d.bt)
+ctx.save();ctx.translate(aX,y);ctx.rotate(ap.a);ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(8,0);ctx.stroke();ctx.restore()
+ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(d.ab,aX,y+15);ctx.fillText(d.abt,aX,y-10)
+if(eve&&d.eb){ctx.save();ctx.translate(eX,y);ctx.rotate(pol(d.eb,d.er).a);ctx.strokeStyle='#999';ctx.lineWidth=1.5;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(8,0);ctx.stroke();ctx.setLineDash([]);ctx.restore()
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText(d.eb,eX,y+15);ctx.fillText(d.er,eX,y-10)}
+ctx.save();ctx.translate(bX,y);ctx.rotate(bp.a);ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(8,0);ctx.stroke();ctx.restore()
+ctx.fillStyle='#666';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(d.bb,bX,y+15);ctx.fillText(d.bt,bX,y-10)
+if(d.mt){ctx.fillStyle='#000';ctx.font='6px monospace';ctx.fillText('✓',(aX+bX)/2,y+5)}
+if(i===0){ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(aX+15,y-10);ctx.lineTo(bX-15,y-10);ctx.stroke();ctx.setLineDash([])}}
+const gX=30,gY=340,gW=W-60,gH=160
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gX,gY,gW,gH);ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('Sifted Key',gX+8,gY+14)
+const kL=Math.min(sK.length,80),cS=12,bPR=50
+if(kL>0){const sI=Math.max(0,sK.length-80)
+for(let i=0;i<kL;i++){const idx=sI+i,r=Math.floor(i/bPR),c=i%bPR,x=gX+10+c*(cS+2),y=gY+28+r*(cS+2)
+const mt=sK[idx]===bS[idx];ctx.fillStyle=mt?'#000':'#999';ctx.fillRect(x,y,cS,cS);ctx.fillStyle='#fff';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(sK[idx],x+cS/2,y+cS-3)}
+const eR2=tot>0?(err/sK.length*100):0
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='right';ctx.fillText('Error: '+eR2.toFixed(1)+'%',gX+gW-10,gY+14);ctx.fillText('Key: '+sK.length,gX+gW-10,gY+28)
+if(eR2>11){ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('⚠ EVE DETECTED!',gX+gW/2,gY+gH-12)}
+}else{ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Send qubits to start',gX+gW/2,gY+gH/2)}
+if(hx.length>1){const mgX=700,mgY=440,mgW=190,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Key bits(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+const my=Math.max(...hy,1);for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/hx[hx.length-1]||1)*mgW,yy=mgY+mgH-(hy[i]/my)*mgH*0.7
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const eRate=tot>0?(err/Math.max(1,sK.length)*100):0,keyRt=sK.length/Math.max(1,tot)*100
+document.getElementById('st').innerHTML=
+`<span><span class="l">Sent =</span> <span class="v">${tot}</span></span>`+
+`<span><span class="l">Sifted =</span> <span class="v">${sK.length}</span></span>`+
+`<span><span class="l">Errors =</span> <span class="v">${err}</span></span>`+
+`<span><span class="l">Error rate =</span> <span class="v">${eRate.toFixed(1)}%</span></span>`+
+`<span><span class="l">Key rate =</span> <span class="v">${keyRt.toFixed(1)}%</span></span>`+
+`<span><span class="l">Eve =</span> <span class="v">${eve?'ON':'OFF'}</span></span>`+
+`<span><span class="l">Bases match =</span> <span class="v">${sK.length}/${tot}</span></span>`+
+`<span><span class="l">Alice + basis =</span> <span class="v">${aB.filter(b=>b==='+').length}</span></span>`+
+`<span><span class="l">Alice × basis =</span> <span class="v">${aB.filter(b=>b==='×').length}</span></span>`+
+`<span><span class="l">QBER =</span> <span class="v">${sK.length>0?(err/sK.length*100).toFixed(1):0}%</span></span>`+
+`<span><span class="l">Skew =</span> <span class="v">${sK.length>0?Math.abs(sK.filter(b=>b).length-sK.filter(b=>!b).length)/sK.length:0}</span></span>`+
+`<span><span class="l">Security =</span> <span class="v">${eRate>11?'⚠ COMPROMISED':'✓ SECURE'}</span></span>`
+}
+function an(){if(!paused)for(let i=0;i<spd;i++)send();drw();requestAnimationFrame(an)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<button id="s1B">SEND 1</button><button id="s10B">SEND 10</button>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="eveB">EVE: ${eve?'ON':'OFF'}</button>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('s1B').onclick=send;document.getElementById('s10B').onclick=function(){for(let i=0;i<10;i++)send()}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('eveB').onclick=function(){eve=!eve;this.textContent='EVE: '+(eve?'ON':'OFF')}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){aB=[];aBt=[];bb=[];br=[];eB=[];eR=[];sK=[];bS=[];err=0;tot=0;disp=[];hx=[];hy=[];ht=0}
+}
+an()
+</script></body></html>

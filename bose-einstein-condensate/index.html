@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>BEC · Bose-Einstein Condensate</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Bose—Einstein Condensate</h1>
+<p>N₀/N = 1 − (T/T<sub>c</sub>)³/² · n(ε) = 1/(e^{(ε−μ)/kT}−1)</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let T=1.5,Tc=1.8,N=10000,nLev=50,paused=0,spd=1
+let hx=[],hy=[],ht=0
+function nB(e,Te){if(Te<=0)return e===0?N:0;const mu=Te>Tc?-0.01:-0.001,ex=(e-mu)/Te;if(ex>50)return 0;return 1/(Math.exp(ex)-1)}
+function dist(){const d=[];let tot=0;const g=T<Tc?N*(1-(T/Tc)**1.5):0;d.push(g);tot+=g
+for(let i=1;i<nLev;i++){const e=i*0.1,scale=T<Tc?(N-g)/(N*0.3):N/(N*0.4);let n=nB(e,T)*scale;n=Math.max(0,n);d.push(n);tot+=n}
+if(tot>0)for(let i=0;i<d.length;i++)d[i]=d[i]/tot*N;return d}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const d=dist(),gX=60,gY=40,gW=420,gH=380
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(gX,gY,gW,gH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Occupation n(ε)',gX+gW/2,gY-4);ctx.fillText('ε (energy level)',gX+gW/2,gY+gH+16);ctx.textAlign='right';ctx.fillText('N',gX-10,gY+10)
+const mN=Math.max(...d,1),bW=gW/(nLev+1)
+for(let i=0;i<d.length;i++){const h=(d[i]/mN)*gH,x=gX+i*bW+1,y=gY+gH-h
+ctx.fillStyle=i===0?'#000':(d[i]>0?'#444':'#ddd');ctx.fillRect(x,y,bW-1,h)
+if(i===0||i===d.length-1||i%10===0){ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(i,x+bW/2,gY+gH+12)}}
+ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('N₀='+Math.round(d[0]),gX+4,gY+14)
+const g2X=500,g2Y=40,g2W=360,g2H=380
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(g2X,g2Y,g2W,g2H)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Condensate Fraction',g2X+g2W/2,g2Y-4)
+const frac=T<Tc?1-(T/Tc)**1.5:0
+ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.arc(g2X+g2W/2,g2Y+70,50,0,Math.PI*2);ctx.stroke()
+ctx.beginPath();const sA=-Math.PI/2,eA=sA+Math.PI*2*frac;ctx.moveTo(g2X+g2W/2,g2Y+70);ctx.arc(g2X+g2W/2,g2Y+70,50,sA,eA);ctx.closePath()
+ctx.fillStyle=frac>0?'#000':'#fff';ctx.fill()
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText((frac*100).toFixed(1)+'%',g2X+g2W/2,g2Y+75)
+ctx.fillStyle='#666';ctx.fillText('T='+T.toFixed(2),g2X+g2W/2,g2Y+140);ctx.fillText('Tc='+Tc.toFixed(2),g2X+g2W/2,g2Y+155)
+ctx.fillStyle=frac>0?'#000':'#999';ctx.fillText('BEC',g2X+g2W/2,g2Y+190);ctx.fillStyle=frac>0?'#999':'#000';ctx.fillText('NORMAL',g2X+g2W/2,g2Y+210)
+const ratio=T/Tc
+ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('T/Tc:',g2X+8,g2Y+250)
+ctx.strokeStyle='#000';ctx.lineWidth=1
+for(let i=0;i<=10;i++){const x=g2X+10+(i/10)*(g2W-20),y=g2Y+260+(i%5===0?10:5);ctx.fillRect(x,g2Y+255,1,y-g2Y-255)
+if(i%5===0){ctx.textAlign='center';ctx.fillText((i/5).toFixed(1),x,g2Y+278)}}
+const dX=g2X+10+Math.min(ratio,2)/2*(g2W-20);ctx.fillStyle='#000';ctx.beginPath();ctx.arc(dX,g2Y+270,5,0,Math.PI*2);ctx.fill()
+if(!paused){ht+=0.05*spd;if(ht<300){hx.push(ht);hy.push(frac);if(hx.length>200){hx.shift();hy.shift()}}}
+if(hx.length>1){const mgX=g2X,mgY=440,mgW=g2W,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('N₀/N(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/300)*mgW,yy=mgY+mgH-hy[i]*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+const TcDep=Tc*Math.pow(1-frac,2/3)
+document.getElementById('st').innerHTML=
+`<span><span class="l">T =</span> <span class="v">${T.toFixed(2)}</span></span>`+
+`<span><span class="l">T_c =</span> <span class="v">${Tc.toFixed(2)}</span></span>`+
+`<span><span class="l">T/T_c =</span> <span class="v">${ratio.toFixed(3)}</span></span>`+
+`<span><span class="l">N₀/N =</span> <span class="v">${(frac*100).toFixed(1)}%</span></span>`+
+`<span><span class="l">N₀ =</span> <span class="v">${Math.round(d[0])}</span></span>`+
+`<span><span class="l">N_excited =</span> <span class="v">${Math.round(N-d[0])}</span></span>`+
+`<span><span class="l">μ ≈</span> <span class="v">${T>Tc?'−0.01':'−0.001'}</span></span>`+
+`<span><span class="l">Max occ =</span> <span class="v">${Math.round(mN)}</span></span>`+
+`<span><span class="l">N_total =</span> <span class="v">${N}</span></span>`+
+`<span><span class="l">T_c(N) ∝</span> <span class="v">n^{2/3}</span></span>`+
+`<span><span class="l">Phase =</span> <span class="v">${frac>0?'CONDENSED':'NORMAL'}</span></span>`+
+`<span><span class="l">T_c* dep =</span> <span class="v">${TcDep.toFixed(2)}</span></span>`
+}
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>T</label><input type="range" id="tS" min="0.2" max="3.5" step="0.05" value="${T}"><span class="val" id="tV">${T}</span></div>`+
+`<div class="ctrl-g"><label>T_c</label><input type="range" id="tcS" min="0.5" max="3.0" step="0.05" value="${Tc}"><span class="val" id="tcV">${Tc}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('tS').oninput=function(){T=+this.value;document.getElementById('tV').textContent=T}
+document.getElementById('tcS').oninput=function(){Tc=+this.value;document.getElementById('tcV').textContent=Tc}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){hx=[];hy=[];ht=0}
+}
+anim()
+</script></body></html>

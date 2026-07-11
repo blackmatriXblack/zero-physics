@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faraday's Law · ε = −dΦ/dt</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.graph-container{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.graph-box{border:1px solid #ddd;position:relative}
+.graph-box .gtitle{position:absolute;top:3px;left:6px;font-size:0.6em;color:#999;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Faraday's Law</h1>
+<p>ε = −dΦ<sub>B</sub>/dt — Drag the magnet to set position</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<div class="graph-container" id="graphs"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+let magX=100, v=1.5, B0=1, coilR=50, coilTurns=5, paused=false, simTime=0, dragging=false;
+const dt=0.008;
+let speed=1;
+const fluxHist=[], emfHist=[], tHist=[], bHist=[], pHist=[];
+const maxHist=500;
+
+function flux(x){
+  const d=x-450; return B0*Math.exp(-d*d/(coilR*coilR*1.44));
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    magX+=v;
+    if(magX>750){magX=50;}
+    if(magX<50){magX=750;}
+    const f=flux(magX);
+    const fPrev=fluxHist.length>0?fluxHist[fluxHist.length-1]:f;
+    const emf=-(f-fPrev)/dt;
+    const p=f*emf;
+    fluxHist.push(f); emfHist.push(emf); tHist.push(simTime); bHist.push(B0); pHist.push(p);
+    if(fluxHist.length>maxHist){fluxHist.shift();emfHist.shift();tHist.shift();bHist.shift();pHist.shift();}
+    simTime+=dt;
+  }
+}
+
+function resetSim(){magX=100;simTime=0;fluxHist.length=0;emfHist.length=0;tHist.length=0;bHist.length=0;pHist.length=0;paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause';}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const f=flux(magX);
+
+  // Coil
+  ctx.strokeStyle='#111';ctx.lineWidth=2;
+  for(let i=0;i<coilTurns;i++){
+    const cy=220-2*coilTurns+i*4+8;
+    ctx.beginPath();ctx.arc(450,cy,coilR,0,Math.PI*2);ctx.stroke();
+  }
+
+  // Magnet
+  const my=220;
+  ctx.fillStyle='#111';ctx.fillRect(magX-18,my-30,36,60);
+  ctx.fillStyle='#fff';ctx.fillRect(magX-18,my-30,36,30);
+  ctx.fillStyle='#111';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#fff';ctx.fillText('N',magX,my-15);
+  ctx.fillStyle='#111';ctx.fillText('S',magX,my+15);
+  ctx.textBaseline='alphabetic';
+
+  // Motion arrow
+  if(Math.abs(v)>0.1){
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(magX,my+50);ctx.lineTo(magX+v*8,my+50);ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();
+    ctx.moveTo(magX+v*8,my+50);ctx.lineTo(magX+v*8-5*Math.sign(v||1),my+46);
+    ctx.lineTo(magX+v*8-5*Math.sign(v||1),my+54);ctx.fill();
+  }
+
+  // B field lines
+  ctx.strokeStyle=`rgba(0,0,0,${0.05+f*0.2})`;ctx.lineWidth=0.8;
+  for(let i=0;i<8;i++){
+    const ang=i/8*Math.PI*2;
+    ctx.beginPath();ctx.arc(450,220,coilR*0.5+f*coilR*0.9,ang,ang+Math.PI*0.3);ctx.stroke();
+  }
+
+  // Flux graph
+  const gX=50,gY=360,gW=380,gH=100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Φ vs time',gX+3,gY+10);
+  if(fluxHist.length>2){
+    ctx.beginPath();
+    for(let i=0;i<fluxHist.length;i++){
+      const px2=gX+(i/maxHist)*gW,py2=gY+gH-(fluxHist[i])*gH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+
+  // EMF graph
+  const egX=470,egY=360,egW=400,egH=100;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(egX,egY,egW,egH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('ε = −dΦ/dt vs time',egX+3,egY+10);
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(egX,egY+egH/2);ctx.lineTo(egX+egW,egY+egH/2);ctx.stroke();
+  if(emfHist.length>2){
+    const emfMax=Math.max(...emfHist.map(Math.abs))*1.2||1;
+    ctx.beginPath();
+    for(let i=0;i<emfHist.length;i++){
+      const px2=egX+(i/emfHist.length)*egW,py2=egY+egH/2-(emfHist[i]/emfMax)*(egH/2-6);
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.7;ctx.stroke();
+  }
+
+  // Power graph (mini)
+  const pX=50,gY2=470,pW=380,pH=26;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(pX,gY2,pW,pH);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('P = ε·I',pX+3,gY2+9);
+  if(pHist.length>2){
+    const pMax=Math.max(...pHist.map(Math.abs))*1.2||1;
+    ctx.beginPath();
+    for(let i=0;i<pHist.length;i++){
+      const px2=pX+(i/pHist.length)*pW,py2=gY2+pH/2-(pHist[i]/pMax)*(pH/2-2);
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.stroke();
+  }
+
+  // Mouse drag on magnet
+  canvas.onmousedown=function(e){
+    const rect=canvas.getBoundingClientRect();
+    const mx=e.clientX-rect.left, my_=e.clientY-rect.top;
+    if(Math.abs(mx-magX)<30&&Math.abs(my_-220)<40){dragging=true;canvas.style.cursor='grabbing';}
+  };
+  canvas.onmousemove=function(e){
+    if(!dragging)return;
+    const rect=canvas.getBoundingClientRect();
+    magX=Math.max(50,Math.min(750,e.clientX-rect.left));
+  };
+  canvas.onmouseup=canvas.onmouseleave=function(){dragging=false;canvas.style.cursor='grab';};
+
+  const currentEMF=emfHist.length>0?emfHist[emfHist.length-1]:0;
+  const emfMax=emfHist.length>0?Math.max(...emfHist.map(Math.abs)):0;
+  const avgPower=pHist.length>0?pHist.reduce((a,b)=>a+Math.abs(b),0)/pHist.length:0;
+  const fPrev=fluxHist.length>1?fluxHist[fluxHist.length-2]:f;
+  const dFlux=f-fPrev;
+  const totalFluxChange=fluxHist.length>1?Math.abs(fluxHist[fluxHist.length-1]-fluxHist[0]):0;
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>v</label><input type="range" id="vS" min="0" max="5" step="0.1" value="${v}"><span class="val" id="vV">${v.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>B₀</label><input type="range" id="b0S" min="0.2" max="3" step="0.1" value="${B0}"><span class="val" id="b0V">${B0.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Turns</label><input type="range" id="tS" min="1" max="10" step="1" value="${coilTurns}"><span class="val" id="tV">${coilTurns}</span></div>`+
+    `<div class="ctrl-group"><label>Radius</label><input type="range" id="rS" min="20" max="80" step="2" value="${coilR}"><span class="val" id="rV">${coilR}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('vS').addEventListener('input',function(){v=parseFloat(this.value);document.getElementById('vV').textContent=v.toFixed(1);});
+  document.getElementById('b0S').addEventListener('input',function(){B0=parseFloat(this.value);document.getElementById('b0V').textContent=B0.toFixed(1);});
+  document.getElementById('tS').addEventListener('input',function(){coilTurns=parseInt(this.value);document.getElementById('tV').textContent=coilTurns;});
+  document.getElementById('rS').addEventListener('input',function(){coilR=parseInt(this.value);document.getElementById('rV').textContent=coilR;});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">Φ =</span> <span class="val">${f.toFixed(4)}</span> Wb</span>`+
+    `<span><span class="label">ε =</span> <span class="val">${currentEMF.toFixed(4)}</span> V</span>`+
+    `<span><span class="label">|ε|<sub>max</sub> =</span> <span class="val">${emfMax.toFixed(4)}</span> V</span>`+
+    `<span><span class="label">dΦ/dt =</span> <span class="val">${(dFlux/dt).toFixed(3)}</span> Wb/s</span>`+
+    `<span><span class="label">ΔΦ =</span> <span class="val">${totalFluxChange.toFixed(3)}</span> Wb</span>`+
+    `<span><span class="label">P<sub>avg</sub> =</span> <span class="val">${avgPower.toFixed(4)}</span> W</span>`+
+    `<span><span class="label">v =</span> <span class="val">${v.toFixed(2)}</span> m/s</span>`+
+    `<span><span class="label">x =</span> <span class="val">${magX.toFixed(0)}</span> px</span>`+
+    `<span><span class="label">B₀ =</span> <span class="val">${B0.toFixed(2)}</span> T</span>`+
+    `<span><span class="label">N =</span> <span class="val">${coilTurns}</span></span>`+
+    `<span><span class="label">N·Φ =</span> <span class="val">${(coilTurns*f).toFixed(3)}</span> Wb</span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(2)}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

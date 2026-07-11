@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Center of Mass · R<sub>CM</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block;cursor:pointer}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Center of Mass</h1>
+<p>R<sub>CM</sub> = Σ m<sub>i</sub>r<sub>i</sub>/M &nbsp;·&nbsp; <span class="eq">P = M·V<sub>CM</sub></span></p>
+<canvas id="c" width="900" height="460"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=460;
+let parts=[],p=0,st=0,sv=1,sm=1,drg=-1;
+const h={t:[],cx:[],cy:[],px:[],py:[],ke:[]};
+function addP(x,y,m){parts.push({x:x||80+Math.random()*740,y:y||80+Math.random()*300,vx:(Math.random()-0.5)*60,vy:(Math.random()-0.5)*60,m:m||1+Math.random()*4})}
+for(let i=0;i<6;i++)addP();
+function gc(){let tx=0,ty=0,tm=0;for(const p of parts){tx+=p.x*p.m;ty+=p.y*p.m;tm+=p.m}return tm>0?{x:tx/tm,y:ty/tm,m:tm}:{x:W/2,y:H/2,m:0}}
+function stp(){
+  if(p)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.004;
+    for(const p2 of parts){p2.x+=p2.vx*dt;p2.y+=p2.vy*dt;if(p2.x<5||p2.x>W-5)p2.vx*=-1;if(p2.y<5||p2.y>H-5)p2.vy*=-1}
+    const com=gc();let px=0,py=0,ke=0;
+    for(const p2 of parts){px+=p2.m*p2.vx;py+=p2.m*p2.vy;ke+=0.5*p2.m*(p2.vx*p2.vx+p2.vy*p2.vy)}
+    h.t.push(st);h.cx.push(com.x);h.cy.push(com.y);h.px.push(px);h.py.push(py);h.ke.push(ke);
+    while(h.t.length>400){h.t.shift();h.cx.shift();h.cy.shift();h.px.shift();h.py.shift();h.ke.shift()}
+    st+=dt
+  }
+}
+function rs(){parts.length=0;for(let i=0;i<6;i++)addP();st=0;h.t.length=0;h.cx.length=0;h.cy.length=0;h.px.length=0;h.py.length=0;h.ke.length=0;p=0;document.getElementById('pb').textContent='Pause'}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,0,0,0.03)';ctx.lineWidth=0.3;for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  for(const p2 of parts){const r=4+p2.m*1.2,g2=ctx.createRadialGradient(p2.x-r*0.3,p2.y-r*0.3,1,p2.x,p2.y,r);g2.addColorStop(0,'#555');g2.addColorStop(1,'#000');ctx.fillStyle=g2;ctx.beginPath();ctx.arc(p2.x,p2.y,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,255,255,0.08)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(p2.m.toFixed(1),p2.x,p2.y+r+10);if(sv&&(Math.abs(p2.vx)>1||Math.abs(p2.vy)>1)){ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(p2.x,p2.y);ctx.lineTo(p2.x+p2.vx*0.3,p2.y+p2.vy*0.3);ctx.stroke()}}
+  const com=gc();
+  if(com.m>0){ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);for(const p2 of parts){ctx.beginPath();ctx.moveTo(com.x,com.y);ctx.lineTo(p2.x,p2.y);ctx.stroke()}ctx.setLineDash([]);ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.arc(com.x,com.y,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(com.x-10,com.y);ctx.lineTo(com.x+10,com.y);ctx.stroke();ctx.beginPath();ctx.moveTo(com.x,com.y-10);ctx.lineTo(com.x,com.y+10);ctx.stroke();ctx.fillStyle='rgba(0,0,0,0.25)';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('CM',com.x+12,com.y+3)}
+  if(h.cx.length>2){ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.8;ctx.beginPath();for(let i=0;i<h.cx.length;i++){i===0?ctx.moveTo(h.cx[i],h.cy[i]):ctx.lineTo(h.cx[i],h.cy[i])}ctx.stroke()}
+  let px=0,py=0,ke=0;for(const p2 of parts){px+=p2.m*p2.vx;py+=p2.m*p2.vy;ke+=0.5*p2.m*(p2.vx*p2.vx+p2.vy*p2.vy)}
+  const cvx=parts.length?px/com.m:0,cvy=parts.length?py/com.m:0;
+  const gx=580,gy=15,gw=290,gh=65;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('CM_x vs time',gx+3,gy+10);
+  if(h.cx.length>2){const cMin=Math.min(...h.cx),cMax=Math.max(...h.cx),cR=cMax-cMin||1;ctx.beginPath();for(let i=0;i<h.cx.length;i++){const px2=gx+(i/h.cx.length)*gw,py2=gy+gh-(h.cx[i]-cMin)/cR*gh;i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2)}ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke()}
+  const egx=580,egy=90,egw=290,egh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(egx,egy,egw,egh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('KE vs time',egx+3,egy+10);
+  if(h.ke.length>2){const km=Math.max(...h.ke)*1.1||1;ctx.beginPath();for(let i=0;i<h.ke.length;i++){const px2=egx+(i/h.ke.length)*egw,py2=egy+egh-(h.ke[i]/km)*egh;i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2)}ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;ctx.stroke()}
+  const pgx=580,pgy=155,pgw=290,pgh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(pgx,pgy,pgw,pgh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('px vs time',pgx+3,pgy+10);
+  if(h.px.length>2){const pm=Math.max(...h.px.map(Math.abs))*1.2||1;ctx.beginPath();for(let i=0;i<h.px.length;i++){const px2=pgx+(i/h.px.length)*pgw,py2=pgy+pgh/2-(h.px[i]/pm)*(pgh/2-4);i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2)}ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.stroke()}
+  const bx=580,by=220,bw=290,bh=120;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(bx,by,bw,bh);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('mass distribution',bx+3,by+10);
+  const maxM=Math.max(...parts.map(p=>p.m))||1;
+  for(let i=0;i<parts.length;i++){const bw2=Math.max(3,bw/parts.length-2),b2=bx+(i+0.5)/parts.length*bw-bw2/2,bh2=(parts[i].m/maxM)*(bh-20);ctx.fillStyle='#111';ctx.fillRect(b2,by+bh-bh2-5,bw2,bh2);ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(i+1,b2+bw2/2,by+bh-2)}ctx.textAlign='left';
+  ca.onmousedown=function(e){const r2=ca.getBoundingClientRect(),mx=e.clientX-r2.left,my=e.clientY-r2.top;for(let i=parts.length-1;i>=0;i--){if(Math.hypot(mx-parts[i].x,my-parts[i].y)<15){drg=i;ca.style.cursor='grabbing';break}}if(drg<0)addP(mx,my,1+Math.random()*4)};
+  ca.onmousemove=function(e){if(drg<0)return;const r2=ca.getBoundingClientRect();parts[drg].x=e.clientX-r2.left;parts[drg].y=e.clientY-r2.top;parts[drg].vx*=0.9;parts[drg].vy*=0.9};
+  ca.onmouseup=ca.onmouseleave=function(){drg=-1;ca.style.cursor='pointer'};
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<button id="ab">+ Particle</button><button id="rb2">- Remove</button>`+
+    `<button id="vb">${sv?'Hide':'Show'} V</button><button id="pb">Pause</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('ab').onclick=()=>addP();
+  document.getElementById('rb2').onclick=()=>{if(parts.length>1)parts.pop()};
+  document.getElementById('vb').onclick=function(){sv=!sv;this.textContent=sv?'Hide V':'Show V'};
+  document.getElementById('pb').onclick=function(){p=!p;this.textContent=p?'Play':'Pause'};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">N =</span> <span class="v">${parts.length}</span></span>`+
+    `<span><span class="l">M =</span> <span class="v">${com.m.toFixed(2)}</span></span>`+
+    `<span><span class="l">CM<sub>x</sub> =</span> <span class="v">${com.x.toFixed(2)}</span></span>`+
+    `<span><span class="l">CM<sub>y</sub> =</span> <span class="v">${com.y.toFixed(2)}</span></span>`+
+    `<span><span class="l">V<sub>CMx</sub> =</span> <span class="v">${cvx.toFixed(3)}</span></span>`+
+    `<span><span class="l">V<sub>CMy</sub> =</span> <span class="v">${cvy.toFixed(3)}</span></span>`+
+    `<span><span class="l">p<sub>x</sub> =</span> <span class="v">${px.toFixed(2)}</span></span>`+
+    `<span><span class="l">p<sub>y</sub> =</span> <span class="v">${py.toFixed(2)}</span></span>`+
+    `<span><span class="l">|p| =</span> <span class="v">${Math.hypot(px,py).toFixed(2)}</span></span>`+
+    `<span><span class="l">KE =</span> <span class="v">${ke.toFixed(2)}</span></span>`+
+    `<span><span class="l">KE<sub>CM</sub> =</span> <span class="v">${(0.5*com.m*(cvx*cvx+cvy*cvy)).toFixed(2)}</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bragg Diffraction · nλ = 2d sin θ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Bragg Diffraction</h1>
+<p>nλ = 2d sin θ — X-ray diffraction from crystal planes</p>
+<canvas id="c" width="920" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=540;
+let d=80,lambda=30,theta=30,paused=false,speed=1,time=0;
+const hLen=200,hMax=300;const hist=[];
+for(let i=0;i<hMax;i++)hist.push(0);
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ const rad=theta*Math.PI/180;
+ const cx=300,cy=260,pathDiff=2*d*Math.sin(rad);
+ const n=Math.round(pathDiff/lambda);
+ const construct=Math.abs(pathDiff-n*lambda)<lambda*0.1;
+ const I=construct?1:Math.cos(Math.PI*pathDiff/lambda)**2*0.15;
+ hist.push(I);if(hist.length>hMax)hist.shift();
+ ctx.strokeStyle='rgba(0,0,0,0.03)';ctx.lineWidth=0.3;
+ for(let i=-6;i<=6;i+=2){ctx.beginPath();ctx.moveTo(40,cy+i*d/2);ctx.lineTo(560,cy+i*d/2);ctx.stroke();}
+ ctx.fillStyle='rgba(0,0,0,0.02)';ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.3;
+ for(let i=-6;i<=6;i+=2)for(let j=-8;j<=8;j++){ctx.beginPath();ctx.arc(cx+j*80,cy+i*d/2,3,0,Math.PI*2);ctx.fill();ctx.stroke();}
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('d',cx+60,cy-8);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(cx+50,cy);ctx.lineTo(cx+50,cy-d/2);ctx.stroke();
+ const inLen=200;
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx-inLen*Math.cos(rad),cy-inLen*Math.sin(rad));ctx.lineTo(cx,cy);ctx.stroke();
+ ctx.fillStyle='#111';ctx.beginPath();const am=cx-60*Math.cos(rad),an=cy-60*Math.sin(rad);
+ ctx.moveTo(am,an);ctx.lineTo(am-12*Math.cos(rad-0.3),an-12*Math.sin(rad-0.3));ctx.lineTo(am-12*Math.cos(rad+0.3),an-12*Math.sin(rad+0.3));ctx.fill();
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('incident',cx-100*Math.cos(rad),cy-100*Math.sin(rad)-10);
+ ctx.strokeStyle=construct?'#111':'rgba(0,0,0,0.15)';ctx.lineWidth=construct?1.5:0.5;
+ ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+inLen*Math.cos(rad),cy-inLen*Math.sin(rad));ctx.stroke();
+ ctx.beginPath();ctx.moveTo(cx,cy+d/2);ctx.lineTo(cx+inLen*Math.cos(rad),cy+d/2-inLen*Math.sin(rad));ctx.stroke();
+ ctx.fillStyle=construct?'#111':'rgba(0,0,0,0.2)';ctx.font='8px monospace';ctx.textAlign='center';
+ ctx.fillText(construct?'CONSTRUCTIVE (peak)':'DESTRUCTIVE',cx+180,cy-60);
+ const gX=620,gY=40,gW=270,gH=460;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('Intensity history',gX+5,gY+12);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='right';ctx.fillText('1.0',gX-4,gY+10);ctx.fillText('0.0',gX-4,gY+gH-4);
+ ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=gX+(i/hMax)*gW,py=gY+gH-4-(hist[i]||0)*(gH-8);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ const eq=`nλ = 2d sinθ → ${n}·${lambda}=2·${d}·sin(${theta}°) = ${pathDiff.toFixed(1)}`;
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(eq,10,H-44);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';
+ ctx.fillText(`Bragg condition ${construct?'SATISFIED':'NOT SATISFIED'}`,10,H-28);
+ const fS=1/(Math.abs(pathDiff/lambda-Math.round(pathDiff/lambda))+0.01);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('nλ = 2d sin θ',cx,cy+140);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>d</label><input type="range" id="dS" min="20" max="150" step="2" value="${d}"><span class="val" id="dV">${d}</span></div>`+
+ `<div class="ctrl-group"><label>λ</label><input type="range" id="lS" min="5" max="80" step="1" value="${lambda}"><span class="val" id="lV">${lambda}</span></div>`+
+ `<div class="ctrl-group"><label>θ</label><input type="range" id="tS" min="5" max="85" step="1" value="${theta}"><span class="val" id="tV">${theta}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('dS').oninput=function(){d=+this.value;dV.textContent=d;};
+ document.getElementById('lS').oninput=function(){lambda=+this.value;lV.textContent=lambda;};
+ document.getElementById('tS').oninput=function(){theta=+this.value;tV.textContent=theta;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;paused=false;hist.fill(0);document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+}
+
+ const k=Math.round(pathDiff/lambda);
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">d =</span> <span class="val">${d}</span></span>`+
+ `<span><span class="label">λ =</span> <span class="val">${lambda}</span></span>`+
+ `<span><span class="label">θ =</span> <span class="val">${theta}°</span></span>`+
+ `<span><span class="label">Δ=2d sinθ =</span> <span class="val">${pathDiff.toFixed(2)}</span></span>`+
+ `<span><span class="label">n = Δ/λ =</span> <span class="val">${(pathDiff/lambda).toFixed(3)}</span></span>`+
+ `<span><span class="label">n (int) =</span> <span class="val">${k}</span></span>`+
+ `<span><span class="label">Peak fwhm ∝</span> <span class="val">${fS.toFixed(1)}</span></span>`+
+ `<span><span class="label">I =</span> <span class="val">${I.toFixed(3)}</span></span>`+
+ `<span><span class="label">Status</span> <span class="val">${construct?'✓ Bragg peak':'✗ No peak'}</span></span>`+
+ `<span><span class="label">sinθ =</span> <span class="val">${Math.sin(rad).toFixed(4)}</span></span>`+
+ `<span><span class="label">2d =</span> <span class="val">${2*d}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`+
+ `<span><span class="label">nₐtoms</span> <span class="val">117</span></span>`;
+}
+function loop(){if(!paused){time+=0.016*speed;}draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

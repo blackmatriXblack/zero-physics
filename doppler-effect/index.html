@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doppler Effect · f' = f · (v ± vₒ)/(v ∓ vₛ)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Doppler Effect</h1>
+<p>f' = f · (v ± vₒ)/(v ∓ vₛ) — Wavefront compression/expansion</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),C=c.getContext('2d'),W=c.width,H=c.height;
+let f=5,vs=80,vo=-40,speed=1,time=0,paused=false,sourceX=100;
+const v=340,sy=260,rings=[],fHist=[],hMax=250;
+const ox=700,oy=260;
+let tgtX=-1,tgtY=-1;
+
+function step(){
+  if(paused)return;
+  const dt=0.02*speed;
+  time+=dt;
+  sourceX=100+time*vs;
+  rings.push({t:time,x:sourceX,y:sy});
+  while(rings.length>50)rings.shift();
+  const fObs=f*(v/(v-vs));
+  fHist.push({t:time,f:fObs});
+  while(fHist.length>hMax)fHist.shift();
+}
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  const oxPos=ox+time*vo;
+  // Grid lines for wavefront reference
+  C.strokeStyle='rgba(0,0,0,0.03)';C.lineWidth=0.3;
+  for(let x=0;x<W;x+=40){C.beginPath();C.moveTo(x,0);C.lineTo(x-30,H);C.stroke();}
+  // Expanding wavefronts
+  for(let r of rings){
+    const dt=time-r.t;
+    if(dt<0)continue;
+    const radius=dt*v*4;
+    const op=Math.max(0.02,0.35-dt*1.5);
+    C.strokeStyle=`rgba(0,0,0,${op})`;C.lineWidth=Math.max(0.3,0.5+dt);
+    C.beginPath();C.arc(r.x,r.y,radius,0,Math.PI*2);C.stroke();
+  }
+  // Source motion trail
+  C.strokeStyle='rgba(0,0,0,0.06)';C.lineWidth=0.5;
+  C.beginPath();C.moveTo(100,sy);C.lineTo(sourceX,sy);C.stroke();
+  // Source
+  C.fillStyle='#111';C.beginPath();C.arc(sourceX,sy,8,0,6.28);C.fill();
+  C.fillStyle='#666';C.font='7px monospace';C.textAlign='center';C.fillText('SOURCE',sourceX,sy-16);
+  // Observed frequency indicator
+  const fObs=f*(v+vo)/(v-vs);
+  const ratio=fObs/f;
+  const approach=ratio>1;
+  // Observer
+  C.strokeStyle='#111';C.lineWidth=1.5;
+  C.beginPath();C.arc(oxPos,oy,10,0,6.28);C.stroke();
+  C.fillStyle='#666';C.font='7px monospace';C.textAlign='center';C.fillText('OBS',oxPos,oy-18);
+  // Mach cone if supersonic
+  const mach=Math.abs(vs)/v;
+  if(mach>1&&vs>0){
+    const alpha=Math.asin(1/mach);
+    C.strokeStyle='rgba(0,0,0,0.15)';C.lineWidth=0.8;
+    C.beginPath();C.moveTo(sourceX,sy);
+    C.lineTo(sourceX-200*Math.cos(alpha),sy-200*Math.sin(alpha));C.stroke();
+    C.beginPath();C.moveTo(sourceX,sy);
+    C.lineTo(sourceX-200*Math.cos(alpha),sy+200*Math.sin(alpha));C.stroke();
+    C.fillStyle='#999';C.font='6px monospace';C.textAlign='center';C.fillText(`Mach ${mach.toFixed(2)}`,sourceX-60,sy-40);
+  }
+  // Wavelength labels
+  C.fillStyle='rgba(0,0,0,0.12)';C.font='6px monospace';C.textAlign='left';
+  C.fillText('← λ\' compressed (higher f\')',15,H-45);
+  C.fillText('λ\' expanded (lower f\') →',15,H-32);
+
+  // f' time series graph
+  const gX=ox-180,gY=30,gW=170,gH=80;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(gX,gY,gW,gH);
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='left';C.fillText("f'(t)",gX+3,gY+10);
+  C.strokeStyle='rgba(0,0,0,0.08)';C.lineWidth=0.3;
+  C.beginPath();C.moveTo(gX,gY+gH/2);C.lineTo(gX+gW,gY+gH/2);C.stroke();
+  if(fHist.length>1){C.strokeStyle='#111';C.lineWidth=0.6;C.beginPath();
+    fHist.forEach((p,i)=>{const x=gX+(i/hMax)*gW,y=gY+gH-(p.f/f/4)*gH;
+      i===0?C.moveTo(x,y):C.lineTo(x,y);});C.stroke();}
+
+  // Frequency shift gauge
+  const ggX=gX,ggY=gY+gH+10,ggW=gW,ggH=50;
+  C.strokeStyle='#ddd';C.lineWidth=0.5;C.strokeRect(ggX,ggY,ggW,ggH);
+  C.fillStyle='#999';C.font='5px monospace';C.textAlign='center';C.fillText(`f'/f = ${ratio.toFixed(3)}`,ggX+ggW/2,ggY+12);
+  C.fillStyle='#ddd';C.fillRect(ggX+10,ggY+22,ggW-20,8);
+  const barW=Math.min(ggW-20,Math.max(0,(ratio-0.5)*2*(ggW-20)));
+  C.fillStyle='#111';C.fillRect(ggX+10,ggY+22,barW,8);
+  C.fillStyle='#999';C.font='5px monospace';C.fillText('0.5x',ggX+10,ggY+40);
+  C.fillText('2.0x',ggX+ggW-20,ggY+40);
+
+  // Wavefront count
+  C.fillStyle='#999';C.font='6px monospace';C.textAlign='left';
+  C.fillText(`Rings: ${rings.length}`,gX+3,ggY+ggH+14);
+
+  // Mouse crosshair info
+  if(tgtX>0){C.strokeStyle='rgba(0,0,0,0.1)';C.lineWidth=0.3;C.setLineDash([2,2]);
+    C.beginPath();C.moveTo(tgtX,0);C.lineTo(tgtX,H);C.stroke();
+    C.beginPath();C.moveTo(0,tgtY);C.lineTo(W,tgtY);C.stroke();C.setLineDash([]);
+    C.fillStyle='rgba(0,0,0,0.3)';C.font='6px monospace';C.textAlign='left';
+    C.fillText(`(${tgtX},${tgtY})`,tgtX+5,tgtY-3);}
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>f</label><input type="range" id="fS" min="1" max="30" step="1" value="${f}"><span class="val" id="fV">${f}</span></div>`+
+    `<div class="ctrl-group"><label>vₛ</label><input type="range" id="vsS" min="-300" max="300" step="5" value="${vs}"><span class="val" id="vsV">${vs}</span></div>`+
+    `<div class="ctrl-group"><label>vₒ</label><input type="range" id="voS" min="-200" max="200" step="5" value="${vo}"><span class="val" id="voV">${vo}</span></div>`+
+    `<div class="ctrl-group"><label>spd</label><input type="range" id="spdS" min="0" max="300" step="10" value="${speed*100}"><span class="val" id="spdV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+  document.getElementById('fS').oninput=function(){f=+this.value;document.getElementById('fV').textContent=f;};
+  document.getElementById('vsS').oninput=function(){vs=+this.value;document.getElementById('vsV').textContent=vs;};
+  document.getElementById('voS').oninput=function(){vo=+this.value;document.getElementById('voV').textContent=vo;};
+  document.getElementById('spdS').oninput=function(){speed=this.value/100;document.getElementById('spdV').textContent=speed.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=function(){time=0;sourceX=100;rings.length=0;fHist.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+}
+
+  step();
+  const Δf=fObs-f;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">f =</span> <span class="val">${f}</span> Hz</span>`+
+    `<span><span class="label">f' =</span> <span class="val">${fObs.toFixed(2)}</span> Hz</span>`+
+    `<span><span class="label">Δf =</span> <span class="val">${Δf.toFixed(2)}</span> Hz</span>`+
+    `<span><span class="label">f'/f =</span> <span class="val">${ratio.toFixed(4)}</span></span>`+
+    `<span><span class="label">vₛ =</span> <span class="val">${vs}</span> m/s</span>`+
+    `<span><span class="label">vₒ =</span> <span class="val">${vo}</span> m/s</span>`+
+    `<span><span class="label">v =</span> <span class="val">${v}</span> m/s</span>`+
+    `<span><span class="label">Mach = |vₛ|/v</span> <span class="val">${mach.toFixed(3)}</span></span>`+
+    `<span><span class="label">λ' = v/f'</span> <span class="val">${(v/fObs).toFixed(2)}</span> m</span>`+
+    `<span><span class="label">Δλ =</span> <span class="val">${(v/f-v/fObs).toFixed(2)}</span> m</span>`+
+    `<span><span class="label">Shift</span> <span class="val">${approach?'BLUE (approach)':'RED (recede)'}</span></span>`+
+    `<span><span class="label">vₛ sign</span> <span class="val">${vs>=0?'→ away':'← toward'}</span></span>`;
+  requestAnimationFrame(draw);
+}
+c.onmousemove=e=>{const r=c.getBoundingClientRect();tgtX=(e.clientX-r.left)*W/r.width;tgtY=(e.clientY-r.top)*H/r.height;};
+c.onmouseleave=()=>{tgtX=-1;};
+draw();
+</script>
+</body>
+</html>

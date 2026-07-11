@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Equipartition · E = ½kT per DOF</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+select{background:#fff;border:1px solid #000;padding:3px 6px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Equipartition Theorem</h1>
+<p>⟨E⟩ = ½k<sub>B</sub>T per quadratic DOF — monatomic / diatomic / polyatomic</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+const kB = 1.381e-23, eV = 1.602e-19, R = 8.314;
+
+let T = 300, gasType = 'mono', N = 50;
+let paused = 0, speed = 1, time = 0;
+let hE = [], hT = [];
+
+const GP = {
+  mono: { dof: 3, cp: 2.5, cv: 1.5, g: 5 / 3, desc: 'Monatomic (He, Ar)', tr: 3, rot: 0 },
+  di:   { dof: 5, cp: 3.5, cv: 2.5, g: 7 / 5, desc: 'Diatomic (N₂, O₂)', tr: 3, rot: 2 },
+  poly: { dof: 6, cp: 4, cv: 3, g: 4 / 3, desc: 'Polyatomic (CO₂, H₂O)', tr: 3, rot: 3 }
+};
+
+let mols = [];
+for (let i = 0; i < N; i++) {
+  mols.push({ x: Math.random() * 260 + 50, y: Math.random() * 260 + 50, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2 });
+}
+
+function update() {
+  if (paused) return;
+  const s = Math.sqrt(T / 300) * speed;
+  for (let m of mols) {
+    m.x += m.vx * s; m.y += m.vy * s;
+    if (m.x < 40 || m.x > 310) { m.vx *= -1; m.x = m.x < 40 ? 40 : 310; }
+    if (m.y < 75 || m.y > 335) { m.vy *= -1; m.y = m.y < 75 ? 75 : 335; }
+  }
+  time++;
+}
+
+function resetMols() {
+  mols = [];
+  for (let i = 0; i < N; i++) {
+    mols.push({ x: Math.random() * 260 + 50, y: Math.random() * 260 + 50, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2 });
+  }
+  time = 0; hE = []; hT = []; paused = 0;
+  document.getElementById('pB').textContent = 'Pause';
+}
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  const g = GP[gasType];
+  const E = kB * T * 0.5 * g.dof / eV;
+
+  hE.push(E); hT.push(time);
+  if (hE.length > 200) { hE.shift(); hT.shift(); }
+
+  // Particle box
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(40, 70, 280, 270);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('Gas particles — thermal motion', 45, 85);
+  x.fillStyle = 'rgba(0,0,0,0.03)';
+  for (let m of mols) { x.beginPath(); x.arc(m.x, m.y, 3, 0, Math.PI * 2); x.fill(); }
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText(`${g.desc} — ${g.dof} DOF (${g.tr} trans + ${g.rot} rot)`, 180, 360);
+
+  // Energy per DOF bar chart
+  const bX = 360, bY = 50, bW = 500, bH = 95;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(bX, bY, bW, bH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('Energy per degree of freedom — each gets ½kT', bX + 3, bY + 10);
+  const bw = (bW - 20) / g.dof;
+  for (let i = 0; i < g.dof; i++) {
+    const bx = bX + 10 + i * (bw + 2), bh = (bH - 30) / g.dof;
+    x.fillStyle = '#111'; x.fillRect(bx, bY + bH - 12 - bh, bw, bh);
+    x.fillStyle = '#999'; x.font = '5px monospace'; x.textAlign = 'center';
+    x.fillText('½kT', bx + bw / 2, bY + bH - 16);
+  }
+
+  // Thermodynamic properties
+  const tX = 360, tY = 155, tW = 500, tH = 100;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(tX, tY, tW, tH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('Thermodynamic properties', tX + 3, tY + 10);
+  x.fillStyle = '#111'; x.font = '8px monospace';
+  x.fillText(`DOF = ${g.dof}  c_v = ${g.cv}R = ${(g.cv * R).toFixed(1)} J/mol·K`, tX + 8, tY + 30);
+  x.fillText(`c_p = ${g.cp}R = ${(g.cp * R).toFixed(1)} J/mol·K  γ = ${g.g.toFixed(3)}`, tX + 8, tY + 50);
+  x.fillText(`U = ${g.dof}·½RT = ${(g.dof * 0.5 * R * T).toFixed(1)} J/mol`, tX + 8, tY + 70);
+  x.fillText(`⟨E⟩ = ${E.toFixed(4)} eV  kT = ${(kB * T / eV).toFixed(4)} eV`, tX + 8, tY + 90);
+
+  // E(t) mini graph
+  const gX = 360, gY = 265, gW = 500, gH = 100;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('⟨E⟩(t) — equipartition check', gX + 3, gY + 10);
+  x.strokeStyle = 'rgba(0,0,0,0.1)'; x.lineWidth = 0.5;
+  x.beginPath(); x.moveTo(gX, gY + gH / 2); x.lineTo(gX + gW, gY + gH / 2); x.stroke();
+  if (hE.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 1.2; x.beginPath();
+    const Emax = g.dof * 0.5 * kB * 500 / eV || 1;
+    for (let i = 0; i < hE.length; i++) {
+      const px = gX + (i / 200) * gW, py = gY + gH - (hE[i] / Emax) * (gH - 10);
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  x.fillStyle = '#111'; x.font = '8px monospace'; x.textAlign = 'center';
+  x.fillText('⟨E⟩ = ½k_BT per quadratic DOF  |  Equipartition theorem', 450, 400);
+  x.fillStyle = '#999'; x.font = '7px monospace';
+  x.fillText(`E = ${g.dof}·½kT  |  Classical: all DOF equally populated`, 450, 418);
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="10" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>T (K)</label><input type="range" id="tS" min="50" max="2000" step="10" value="${T}"><span class="val" id="tV">${T}</span></div>` +
+    `<div class="ctrl-group"><label>N</label><input type="range" id="nS" min="5" max="200" step="5" value="${N}"><span class="val" id="nV">${N}</span></div>` +
+    `<div class="ctrl-group"><label>Gas</label><select id="gS"><option value="mono" ${gasType === 'mono' ? 'selected' : ''}>Monatomic</option><option value="di" ${gasType === 'di' ? 'selected' : ''}>Diatomic</option><option value="poly" ${gasType === 'poly' ? 'selected' : ''}>Polyatomic</option></select></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button><button id="rB">Reset</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('tS').oninput = function () { T = +this.value; document.getElementById('tV').textContent = T; };
+  document.getElementById('nS').oninput = function () { N = +this.value; resetMols(); document.getElementById('nV').textContent = N; };
+  document.getElementById('gS').onchange = function () { gasType = this.value; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = resetMols;
+
+  // Stats
+}
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">T =</span> <span class="val">${T}</span> K</span>` +
+    `<span><span class="label">DOF =</span> <span class="val">${g.dof}</span></span>` +
+    `<span><span class="label">⟨E⟩ =</span> <span class="val">${E.toFixed(4)}</span> eV</span>` +
+    `<span><span class="label">kT =</span> <span class="val">${(kB * T / eV).toFixed(4)}</span> eV</span>` +
+    `<span><span class="label">½kT =</span> <span class="val">${(kB * T / eV * 0.5).toFixed(4)}</span> eV</span>` +
+    `<span><span class="label">c_v =</span> <span class="val">${(g.cv * R).toFixed(1)}</span> J/mol·K</span>` +
+    `<span><span class="label">γ =</span> <span class="val">${g.g.toFixed(3)}</span></span>` +
+    `<span><span class="label">U =</span> <span class="val">${(g.dof * 0.5 * R * T).toFixed(1)}</span> J/mol</span>` +
+    `<span><span class="label">N =</span> <span class="val">${N}</span></span>` +
+    `<span><span class="label">Trans DOF =</span> <span class="val">${g.tr}</span></span>` +
+    `<span><span class="label">Rot DOF =</span> <span class="val">${g.rot}</span></span>` +
+    `<span><span class="label">Gas</span> <span class="val">${g.desc}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

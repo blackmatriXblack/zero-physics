@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Double Pendulum · Coupled Nonlinear Dynamics</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.graph-container{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.graph-box{border:1px solid #ddd;position:relative}
+.graph-box .gtitle{position:absolute;top:3px;left:6px;font-size:0.6em;color:#999;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Double Pendulum</h1>
+<p>Chaotic motion — θ₁̈, θ₂̈ = f(θ₁,θ₂,θ̇₁,θ̇₂)</p>
+<canvas id="c" width="900" height="440"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<div class="graph-container" id="graphs"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+
+const g=9.81;
+let m1=1,m2=1,l1=1.6,l2=1.2;
+let th1=Math.PI/2+0.3, th2=Math.PI/2+0.5;
+let om1=0, om2=0;
+const dt=0.006;
+let paused=false, speed=1, trailMode='bob2';
+let simTime=0;
+
+const px=220, py=55, scale=140;
+const history={t:[],th1:[],th2:[],om1:[],om2:[],ke:[],pe:[],te:[]};
+const maxHist=2000;
+const trail=[];
+const trail1=[];
+
+function deriv(th1,th2,om1,om2){
+  const dth=th2-th1;
+  const den=m1+m2*Math.sin(dth)*Math.sin(dth);
+  const a1=(m2*g*Math.sin(th2)*Math.cos(dth)-m2*Math.sin(dth)*Math.cos(dth)*l1*om1*om1
+           -m2*Math.sin(dth)*l2*om2*om2-(m1+m2)*g*Math.sin(th1))/(l1*den);
+  const a2=((m1+m2)*(Math.sin(dth)*l1*om1*om1+g*Math.sin(th1)*Math.cos(dth)-g*Math.sin(th2))
+           +m2*Math.sin(dth)*Math.cos(dth)*l2*om2*om2)/(l2*den);
+  return[a1,a2];
+}
+
+function rk4(){
+  const k1=deriv(th1,th2,om1,om2);
+  const k2=deriv(th1+0.5*dt*om1,th2+0.5*dt*om2,om1+0.5*dt*k1[0],om2+0.5*dt*k1[1]);
+  const k3=deriv(th1+0.5*dt*om2,th2+0.5*dt*om2,om1+0.5*dt*k2[0],om2+0.5*dt*k2[1]);
+  const k4=deriv(th1+dt*om1,th2+dt*om2,om1+dt*k3[0],om2+dt*k3[1]);
+  th1+=dt*(om1+(k1[0]+k2[0]+k3[0])/6);
+  th2+=dt*(om2+(k1[1]+k2[1]+k3[1])/6);
+  om1+=dt*(k1[0]+2*k2[0]+2*k3[0]+k4[0])/6;
+  om2+=dt*(k1[1]+2*k2[1]+2*k3[1]+k4[1])/6;
+}
+
+function energy(){
+  const x1=l1*Math.sin(th1), y1=-l1*Math.cos(th1);
+  const x2=x1+l2*Math.sin(th2), y2=y1-l2*Math.cos(th2);
+  const vx1=l1*om1*Math.cos(th1), vy1=l1*om1*Math.sin(th1);
+  const vx2=vx1+l2*om2*Math.cos(th2), vy2=vy1+l2*om2*Math.sin(th2);
+  const KE=0.5*m1*(vx1*vx1+vy1*vy1)+0.5*m2*(vx2*vx2+vy2*vy2);
+  const PE=m1*g*(y1+l1)+m2*g*(y2+l1+l2);
+  return{ke:KE,pe:PE,te:KE+PE};
+}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed;s++){
+    rk4();
+    const x1=px+l1*scale*Math.sin(th1), y1=py+l1*scale*Math.cos(th1);
+    const x2=x1+l2*scale*Math.sin(th2), y2=y1+l2*scale*Math.cos(th2);
+    trail.push({x:x2,y:y2});
+    if(trail.length>maxHist)trail.shift();
+    trail1.push({x:x1,y:y1});
+    if(trail1.length>maxHist)trail1.shift();
+    const e=energy();
+    history.t.push(simTime);history.th1.push(th1);history.th2.push(th2);
+    history.om1.push(om1);history.om2.push(om2);
+    history.ke.push(e.ke);history.pe.push(e.pe);history.te.push(e.te);
+    if(history.t.length>maxHist){history.t.shift();history.th1.shift();history.th2.shift();history.om1.shift();history.om2.shift();history.ke.shift();history.pe.shift();history.te.shift();}
+    simTime+=dt;
+  }
+}
+
+function resetSim(){
+  th1=Math.PI/2+0.3;th2=Math.PI/2+0.5;om1=0;om2=0;simTime=0;
+  trail.length=0;trail1.length=0;
+  history.t.length=0;history.th1.length=0;history.th2.length=0;
+  history.om1.length=0;history.om2.length=0;
+  history.ke.length=0;history.pe.length=0;history.te.length=0;
+  paused=false;
+  const pb=document.getElementById('pauseBtn');
+  if(pb)pb.textContent='Pause';
+}
+
+// Energy graph
+const egX=590, egY=25, egW=290, egH=110;
+// Phase space
+const psX=590, psY=175, psW=290, psH=140;
+// Poincare section placeholder
+const poX=590, poY=350, poW=290, poH=80;
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  const x1=px+l1*scale*Math.sin(th1), y1=py+l1*scale*Math.cos(th1);
+  const x2=x1+l2*scale*Math.sin(th2), y2=y1+l2*scale*Math.cos(th2);
+
+  // Ceiling
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(px-220,py-2);ctx.lineTo(px+220,py-2);ctx.stroke();
+  for(let ax=-200;ax<=200;ax+=50){
+    ctx.beginPath();ctx.moveTo(px+ax,py-2);ctx.lineTo(px+ax,py-18);ctx.stroke();
+  }
+
+  // Pivot
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();
+
+  // Rod 1
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x1,y1);ctx.stroke();
+
+  // Rod 2
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+
+  // Trails
+  const tlen=trail.length;
+  if(tlen>2){
+    for(let i=1;i<tlen;i+=2){
+      ctx.fillStyle=`rgba(0,0,0,${0.02+0.1*i/tlen})`;
+      ctx.beginPath();ctx.arc(trail[i].x,trail[i].y,0.5+1.5*i/tlen,0,Math.PI*2);ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x,trail[0].y);
+    for(let i=1;i<tlen;i++)ctx.lineTo(trail[i].x,trail[i].y);
+    ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.4;ctx.stroke();
+  }
+
+  // Joint 1
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(x1,y1,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x1,y1,6,0,Math.PI*2);ctx.stroke();
+
+  // Bob 2 with gradient
+  const grad=ctx.createRadialGradient(x2-3,y2-3,2,x2,y2,14);
+  grad.addColorStop(0,'#444');grad.addColorStop(1,'#000');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(x2,y2,13,0,Math.PI*2);ctx.fill();
+
+  // Mass labels
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText('m₁',x1+10,y1-5);
+  ctx.fillText('m₂',x2+10,y2-5);
+
+  // ---- Energy Graph ----
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(egX,egY,egW,egH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('ENERGY',egX+3,egY+9);
+
+  if(history.te.length>5){
+    const eMax=Math.max(...history.te)*1.05||1;
+    // PE (dashed)
+    ctx.beginPath();
+    for(let i=0;i<history.pe.length;i++){
+      const gx=egX+(i/history.pe.length)*egW;
+      const gy=egY+egH-(history.pe[i]/eMax)*egH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.6;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+    // KE
+    ctx.beginPath();
+    for(let i=0;i<history.ke.length;i++){
+      const gx=egX+(i/history.ke.length)*egW;
+      const gy=egY+egH-(history.ke[i]/eMax)*egH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+    // TE
+    ctx.beginPath();
+    for(let i=0;i<history.te.length;i++){
+      const gx=egX+(i/history.te.length)*egW;
+      const gy=egY+egH-(history.te[i]/eMax)*egH;
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.5;ctx.stroke();
+    ctx.font='6px monospace';
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillText('KE',egX+egW-30,egY+9);
+    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillText('PE',egX+egW-16,egY+9);
+    ctx.fillStyle='#111';ctx.fillText('E',egX+egW-43,egY+9);
+  }
+
+  // ---- Phase Space (θ₁ vs ω₁) ----
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(psX,psY,psW,psH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('θ₁ vs ω₁',psX+3,psY+9);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.3;
+  ctx.beginPath();ctx.moveTo(psX+psW/2,psY);ctx.lineTo(psX+psW/2,psY+psH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(psX,psY+psH/2);ctx.lineTo(psX+psW,psY+psH/2);ctx.stroke();
+
+  if(history.th1.length>5){
+    const t1Max=Math.max(...history.th1.map(Math.abs))*1.2||1;
+    const o1Max=Math.max(...history.om1.map(Math.abs))*1.2||1;
+    ctx.beginPath();
+    for(let i=0;i<history.th1.length;i++){
+      const gx=psX+psW/2+(history.th1[i]/t1Max)*(psW/2-5);
+      const gy=psY+psH/2-(history.om1[i]/o1Max)*(psH/2-5);
+      i===0?ctx.moveTo(gx,gy):ctx.lineTo(gx,gy);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.6;ctx.stroke();
+    ctx.fillStyle='#111';
+    const cpx=psX+psW/2+(th1/t1Max)*(psW/2-5);
+    const cpy=psY+psH/2-(om1/o1Max)*(psH/2-5);
+    ctx.beginPath();ctx.arc(cpx,cpy,2.5,0,Math.PI*2);ctx.fill();
+  }
+
+  // ---- Poincare Section (ω₂=0 crossings) ----
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(poX,poY,poW,poH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';
+  ctx.fillText('POINCARÉ (ω₂=0)',poX+3,poY+9);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>θ₁</label><input type="range" id="th1S" min="0.1" max="3" step="0.01" value="${th1}"><span class="val" id="th1V">${th1.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>θ₂</label><input type="range" id="th2S" min="0.1" max="3" step="0.01" value="${th2}"><span class="val" id="th2V">${th2.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>m₁</label><input type="range" id="m1S" min="0.2" max="5" step="0.1" value="${m1}"><span class="val" id="m1V">${m1.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m₂</label><input type="range" id="m2S" min="0.2" max="5" step="0.1" value="${m2}"><span class="val" id="m2V">${m2.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('th1S').addEventListener('input',function(){
+    th1=parseFloat(this.value);om1=0;om2=0;simTime=0;
+    trail.length=0;trail1.length=0;
+    history.t.length=0;history.th1.length=0;history.th2.length=0;
+    history.om1.length=0;history.om2.length=0;
+    history.ke.length=0;history.pe.length=0;history.te.length=0;
+    document.getElementById('th1V').textContent=th1.toFixed(2);
+  });
+  document.getElementById('th2S').addEventListener('input',function(){
+    th2=parseFloat(this.value);om1=0;om2=0;simTime=0;
+    trail.length=0;trail1.length=0;
+    history.t.length=0;history.th1.length=0;history.th2.length=0;
+    history.om1.length=0;history.om2.length=0;
+    history.ke.length=0;history.pe.length=0;history.te.length=0;
+    document.getElementById('th2V').textContent=th2.toFixed(2);
+  });
+  document.getElementById('m1S').addEventListener('input',function(){
+    m1=parseFloat(this.value);
+    document.getElementById('m1V').textContent=m1.toFixed(1);
+  });
+  document.getElementById('m2S').addEventListener('input',function(){
+    m2=parseFloat(this.value);
+    document.getElementById('m2V').textContent=m2.toFixed(1);
+  });
+  const pb=document.getElementById('pauseBtn');
+  pb.addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+  document.getElementById('speedS').addEventListener('input',function(){
+    speed=parseInt(this.value);
+    document.getElementById('speedV').textContent=speed+'x';
+  }); }
+
+  const e=energy();
+  const eDrift=history.te.length>5?((Math.max(...history.te)-Math.min(...history.te))/Math.abs(Math.max(...history.te)||1)*100):0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">θ₁ =</span> <span class="val">${th1.toFixed(3)}</span></span>`+
+    `<span><span class="label">θ₂ =</span> <span class="val">${th2.toFixed(3)}</span></span>`+
+    `<span><span class="label">ω₁ =</span> <span class="val">${om1.toFixed(3)}</span></span>`+
+    `<span><span class="label">ω₂ =</span> <span class="val">${om2.toFixed(3)}</span></span>`+
+    `<span><span class="label">KE =</span> <span class="val">${e.ke.toFixed(3)}</span></span>`+
+    `<span><span class="label">PE =</span> <span class="val">${e.pe.toFixed(3)}</span></span>`+
+    `<span><span class="label">E =</span> <span class="val">${e.te.toFixed(3)}</span></span>`+
+    `<span><span class="label">ΔE/E =</span> <span class="val">${eDrift.toFixed(4)}%</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${simTime.toFixed(1)}</span> s</span>`+
+    `<span><span class="label">Σθ =</span> <span class="val">${(th1+th2).toFixed(3)}</span></span>`+
+    `<span><span class="label">|ω| =</span> <span class="val">${Math.sqrt(om1*om1+om2*om2).toFixed(3)}</span></span>`+
+    `<span><span class="label">Lyapunov ≈</span> <span class="val">chaotic</span></span>`;
+}
+
+function loop(){
+  step();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electric Field 2D · E = kq/r²</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:6px;letter-spacing:.5px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:940px}
+.ctrl-group{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:940px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.eq{font-size:0.72em;color:#444;margin-bottom:4px;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<h1>Electric Field 2D</h1>
+<p class="eq">E = kq/r² &nbsp;&nbsp; V = kq/r &nbsp;&nbsp; ∇·E = ρ/ε₀</p>
+<canvas id="c" width="900" height="540"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=900,H=540;
+let charges=[{x:300,y:270,q:1},{x:600,y:270,q:-1}];
+const k=8.99e9; let showEqui=true,showLines=true,playing=true,speed=1,time=0,paused=false;
+let selectedCharge=null,testAngle=0; const ePotHist=[],tHist3=[];
+let testQ=-1; const testP={x:450,y:100};
+
+function E(x,y){
+  let ex=0,ey=0;
+  for(let c of charges){const dx=x-c.x,dy=y-c.y,r2=dx*dx+dy*dy;if(r2<400)return null;const r3=r2*Math.sqrt(r2);ex+=k*dx/r3*c.q;ey+=k*dy/r3*c.q;}
+  const mag=Math.sqrt(ex*ex+ey*ey);return {x:mag>0?ex/mag:0,y:mag>0?ey/mag:0,mag};
+}
+
+function Vpot(x,y){let v=0;for(let c of charges){const r=Math.hypot(x-c.x,y-c.y);if(r<5)return null;v+=k*c.q/r;}return v;}
+
+function traceField(sx,sy,dir){
+  const pts=[];let x=sx,y=sy;
+  for(let i=0;i<400;i++){
+    const f=E(x,y);if(!f||f.mag<0.01)break;
+    const st=4;x+=st*f.x*dir;y+=st*f.y*dir;
+    if(x<0||x>W||y<0||y>H)break;
+    if(i%2===0)pts.push({x,y});
+  }
+  return pts;
+}
+
+function resetSim(){time=0;ePotHist.length=0;tHist3.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+
+function step(){
+  if(paused||!playing)return;
+  const dt=0.02*speed;time+=dt;
+  testAngle+=dt*0.5;
+  testP.x=450+Math.cos(testAngle)*200;testP.y=270+Math.sin(testAngle*0.7)*150;
+  const v=Vpot(testP.x,testP.y);
+  if(v!==null){ePotHist.push(v);tHist3.push(time);}
+  if(ePotHist.length>300){ePotHist.shift();tHist3.shift();}
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  // Grid arrows
+  const step=30;
+  for(let x=step;x<W;x+=step){
+    for(let y=step;y<H;y+=step){
+      const f=E(x,y);if(!f||f.mag<0.01)continue;
+      const len=Math.min(14,f.mag/2e10);const arrLen=Math.max(3,Math.min(len,14));
+      ctx.strokeStyle=`rgba(0,0,0,${Math.min(0.1+f.mag/8e10,0.5)})`;ctx.lineWidth=0.4+(f.mag/8e10)*0.6;
+      ctx.beginPath();const mx=x+arrLen*f.x,my=y+arrLen*f.y;
+      ctx.moveTo(x,y);ctx.lineTo(mx,my);ctx.stroke();
+      const ang=Math.atan2(f.y,f.x);
+      ctx.beginPath();ctx.moveTo(mx,my);ctx.lineTo(mx-4*Math.cos(ang-0.4),my-4*Math.sin(ang-0.4));
+      ctx.lineTo(mx-4*Math.cos(ang+0.4),my-4*Math.sin(ang+0.4));ctx.closePath();ctx.fillStyle='#111';ctx.fill();
+    }
+  }
+  // Field line traces from around charges
+  if(showLines){
+    for(let c of charges){
+      const nRays=12,sgn=c.q>0?1:-1;
+      for(let i=0;i<nRays;i++){
+        const a=Math.PI*2*i/nRays;const sx=c.x+20*Math.cos(a),sy=c.y+20*Math.sin(a);
+        const pts=traceField(sx,sy,sgn);
+        if(pts.length<4)continue;
+        ctx.beginPath();
+        for(let j=0;j<pts.length;j++){j===0?ctx.moveTo(pts[j].x,pts[j].y):ctx.lineTo(pts[j].x,pts[j].y);}
+        ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.4;ctx.stroke();
+      }
+    }
+  }
+  // Equipotentials (improved)
+  if(showEqui){
+    ctx.strokeStyle='rgba(0,0,0,0.035)';ctx.lineWidth=0.3;
+    for(let phi=-6;phi<=6;phi+=0.5){
+      if(Math.abs(phi)<0.01)continue;
+      ctx.beginPath();let first=true,cont=false;
+      for(let i=0;i<360;i+=3){
+        const a=Math.PI*i/180;let x=W/2+Math.cos(a)*250,y=H/2+Math.sin(a)*250;
+        for(let iter=0;iter<30;iter++){
+          const f=E(x,y);if(!f)break;
+          const Vcur=charges.reduce((s,ch)=>s+k*ch.q/Math.hypot(x-ch.x,y-ch.y),0);
+          if(Math.abs(phi-Vcur)<0.02)break;
+          x+=f.x*(phi-Vcur)*0.08;y+=f.y*(phi-Vcur)*0.08;
+        }
+        if(x>5&&x<W-5&&y>5&&y<H-5){
+          first?ctx.moveTo(x,y):ctx.lineTo(x,y);first=false;cont=true;
+        }
+      }
+      if(cont)ctx.stroke();
+    }
+  }
+  // Test charge path
+  const vNow=Vpot(testP.x,testP.y);
+  ctx.beginPath();ctx.arc(testP.x,testP.y,5,0,Math.PI*2);
+  ctx.fillStyle='#111';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('test',testP.x+7,testP.y+3);
+  if(vNow!==null){ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('V='+vNow.toFixed(2)+'V',testP.x-30,testP.y-10);}
+  // Charges
+  for(let c of charges){
+    ctx.beginPath();ctx.arc(c.x,c.y,16,0,Math.PI*2);
+    ctx.fillStyle=c.q>0?'#fff':'#111';ctx.fill();ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=c.q>0?'#111':'#fff';ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(c.q>0?'+':'−',c.x,c.y);
+    ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textBaseline='bottom';
+    ctx.fillText('q='+c.q.toFixed(1),c.x,c.y-18);
+  }
+  // Mini graph: V(t) at test point
+  const gx=20,gy=H-120,gw=200,gh=100;
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('V(t) at test point [V]',gx+3,gy+9);
+  if(ePotHist.length>1){
+    const vMax=Math.max(...ePotHist.map(Math.abs),1);
+    ctx.beginPath();
+    for(let i=0;i<ePotHist.length;i++){const x=gx+(i/(ePotHist.length-1))*gw,y=gy+gh/2-(ePotHist[i]/vMax)*(gh/2-10);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+  }
+  // Mini graph: E-field profile along midline
+  const gx2=250,gy2=H-120,gw2=220,gh2=100;
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('|E|(x) along y=270',gx2+3,gy2+9);
+  ctx.beginPath();
+  for(let i=0;i<gw2;i+=2){
+    const ex=gx2+i,ey=270,f=E(ex,ey);const mag=f?f.mag:0;
+    const mMax=Math.max(charges.reduce((s,c)=>s+Math.abs(k/(50*50)*c.q),0),1);
+    const py=gy2+gh2-8-(mag/mMax*5)*(gh2-16);
+    i===0?ctx.moveTo(ex,py):ctx.lineTo(ex,py);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>Q₁</label><input type="range" id="q1S" min="-5" max="5" step="0.5" value="${charges[0].q}"><span class="val" id="q1V">${charges[0].q.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Q₂</label><input type="range" id="q2S" min="-5" max="5" step="0.5" value="${charges[1].q}"><span class="val" id="q2V">${charges[1].q.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Equi</label><input type="checkbox" id="eqC" ${showEqui?'checked':''}></div>`+
+    `<div class="ctrl-group"><label>lines</label><input type="checkbox" id="lnC" ${showLines?'checked':''}></div>`+
+    `<div class="ctrl-group"><label>speed</label><input type="range" id="spS" min="0.1" max="4" step="0.1" value="${speed}"><span class="val" id="spV">${speed.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('q1S').addEventListener('input',function(){charges[0].q=parseFloat(this.value);document.getElementById('q1V').textContent=charges[0].q.toFixed(1);});
+  document.getElementById('q2S').addEventListener('input',function(){charges[1].q=parseFloat(this.value);document.getElementById('q2V').textContent=charges[1].q.toFixed(1);});
+  document.getElementById('eqC').addEventListener('change',function(){showEqui=this.checked;});
+  document.getElementById('lnC').addEventListener('change',function(){showLines=this.checked;});
+  document.getElementById('spS').addEventListener('input',function(){speed=parseFloat(this.value);document.getElementById('spV').textContent=speed.toFixed(1);});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',function(){charges[0]={x:300,y:270,q:1};charges[1]={x:600,y:270,q:-1};});
+}
+
+  canvas.onmousedown=function(e){const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+    for(let c of charges){if(Math.hypot(mx-c.x,my-c.y)<25){selectedCharge=c;return;}}selectedCharge=null;};
+  canvas.onmousemove=function(e){if(!selectedCharge)return;const r=canvas.getBoundingClientRect();
+    selectedCharge.x=Math.max(20,Math.min(W-20,e.clientX-r.left));selectedCharge.y=Math.max(20,Math.min(H-20,e.clientY-r.top));};
+  canvas.onmouseup=function(){selectedCharge=null;};
+
+  const f1=E(charges[0].x+60,charges[0].y),f2=E(charges[1].x+60,charges[1].y);
+  const d12=Math.hypot(charges[1].x-charges[0].x,charges[1].y-charges[0].y);
+  const FC=k*charges[0].q*charges[1].q/(d12*d12||1);
+  const Vmid=Vpot(450,270);
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">k =</span> <span class="val">${k.toExponential(2)}</span></span>`+
+    `<span><span class="label">|E|₁ =</span> <span class="val">${f1?f1.mag.toExponential(2):0}</span> V/m</span>`+
+    `<span><span class="label">|E|₂ =</span> <span class="val">${f2?f2.mag.toExponential(2):0}</span> V/m</span>`+
+    `<span><span class="label">Vₘᵢₔ =</span> <span class="val">${Vmid!==null?Vmid.toFixed(2):'∞'}</span> V</span>`+
+    `<span><span class="label">V(probe) =</span> <span class="val">${vNow!==null?vNow.toFixed(2):'∞'}</span> V</span>`+
+    `<span><span class="label">F₁₂ =</span> <span class="val">${FC.toExponential(2)}</span> N</span>`+
+    `<span><span class="label">d₁₂ =</span> <span class="val">${d12.toFixed(1)}</span> px</span>`+
+    `<span><span class="label">Q₁ =</span> <span class="val">${charges[0].q.toFixed(1)}</span></span>`+
+    `<span><span class="label">Q₂ =</span> <span class="val">${charges[1].q.toFixed(1)}</span></span>`+
+    `<span><span class="label">|E|ₘᵢₙ ≈</span> <span class="val">${d12>1?(k*Math.abs(charges[0].q-charges[1].q)/((d12/2)*(d12/2))).toExponential(2):0}</span></span>`+
+    `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span> s</span>`+
+    `<span><span class="label">drag</span> <span class="val">charges</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

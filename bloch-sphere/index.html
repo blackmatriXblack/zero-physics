@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloch Sphere · Qubit representation on unit sphere</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+p{font-size:0.7em;color:#666;margin:5px 0 10px;text-align:center;max-width:920px;line-height:1.5}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px;cursor:pointer}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:0.65em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.1s}
+button:hover{background:#000;color:#fff}
+button.gate{background:#fafafa;border-color:#999;padding:3px 8px;font-size:0.7em}
+button.gate:hover{background:#111;color:#fff;border-color:#000}
+.stats{display:flex;flex-wrap:wrap;gap:3px 16px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Bloch Sphere</h1>
+<p>|ψ⟩ = cos(θ/2)|0⟩ + e^(iφ) sin(θ/2)|1⟩ &nbsp; ⟨X⟩=sinθcosφ &nbsp; ⟨Y⟩=sinθsinφ &nbsp; ⟨Z⟩=cosθ</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const ca = document.getElementById('c')
+const cx = ca.getContext('2d')
+const W = 920
+const H = 520
+let th = 60
+let ph = 30
+let sp = 1
+let pl = true
+let ti = 0
+const hP0 = []
+const hP1 = []
+const hBz = []
+function dr(){
+  cx.fillStyle = '#fff'
+  cx.fillRect(0, 0, W, H)
+  if (pl) {
+    ti += sp * 0.016
+    ph = (ph + sp * 0.12) % 360
+  }
+  const t = th * Math.PI / 180
+  const p = ph * Math.PI / 180
+  const cx0 = 280
+  const cy = 255
+  const r = 175
+  cx.strokeStyle = 'rgba(0,0,0,0.04)'
+  cx.lineWidth = 0.3
+  for (let i = 0; i <= 180; i += 30) {
+    cx.beginPath()
+    for (let j = 0; j <= 360; j += 5) {
+      const x = r * Math.sin(i * Math.PI / 180) * Math.cos(j * Math.PI / 180)
+      const z = r * Math.sin(j * Math.PI / 180)
+      const y = r * Math.cos(i * Math.PI / 180)
+      const px = cx0 + x
+      const py = cy - z
+      j === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py)
+    }
+    cx.stroke()
+  }
+  for (let i = 0; i <= 180; i += 30) {
+    cx.beginPath()
+    for (let j = 0; j <= 360; j += 5) {
+      const x = r * Math.cos(j * Math.PI / 180) * Math.sin(i * Math.PI / 180)
+      const z = r * Math.sin(j * Math.PI / 180)
+      const y = r * Math.cos(j * Math.PI / 180) * Math.cos(i * Math.PI / 180)
+      const px = cx0 + x
+      const py = cy - z
+      j === 0 ? cx.moveTo(px, py) : cx.lineTo(px, py)
+    }
+    cx.stroke()
+  }
+  cx.strokeStyle = 'rgba(0,0,0,0.1)'
+  cx.lineWidth = 0.5
+  cx.beginPath()
+  cx.arc(cx0, cy, r, 0, Math.PI * 2)
+  cx.stroke()
+  cx.fillStyle = '#999'
+  cx.font = '8px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('|0⟩ (north pole)', cx0, cy - r - 10)
+  cx.fillText('|1⟩ (south pole)', cx0, cy + r + 16)
+  cx.fillText('|+⟩ (x)', cx0 + r + 14, cy + 4)
+  cx.fillText('|−⟩ (-x)', cx0 - r - 14, cy + 4)
+  cx.fillText('|+i⟩ (y)', cx0 - 14, cy - r - 24)
+  cx.fillText('|−i⟩ (-y)', cx0 - 14, cy + r + 28)
+  const sx = Math.sin(t) * Math.cos(p)
+  const sy = Math.sin(t) * Math.sin(p)
+  const sz = Math.cos(t)
+  cx.strokeStyle = '#111'
+  cx.lineWidth = 2.5
+  cx.beginPath()
+  cx.moveTo(cx0, cy)
+  cx.lineTo(cx0 + sx * r, cy - sz * r)
+  cx.stroke()
+  cx.fillStyle = '#111'
+  cx.beginPath()
+  cx.arc(cx0 + sx * r, cy - sz * r, 6, 0, Math.PI * 2)
+  cx.fill()
+  cx.strokeStyle = 'rgba(0,0,0,0.08)'
+  cx.lineWidth = 0.3
+  cx.setLineDash([3, 3])
+  cx.beginPath()
+  cx.moveTo(cx0 + sx * r, cy - sz * r)
+  cx.lineTo(cx0 + sx * r, cy)
+  cx.lineTo(cx0, cy)
+  cx.stroke()
+  cx.setLineDash([])
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.fillText('θ=' + th.toFixed(0) + '°', cx0 + sx * r / 2, cy - sz * r / 2 - 12)
+  cx.fillText('φ=' + ph.toFixed(0) + '°', cx0 + sx * r / 2 + 14, cy + 18)
+  const p0 = Math.cos(t / 2) ** 2
+  const p1 = Math.sin(t / 2) ** 2
+  const bX = 500
+  const bY = 40
+  const bW = 380
+  const bH = 28
+  for (let k = 0; k < 2; k++) {
+    cx.fillStyle = 'rgba(0,0,0,0.05)'
+    cx.fillRect(bX, bY + k * 48, bW, bH)
+    cx.fillStyle = '#111'
+    cx.fillRect(bX, bY + k * 48, bW * (k ? p1 : p0), bH)
+    cx.strokeStyle = 'rgba(0,0,0,0.06)'
+    cx.lineWidth = 0.5
+    cx.strokeRect(bX, bY + k * 48, bW, bH)
+    cx.fillStyle = '#999'
+    cx.font = '8px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? '|⟨1|ψ⟩|² = sin²(θ/2) = ' + p1.toFixed(3) : '|⟨0|ψ⟩|² = cos²(θ/2) = ' + p0.toFixed(3), bX, bY - 4 + k * 48)
+  }
+  cx.fillStyle = '#111'
+  cx.font = '9px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('Bloch vector = (' + sx.toFixed(3) + ', ' + sy.toFixed(3) + ', ' + sz.toFixed(3) + ')', bX, bY + 112)
+  cx.fillStyle = '#999'
+  cx.font = '8px monospace'
+  cx.fillText('⟨X⟩ = sinθcosφ = ' + (Math.sin(t) * Math.cos(p)).toFixed(3), bX, bY + 132)
+  cx.fillText('⟨Y⟩ = sinθsinφ = ' + (Math.sin(t) * Math.sin(p)).toFixed(3), bX, bY + 150)
+  cx.fillText('⟨Z⟩ = cosθ = ' + Math.cos(t).toFixed(3), bX, bY + 168)
+  hP0.push(p0)
+  hP1.push(p1)
+  hBz.push(sz)
+  if (hP0.length > 85) { hP0.shift(); hP1.shift(); hBz.shift() }
+  const mX = 500
+  const mY = 215
+  const mW = 380
+  const mH = 85
+  for (let k = 0; k < 2; k++) {
+    const arr = k ? hBz : hP0
+    const my = mY + k * 95
+    cx.strokeStyle = '#ddd'
+    cx.lineWidth = 0.5
+    cx.strokeRect(mX, my, mW, mH)
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? '⟨Z⟩ = cosθ history' : '|⟨0|ψ⟩|² history', mX + 4, my + 12)
+    if (arr.length > 1) {
+      const mx = Math.max(...arr)
+      const mn = Math.min(...arr)
+      const rg = mx - mn || 1
+      cx.strokeStyle = k ? 'rgba(0,0,0,0.5)' : '#111'
+      cx.lineWidth = 0.9
+      cx.beginPath()
+      for (let i = 0; i < arr.length; i++) {
+        const x = mX + i / (arr.length - 1) * mW
+        const y = my + mH - (arr[i] - mn) / rg * (mH - 16)
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      cx.stroke()
+    }
+  }
+  const bl = Math.hypot(sx, sy, sz)
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><label>θ(°)</label><input type="range" id="tS" min="0" max="180" step="1" value="' + th + '"><span class="val" id="tV">' + th + '</span></div>' +
+    '<div class="ctrl-group"><label>φ(°)</label><input type="range" id="pS" min="0" max="360" step="1" value="' + (ph|0) + '"><span class="val" id="pV">' + (ph|0) + '</span></div>' +
+    '<div class="ctrl-group"><label>SPEED</label><input type="range" id="spS" min="0" max="5" step="0.1" value="' + sp + '"><span class="val" id="spV">' + sp.toFixed(1) + '</span></div>' +
+    '<button id="plBtn">' + (pl ? '⏸PAUSE' : '▶PLAY') + '</button>' +
+    '<button id="rsBtn">↺RESET</button>' +
+    '<button class="gate" id="xBtn">X</button>' +
+    '<button class="gate" id="hBtn">H</button>' +
+    '<button class="gate" id="zBtn">Z</button>' +
+    '<button class="gate" id="sBtn">S</button>'
+  document.getElementById('tS').oninput = function(){ th = +this.value; tV.textContent = th }
+  document.getElementById('pS').oninput = function(){ ph = +this.value; pV.textContent = ph|0 }
+  document.getElementById('spS').oninput = function(){ sp = +this.value; spV.textContent = sp.toFixed(1) }
+  document.getElementById('plBtn').onclick = function(){ pl = !pl; this.textContent = pl ? '⏸PAUSE' : '▶PLAY' }
+  document.getElementById('rsBtn').onclick = function(){ th = 60; ph = 30; ti = 0; hP0.length = 0; hP1.length = 0; hBz.length = 0 }
+  document.getElementById('xBtn').onclick = function(){ th = 180 - th; ph = (ph + 180) % 360 }
+  document.getElementById('hBtn').onclick = function(){ const ct = Math.cos(t); const st = Math.sin(t); const cp = Math.cos(p); const nx = (ct + st * cp) / Math.sqrt(2); const nz = (ct - st * cp) / Math.sqrt(2); th = Math.acos(Math.max(-1, Math.min(1, nz))) * 180 / Math.PI; ph = Math.atan2(st * Math.sin(p), st * cp) * 180 / Math.PI; if (ph < 0) ph += 360 }
+  document.getElementById('zBtn').onclick = function(){ ph = (ph + 180) % 360 }
+  document.getElementById('sBtn').onclick = function(){ ph = (ph + 90) % 360 }
+}
+  document.getElementById('stats').innerHTML =
+    '<span><span class="label">θ =</span> <span class="val">' + th.toFixed(1) + '°</span></span>' +
+    '<span><span class="label">φ =</span> <span class="val">' + (ph%360).toFixed(1) + '°</span></span>' +
+    '<span><span class="label">|0⟩ prob =</span> <span class="val">' + (p0*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">|1⟩ prob =</span> <span class="val">' + (p1*100).toFixed(1) + '%</span></span>' +
+    '<span><span class="label">|Bloch| =</span> <span class="val">' + bl.toFixed(4) + '</span></span>' +
+    '<span><span class="label">⟨X⟩ =</span> <span class="val">' + sx.toFixed(3) + '</span></span>' +
+    '<span><span class="label">⟨Y⟩ =</span> <span class="val">' + sy.toFixed(3) + '</span></span>' +
+    '<span><span class="label">⟨Z⟩ =</span> <span class="val">' + sz.toFixed(3) + '</span></span>' +
+    '<span><span class="label">cos(θ/2) =</span> <span class="val">' + Math.cos(t/2).toFixed(3) + '</span></span>' +
+    '<span><span class="label">sin(θ/2) =</span> <span class="val">' + Math.sin(t/2).toFixed(3) + '</span></span>' +
+    '<span><span class="label">e^(iφ) =</span> <span class="val">' + Math.cos(p).toFixed(3) + ' + ' + Math.sin(p).toFixed(3) + 'i</span></span>' +
+    '<span><span class="label">State type =</span> <span class="val">' + (bl > 0.99 ? 'Pure' : 'Mixed') + '</span></span>' +
+    '<span><span class="label">cos²+sin² =</span> <span class="val">' + (p0+p1).toFixed(3) + '</span></span>'
+}
+setInterval(dr, 16)
+</script>
+</body>
+</html>

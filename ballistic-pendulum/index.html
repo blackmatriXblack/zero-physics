@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ballistic Pendulum · v = (m+M)/m √(2gh)</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}p{font-size:0.75em;color:#666;margin-bottom:10px}canvas{border:1px solid #000;display:block}.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}.ctrl-group input[type=range]{width:70px;accent-color:#000}.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}button:hover{background:#000;color:#fff}.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}.fire-btn{background:#000;color:#fff;padding:6px 24px}button.fire-btn:hover{background:#333}</style>
+</head>
+<body>
+<h1>Ballistic Pendulum</h1>
+<p>v = (m+M)/m · √(2gh) — Inelastic collision + energy conservation</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+const g=9.81;
+let mBullet=0.05,mBlock=1.0,vBullet=15;
+let state='ready';
+let theta=0,omega=0;
+const L=220;
+const pivotX=350,pivotY=55;
+let blockX=pivotX,blockY=pivotY+L;
+let bulletX=60,bulletY=380;
+let bulletVx=vBullet*10;
+let vAfter=0,maxTheta=0,t=0;
+const trail=[];
+
+function resetSim(){
+  state='ready';theta=0;omega=0;
+  bulletX=60;bulletY=380;bulletVx=vBullet*10;
+  vAfter=0;maxTheta=0;t=0;trail.length=0;
+  blockX=pivotX+L*Math.sin(theta);blockY=pivotY+L*Math.cos(theta);
+  document.getElementById('fireBtn').textContent='FIRE';
+}
+function fire(){
+  if(state!=='ready')return;
+  state='flying';bulletX=60;bulletY=380;bulletVx=vBullet*10;
+  mBullet=parseFloat(document.getElementById('mbS')?.value)||mBullet;
+}
+
+function step(){
+  const dt=0.005;
+  if(state==='flying'){
+    bulletX+=bulletVx*dt*50;
+    const bx=pivotX+L*Math.sin(theta);const by=pivotY+L*Math.cos(theta);
+    const dist=Math.sqrt((bulletX-bx)**2+(bulletY-by)**2);
+    if(dist<25||bulletX>W){
+      vAfter=(mBullet*bulletVx)/(mBullet+mBlock);
+      omega=vAfter/L;
+      const h_=(vAfter*vAfter)/(2*g);
+      maxTheta=Math.acos(1-h_/L);
+      if(maxTheta>Math.PI/2||!isFinite(maxTheta))maxTheta=Math.PI/2;
+      state='swinging';
+      document.getElementById('fireBtn').textContent='SWINGING';
+    }
+  }
+  if(state==='swinging'){
+    const alpha=-(g/L)*Math.sin(theta);
+    omega+=alpha*dt;
+    theta+=omega*dt*40;
+    // Damping
+    omega*=0.998;
+    t+=dt*40;
+    trail.push({x:blockX,y:blockY});
+    if(theta<=0&&omega<=0&&theta>-0.01){theta=0;omega=0;state='done';document.getElementById('fireBtn').textContent='FIRE';}
+  }
+  blockX=pivotX+L*Math.sin(theta);blockY=pivotY+L*Math.cos(theta);
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Support
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(0,pivotY);ctx.lineTo(W,pivotY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pivotX,pivotY);ctx.lineTo(pivotX,pivotY-20);ctx.stroke();
+  for(let x=pivotX-120;x<=pivotX+120;x+=30){ctx.beginPath();ctx.moveTo(x,pivotY);ctx.lineTo(x,pivotY-12);ctx.stroke();}
+
+  // Pivot
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(pivotX,pivotY,5,0,Math.PI*2);ctx.fill();
+
+  // Pendulum rod
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(pivotX,pivotY);ctx.lineTo(blockX,blockY);ctx.stroke();
+
+  // Block
+  ctx.fillStyle='#333';ctx.fillRect(blockX-28,blockY-18,56,36);
+  ctx.strokeStyle='#fff';ctx.lineWidth=0.5;ctx.strokeRect(blockX-24,blockY-14,48,28);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('M='+mBlock.toFixed(2),blockX,blockY+3);
+
+  // Bullet
+  if(state==='flying'){
+    ctx.fillStyle='#111';
+    ctx.beginPath();ctx.arc(bulletX,bulletY,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='7px monospace';ctx.textAlign='center';
+    ctx.fillText('m='+mBullet.toFixed(3),bulletX,bulletY-12);
+  }
+
+  // Trail of block during swing
+  if(trail.length>1){
+    ctx.beginPath();ctx.moveTo(trail[0].x,trail[0].y);
+    for(let i=1;i<trail.length;i++)ctx.lineTo(trail[i].x,trail[i].y);
+    ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.4;ctx.stroke();
+  }
+
+  // Height indicator
+  if(state==='swinging'||state==='done'){
+    const h=L*(1-Math.cos(maxTheta));
+    const hY=pivotY+L-h;
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(pivotX+30,hY);ctx.lineTo(pivotX+80,hY);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';
+    ctx.fillText('h='+h.toFixed(3)+'m',pivotX+85,hY+3);
+  }
+
+  // Info panels
+  const ix=480,iy=30;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ix,iy,390,120);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('BALLISTIC PENDULUM ANALYSIS',ix+5,iy+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+
+  const v0Calc=mBullet>0?((mBullet+mBlock)/mBullet)*Math.sqrt(2*g*L*(1-Math.cos(maxTheta))):0;
+  const pBefore=mBullet*vBullet;
+  const pAfter=(mBullet+mBlock)*vAfter;
+
+  ctx.fillText(`m = ${mBullet.toFixed(3)} kg  M = ${mBlock.toFixed(2)} kg  v₀ = ${vBullet.toFixed(1)} m/s`,ix+5,iy+32);
+  ctx.fillText(`State: ${state}`,ix+5,iy+48);
+  if(state==='swinging'||state==='done'){
+    ctx.fillText(`v_after = ${vAfter.toFixed(3)} m/s  θ_max = ${(maxTheta*180/Math.PI).toFixed(2)}°`,ix+5,iy+64);
+    ctx.fillText(`h = ${(L*(1-Math.cos(maxTheta))).toFixed(4)} m`,ix+5,iy+80);
+    ctx.fillText(`p_before = ${pBefore.toFixed(4)}  p_after = ${pAfter.toFixed(4)}  ${Math.abs(pBefore-pAfter)<0.01?'✓ conserved':'⚠'}`,ix+5,iy+96);
+    ctx.fillText(`v₀(computed) = ${v0Calc.toFixed(2)} m/s  (from h)`,ix+5,iy+112);
+  }
+
+  // Conservation law boxes
+  const cx_=480,cy_=180;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(cx_,cy_,390,55);
+  ctx.fillStyle='#111';ctx.font='7px monospace';
+  ctx.fillText('CONSERVATION LAWS',cx_+5,cy_+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='6px monospace';
+  ctx.fillText('1. Inelastic collision:  mv₀ = (m+M)v\'  (momentum conserved)',cx_+5,cy_+30);
+  ctx.fillText('2. Swing:  ½(m+M)v\'² = (m+M)gh  (energy conserved)',cx_+5,cy_+45);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>m(g)</label><input type="range" id="mbS" min="5" max="200" step="1" value="${mBullet*1000}"><span class="val" id="mbV">${(mBullet*1000).toFixed(0)}g</span></div>`+
+    `<div class="ctrl-group"><label>M</label><input type="range" id="mBS" min="0.2" max="5" step="0.05" value="${mBlock}"><span class="val" id="mBV">${mBlock.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>v₀</label><input type="range" id="vS" min="2" max="40" step="0.5" value="${vBullet}"><span class="val" id="vV">${vBullet.toFixed(1)}</span></div>`+
+    `<button id="fireBtn" class="fire-btn">FIRE</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('mbS').addEventListener('input',function(){mBullet=parseFloat(this.value)/1000;document.getElementById('mbV').textContent=(mBullet*1000).toFixed(0)+'g';resetSim();});
+  document.getElementById('mBS').addEventListener('input',function(){mBlock=parseFloat(this.value);document.getElementById('mBV').textContent=mBlock.toFixed(2);resetSim();});
+  document.getElementById('vS').addEventListener('input',function(){vBullet=parseFloat(this.value);document.getElementById('vV').textContent=vBullet.toFixed(1);resetSim();});
+  document.getElementById('fireBtn').addEventListener('click',fire);
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">State:</span> <span class="val">${state}</span></span>`+
+    `<span><span class="label">m/M =</span> <span class="val">${(mBullet/(mBlock||0.001)*100).toFixed(2)}%</span></span>`+
+    `<span><span class="label">θ =</span> <span class="val">${(theta*180/Math.PI).toFixed(2)}°</span></span>`+
+    `<span><span class="label">h =</span> <span class="val">${(L*(1-Math.cos(maxTheta))).toFixed(4)}</span> m</span>`+
+    `<span><span class="label">v\' =</span> <span class="val">${vAfter.toFixed(3)}</span> m/s</span>`;
+}
+
+function loop(){step();draw();requestAnimationFrame(loop);}
+resetSim();loop();
+</script>
+</body>
+</html>

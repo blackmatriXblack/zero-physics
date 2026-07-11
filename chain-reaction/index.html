@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chain Reaction · k = ν·P_capture·(1−L) · Fission</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;right:10px;pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;align-items:center}
+.panel{background:rgba(255,255,255,0.85);border:1px solid rgba(0,0,0,0.15);padding:5px 10px;font-size:11px;line-height:1.5}
+.panel .eq{font-size:13px;margin-bottom:3px}
+button{background:#fff;border:1px solid #111;padding:4px 10px;font:11px/1.4 'Courier New',monospace;cursor:pointer;color:#111;pointer-events:auto;letter-spacing:1px;text-transform:uppercase}
+button:hover{background:#111;color:#fff}
+input[type=range]{accent-color:#111;width:72px;vertical-align:middle;pointer-events:auto}
+label{font-size:11px;pointer-events:auto;white-space:nowrap}
+#data{position:absolute;bottom:8px;left:8px;right:8px;pointer-events:none;display:flex;gap:4px;flex-wrap:wrap}
+.dbox{border:1px solid rgba(0,0,0,0.12);padding:2px 5px;font-size:10px;line-height:1.4;background:rgba(255,255,255,0.8);min-width:60px}
+.dbox b{font-size:10px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="row">
+<div class="panel"><div class="eq">k_{eff}=ν·Σ_f/Σ_a &nbsp; dN/dt=(k−1)N/τ &nbsp; n+²³⁵U→fission+2–3n+200MeV</div></div>
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<button id="playBtn">⏸</button>
+<button id="resetBtn">↺</button>
+<label>Speed <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1"></label>
+</div>
+</div>
+<div class="row">
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<label>ν/fission <input type="range" id="nuSlider" min="1" max="4" step="0.1" value="2.5"></label>
+<label>nU235 <input type="range" id="nucSlider" min="10" max="100" step="5" value="40"></label>
+<label>P_capture <input type="range" id="pcSl" min="0.2" max="1" step="0.05" value="0.7"></label>
+<label>leak% <input type="range" id="leakSl" min="0" max="50" step="2" value="10"></label>
+<label>τ_gen <input type="range" id="tauSl" min="0.1" max="2" step="0.1" value="0.5"></label>
+</div>
+</div>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight}
+window.addEventListener('resize',resize);resize();
+let neutrons=[],nuclei=[],fissionEvents=[],paused=false,speed=1;
+let generation=0,totalNeutrons=0,neutronsPerFission=2.5,pCapture=0.7,leakFrac=0.1,genTime=0.5;
+let nNuclei=40,maxNeutrons=800;
+let neutronHist=[],genHist=[],t=0,fissionCount=0,peakNeutrons=0;
+let regime='subcritical';
+const maxHPts=500;
+
+function reset(){
+  neutrons=[];nuclei=[];fissionEvents=[];generation=0;totalNeutrons=0;fissionCount=0;t=0;neutronHist=[];genHist=[];peakNeutrons=0;
+  for(let i=0;i<nNuclei;i++){let x=80+Math.random()*(W-160),y=60+Math.random()*(H-120);nuclei.push({x,y,r:14,hit:false,id:i})}
+  neutrons.push({x:150+Math.random()*100,y:H/2+(Math.random()-0.5)*100,vx:(Math.random()-0.5)*2,vy:(Math.random()-0.5)*2,life:0,gen:0});
+  totalNeutrons=1;neutronHist.push({t:0,n:1});genHist.push({t:0,g:0});
+  updateRegime();
+}
+function updateRegime(){
+  const kEff=neutronsPerFission*pCapture*(1-leakFrac);
+  if(kEff<0.98)regime='subcritical';else if(kEff<1.02)regime='critical';else regime='supercritical';
+}
+function step(){
+  if(paused)return;
+  t+=0.016*speed*genTime;
+  const toSplice=[];
+  for(let i=neutrons.length-1;i>=0;i--){
+    const n=neutrons[i];n.x+=n.vx*speed;n.y+=n.vy*speed;n.life++;
+    if(n.x<0||n.x>W||n.y<0||n.y>H||n.life>200){toSplice.push(i);continue}
+    if(Math.random()<leakFrac*0.02){toSplice.push(i);continue}
+    let hit=false;
+    for(let j=0;j<nuclei.length;j++){
+      const u=nuclei[j];if(u.hit)continue;
+      const dx=n.x-u.x,dy=n.y-u.y;
+      if(dx*dx+dy*dy<(u.r+3)*(u.r+3)){
+        if(Math.random()<pCapture){
+          u.hit=true;hit=true;
+          const count=Math.round(neutronsPerFission);
+          for(let k=0;k<count;k++){
+            if(neutrons.length<maxNeutrons){const ang=Math.random()*6.28,sp=0.8+Math.random()*1.5;neutrons.push({x:u.x+Math.cos(ang)*8,y:u.y+Math.sin(ang)*8,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,life:0,gen:n.gen+1});totalNeutrons++}
+          }
+          fissionEvents.push({x:u.x,y:u.y,t:0,r:u.r});
+          fissionCount++;
+          if(n.gen+1>generation)generation=n.gen+1;
+        }else{toSplice.push(i)}
+        break;
+      }
+    }
+    if(hit)toSplice.push(i);
+  }
+  for(const idx of toSplice.sort((a,b)=>b-a))neutrons.splice(idx,1);
+  for(let i=nuclei.length-1;i>=0;i--)if(nuclei[i].hit)nuclei.splice(i,1);
+  for(let i=fissionEvents.length-1;i>=0;i--){fissionEvents[i].t++;if(fissionEvents[i].t>30)fissionEvents.splice(i,1)}
+  if(neutronHist.length===0||t-neutronHist[neutronHist.length-1].t>0.02){neutronHist.push({t,n:neutrons.length});if(neutronHist.length>maxHPts)neutronHist.shift()}
+  if(genHist.length===0||t-genHist[genHist.length-1].t>0.1){genHist.push({t,g:generation});if(genHist.length>200)genHist.shift()}
+  peakNeutrons=Math.max(peakNeutrons,neutrons.length);
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  for(const u of nuclei){if(!u.hit){ctx.fillStyle='#333';ctx.beginPath();ctx.arc(u.x,u.y,u.r,0,6.28);ctx.fill();ctx.fillStyle='#fff';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('²³⁵U',u.x,u.y+3)}}
+  for(const fe of fissionEvents){const a=1-fe.t/30;ctx.strokeStyle='rgba(0,0,0,'+(a*0.4)+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(fe.x,fe.y,fe.r*(1+fe.t*0.25),0,6.28);ctx.stroke()}
+  for(const n of neutrons){ctx.fillStyle='#111';ctx.beginPath();ctx.arc(n.x,n.y,2.2,0,6.28);ctx.fill()}
+  const gx=W*0.65,gw=W*0.32,gy=H*0.05,gh=H*0.35;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText('neutron N(t)',gx+4,gy+12);
+  if(neutronHist.length>1){
+    const maxN=Math.max(...neutronHist.map(p=>p.n),1),tMax=Math.max(neutronHist[neutronHist.length-1].t,0.1);
+    ctx.beginPath();
+    for(let i=0;i<neutronHist.length;i++){const sx=gx+neutronHist[i].t/tMax*gw,sy=gy+gh-neutronHist[i].n/maxN*gh;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)}
+    ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='8px monospace';ctx.fillText('N='+neutrons.length+' peak='+peakNeutrons,gx+4,gy+gh-6);
+  }
+  const gx2=W*0.65,gy2=H*0.44,gw2=gw,gh2=H*0.2;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.font='9px monospace';ctx.fillText('generation',gx2+4,gy2+12);
+  if(genHist.length>1){
+    const maxG=Math.max(...genHist.map(p=>p.g),1),tMax2=Math.max(genHist[genHist.length-1].t,0.1);
+    ctx.beginPath();
+    for(let i=0;i<genHist.length;i++){const sx=gx2+genHist[i].t/tMax2*gw2,sy=gy2+gh2-genHist[i].g/maxG*gh2;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy)}
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='7px monospace';ctx.fillText('gen='+generation,gx2+4,gy2+gh2-4);
+  }
+  const kEff=neutronsPerFission*pCapture*(1-leakFrac);
+  const nDensity=neutrons.length/Math.max(W*H/10000,1);
+  const rate=nDensity*0.1;
+  const neutronFlux=neutrons.length*0.05;
+  const doublingTime=Math.abs(kEff-1)>0.001?genTime*Math.log(2)/Math.abs(kEff-1):Infinity;
+  const dataEl=document.getElementById('data');
+  let html='';
+  const disp=[
+    {k:'ν/fis',v:neutronsPerFission.toFixed(1)},{k:'P_cap',v:pCapture.toFixed(2)},{k:'leak',v:(leakFrac*100).toFixed(0)+'%'},{k:'τ_gen',v:genTime.toFixed(2)},{k:'k_eff',v:kEff.toFixed(4)},{k:'regime',v:regime},{k:'n(t)',v:neutrons.length},{k:'peak',v:peakNeutrons},{k:'fissions',v:fissionCount},{k:'gen',v:generation},{k:'n_total',v:totalNeutrons},{k:'nuc_left',v:nuclei.length},{k:'flux(p/s)',v:neutronFlux.toFixed(1)},{k:'T_double',v:doublingTime===Infinity?'∞':doublingTime.toFixed(2)},{k:'k−1',v:(kEff-1).toFixed(4)},{k:'dN/dt',v:((kEff-1)*neutrons.length*0.1).toFixed(2)}];
+  for(const kv of disp)html+=`<div class="dbox"><b>${kv.k}</b><br>${kv.v}</div>`;
+  dataEl.innerHTML=html;
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.font='9px monospace';ctx.fillText('n (fast neutron)',10,20);
+  ctx.fillStyle='#333';ctx.fillText('²³⁵U nucleus',10,35);
+}
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'▶':'⏸'}
+document.getElementById('resetBtn').onclick=reset;
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('nuSlider').oninput=function(){neutronsPerFission=parseFloat(this.value);updateRegime()};
+document.getElementById('nucSlider').oninput=function(){nNuclei=parseInt(this.value);reset()};
+document.getElementById('pcSl').oninput=function(){pCapture=parseFloat(this.value);updateRegime()};
+document.getElementById('leakSl').oninput=function(){leakFrac=parseInt(this.value)/100;updateRegime()};
+document.getElementById('tauSl').oninput=function(){genTime=parseFloat(this.value)};
+reset();
+function loop(){for(let i=0;i<5;i++)step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

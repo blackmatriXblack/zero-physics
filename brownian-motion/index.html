@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brownian Motion · ⟨r²⟩ = 2Dt</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.eq{font-size:0.7em;color:#666;margin-bottom:5px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:65px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.st{display:flex;flex-wrap:wrap;gap:1px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Brownian Motion</h1>
+<p class="eq">⟨r²⟩ = 2Dt — Einstein relation — k_B T stochastic force</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="ctrl" id="ctrls"></div>
+<div class="st" id="st"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=920,H=520;
+let D=2,scale=3,nP=8,dt=0.02,speed=1,kBT=1;
+let paused=0,reset=0,time=0;
+const P=[];
+function initP(){P.length=0;for(let i=0;i<nP;i++)P.push({x:W/2,y:H/2,trail:[],r:2.5+Math.random()*3,vx:0,vy:0})}
+initP();
+const mHist=[],tHist=[],keHist=[],rmsHist=[],maxH=400;
+function step(){
+  if(paused)return;
+  const sdt=dt*speed;time+=sdt;const f=Math.sqrt(2*D*sdt)*scale;
+  for(let p of P){
+    const fx=f*(Math.random()-0.5)*2;const fy=f*(Math.random()-0.5)*2;
+    p.vx+=fx-p.vx*0.08;p.vy+=fy-p.vy*0.08;
+    p.x+=p.vx;sdt;p.y+=p.vy;sdt;
+    if(p.x<0){p.x=0;p.vx*=-0.5}if(p.x>W){p.x=W;p.vx*=-0.5}
+    if(p.y<0){p.y=0;p.vy*=-0.5}if(p.y>H){p.y=H;p.vy*=-0.5}
+    p.trail.push({x:p.x,y:p.y});if(p.trail.length>150)p.trail.shift();
+    if(reset){p.x=W/2;p.y=H/2;p.trail=[];p.vx=0;p.vy=0}
+  }
+  reset=0;let msd=0,ke=0,rms=0;
+  for(let p of P){const dx=p.x-W/2,dy=p.y-H/2;msd+=dx*dx+dy*dy;rms+=Math.sqrt(dx*dx+dy*dy);ke+=p.vx*p.vx+p.vy*p.vy}
+  msd/=P.length;rms/=P.length;ke*=kBT/(2*P.length);
+  mHist.push(msd);tHist.push(time);keHist.push(ke);rmsHist.push(rms);
+  if(mHist.length>maxH){mHist.shift();tHist.shift();keHist.shift();rmsHist.shift()}
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  for(let p of P){
+    for(let i=1;i<p.trail.length;i++){const a=i/p.trail.length*0.35+0.02;ctx.strokeStyle=`rgba(0,0,0,${a})`;ctx.lineWidth=0.3;ctx.beginPath();ctx.moveTo(p.trail[i-1].x,p.trail[i-1].y);ctx.lineTo(p.trail[i].x,p.trail[i].y);ctx.stroke()}
+    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()
+  }
+  const gx=460,gy=350,gw=430,gh=150,msd=mHist.length>0?mHist[mHist.length-1]:0;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('⟨r²⟩ vs t (solid) · 2Dt theory (dashed)',gx+3,gy+10);
+  if(mHist.length>2){
+    const mx=Math.max(...mHist,1);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();
+    for(let i=0;i<mHist.length;i++){const px=gx+(i/mHist.length)*gw,py=gy+gh-mHist[i]/mx*(gh-20);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}
+    ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();
+    for(let i=0;i<gw;i++){const t=(i/gw)*tHist[tHist.length-1]||1,mt=2*D*t*scale*scale*5,py=gy+gh-mt/mx*(gh-20);i===0?ctx.moveTo(gx+i,py):ctx.lineTo(gx+i,py)}
+    ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#999';ctx.font='6px monospace';ctx.fillText('⟨r²⟩',gx+3,gy+gh-4)
+  }
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>D</label><input type="range" id="sD" min="0.1" max="6" step="0.1" value="${D}"><span class="v" id="vD">${D.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>Scale</label><input type="range" id="sS" min="1" max="12" step="0.5" value="${scale}"><span class="v" id="vS">${scale.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>kBT</label><input type="range" id="sT" min="0.1" max="5" step="0.1" value="${kBT}"><span class="v" id="vT">${kBT.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>N</label><input type="range" id="sN" min="1" max="30" step="1" value="${nP}"><span class="v" id="vN">${nP}</span></div>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="sSp" min="0" max="5" step="0.1" value="${speed}"><span class="v" id="vSp">${speed.toFixed(1)}</span></div>`+
+    `<button id="pb">${paused?'PLAY':'PAUSE'}</button><button id="rs">RESET</button>`;
+  document.getElementById('sD').oninput=function(){D=+this.value;document.getElementById('vD').textContent=D.toFixed(1)};
+  document.getElementById('sS').oninput=function(){scale=+this.value;document.getElementById('vS').textContent=scale.toFixed(1)};
+  document.getElementById('sT').oninput=function(){kBT=+this.value;document.getElementById('vT').textContent=kBT.toFixed(1)};
+  document.getElementById('sN').oninput=function(){nP=+this.value;initP();document.getElementById('vN').textContent=nP};
+  document.getElementById('sSp').oninput=function(){speed=+this.value;document.getElementById('vSp').textContent=speed.toFixed(1)};
+  document.getElementById('pb').onclick=function(){paused=!paused;this.textContent=paused?'PLAY':'PAUSE'};
+  document.getElementById('rs').onclick=function(){reset=1;time=0;mHist.length=0;tHist.length=0;keHist.length=0;rmsHist.length=0};
+}
+  const tke=keHist.length>0?keHist[keHist.length-1]:0,rr=rmsHist.length>0?rmsHist[rmsHist.length-1]:0;
+  const Dmeas=tHist.length>2&&tHist[tHist.length-1]>0?msd/(2*tHist[tHist.length-1]*scale*scale):0;
+  document.getElementById('st').innerHTML=
+    `<span><span class="l">t =</span> <span class="v">${time.toFixed(2)}</span> s</span>`+
+    `<span><span class="l">⟨r²⟩ =</span> <span class="v">${msd.toFixed(1)}</span></span>`+
+    `<span><span class="l">2Dt =</span> <span class="v">${(2*D*time*scale*scale).toFixed(1)}</span></span>`+
+    `<span><span class="l">RMS =</span> <span class="v">${rr.toFixed(1)}</span></span>`+
+    `<span><span class="l">D_meas =</span> <span class="v">${Dmeas.toFixed(3)}</span></span>`+
+    `<span><span class="l">KE =</span> <span class="v">${tke.toFixed(3)}</span></span>`+
+    `<span><span class="l">N =</span> <span class="v">${P.length}</span></span>`+
+    `<span><span class="l">D =</span> <span class="v">${D.toFixed(1)}</span></span>`+
+    `<span><span class="l">scale =</span> <span class="v">${scale.toFixed(1)}</span></span>`+
+    `<span><span class="l">kBT =</span> <span class="v">${kBT.toFixed(1)}</span></span>`+
+    `<span><span class="l">⟨KE⟩ =</span> <span class="v">${(tke/P.length||0).toFixed(4)}</span></span>`+
+    `<span><span class="l">max⟨r²⟩ =</span> <span class="v">${mHist.length>0?Math.max(...mHist).toFixed(1):0}</span></span>`
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

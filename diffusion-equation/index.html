@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diffusion Equation · ∂C/∂t = D∇²C</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.eq{font-size:0.7em;color:#666;margin-bottom:5px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:65px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.st{display:flex;flex-wrap:wrap;gap:1px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Diffusion Equation</h1>
+<p class="eq">∂C/∂t = D ∇²C — Fick's second law</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="ctrl" id="ctrls"></div>
+<div class="st" id="st"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=920,H=520;
+const COLS=180,ROWS=100,CELLW=W/COLS,CELLH=H/ROWS;
+let grid=new Float64Array(COLS*ROWS),newG=new Float64Array(COLS*ROWS);
+let D=0.05,dt=0.08,rad=8,speed=1;
+let time=0,running=1,paused=0,reset=0;
+const tHist=[],massHist=[],maxCHist=[],entHist=[],gradHist=[],maxH=400;
+
+function init(){
+  grid.fill(0);const cx=Math.floor(COLS/2),cy=Math.floor(ROWS/2);
+  for(let j=-rad;j<=rad;j++)for(let i=-rad;i<=rad;i++)if(i*i+j*j<=rad*rad){const idx=(cy+j)*COLS+(cx+i);if(idx>=0&&idx<COLS*ROWS)grid[idx]=1.0}
+  time=0;running=1
+}
+init();
+
+function step(){
+  if(paused)return;
+  const sdt=dt*speed;time+=sdt;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const idx=y*COLS+x;let lap=0,c=0;
+    if(x>0){lap+=grid[idx-1]-grid[idx];c++}if(x<COLS-1){lap+=grid[idx+1]-grid[idx];c++}
+    if(y>0){lap+=grid[idx-COLS]-grid[idx];c++}if(y<ROWS-1){lap+=grid[idx+COLS]-grid[idx];c++}
+    newG[idx]=grid[idx]+D*lap*sdt;if(newG[idx]<0)newG[idx]=0;if(newG[idx]>1)newG[idx]=1
+  }[grid,newG]=[newG,grid];
+  let tot=0,mx=0,en=0,gr=0;
+  for(let i=0;i<grid.length;i++){tot+=grid[i];if(grid[i]>mx)mx=grid[i]}
+  for(let y=1;y<ROWS-1;y++)for(let x=1;x<COLS-1;x++){const gx=grid[y*COLS+x]-grid[y*COLS+x-1],gy=grid[y*COLS+x]-grid[(y-1)*COLS+x];gr+=Math.sqrt(gx*gx+gy*gy)}
+  for(let i=0;i<grid.length;i++){const p=grid[i];if(p>0)en-=p*Math.log(p)}
+  tHist.push(time);massHist.push(tot);maxCHist.push(mx);entHist.push(en);gradHist.push(gr);
+  if(tHist.length>maxH){tHist.shift();massHist.shift();maxCHist.shift();entHist.shift();gradHist.shift()}
+}
+
+function draw(){
+  const img=ctx.createImageData(W,H),d=img.data;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const v=grid[y*COLS+x],g=Math.floor(255*(1-v));
+    const sx=Math.floor(x*CELLW),sy=Math.floor(y*CELLH);
+    const ex=Math.min(Math.ceil((x+1)*CELLW),W),ey=Math.min(Math.ceil((y+1)*CELLH),H);
+    for(let py=sy;py<ey;py++)for(let px=sx;px<ex;px++){const i=(py*W+px)*4;d[i]=g;d[i+1]=g;d[i+2]=g;d[i+3]=255}
+  }
+  ctx.putImageData(img,0,0);
+  // concentration profile slice
+  const gx=W-Math.min(W*0.38,360),gy=20,gw=Math.min(W*0.35,350),gh=100,cy=Math.floor(ROWS/2);
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('C(x) at y=mid',gx+3,gy+10);
+  ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<COLS;x++){const px=gx+(x/COLS)*gw,py=gy+gh-grid[cy*COLS+x]*gh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}
+  ctx.stroke();
+  // mass conservation graph
+  const gx2=gx,gy2=gy+gh+10,gw2=gw,gh2=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('Total mass (conserved)',gx2+3,gy2+10);
+  if(massHist.length>1){const mm=Math.max(...massHist,1);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<massHist.length;i++){const px=gx2+(i/massHist.length)*gw2,py=gy2+gh2-massHist[i]/mm*(gh2-10);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke()}
+  const tot=massHist.length>0?massHist[massHist.length-1]:0,ent=entHist.length>0?entHist[entHist.length-1]:0,gr=gradHist.length>0?gradHist[gradHist.length-1]:0,mx=maxCHist.length>0?maxCHist[maxCHist.length-1]:0;
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>D</label><input type="range" id="sD" min="0.005" max="0.5" step="0.005" value="${D}"><span class="v" id="vD">${D.toFixed(3)}</span></div>`+
+    `<div class="cg"><label>Rad</label><input type="range" id="sR" min="2" max="20" step="1" value="${rad}"><span class="v" id="vR">${rad}</span></div>`+
+    `<div class="cg"><label>dt</label><input type="range" id="sDt" min="0.02" max="0.5" step="0.02" value="${dt}"><span class="v" id="vDt">${dt.toFixed(2)}</span></div>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="sSp" min="0" max="5" step="0.1" value="${speed}"><span class="v" id="vSp">${speed.toFixed(1)}</span></div>`+
+    `<button id="pb">${paused?'PLAY':'PAUSE'}</button><button id="rs">RESET</button>`;
+  document.getElementById('sD').oninput=function(){D=+this.value;document.getElementById('vD').textContent=D.toFixed(3)};
+  document.getElementById('sR').oninput=function(){rad=+this.value;init();document.getElementById('vR').textContent=rad};
+  document.getElementById('sDt').oninput=function(){dt=+this.value;document.getElementById('vDt').textContent=dt.toFixed(2)};
+  document.getElementById('sSp').oninput=function(){speed=+this.value;document.getElementById('vSp').textContent=speed.toFixed(1)};
+  document.getElementById('pb').onclick=function(){paused=!paused;this.textContent=paused?'PLAY':'PAUSE'};
+  document.getElementById('rs').onclick=function(){init();tHist.length=0;massHist.length=0;maxCHist.length=0;entHist.length=0;gradHist.length=0};
+}
+  const D_m=tHist.length>2&&tHist[tHist.length-1]>0?2*rad*rad/(4*tHist[tHist.length-1]):0;
+  document.getElementById('st').innerHTML=
+    `<span><span class="l">t =</span> <span class="v">${time.toFixed(2)}</span> s</span>`+
+    `<span><span class="l">M_total =</span> <span class="v">${tot.toFixed(2)}</span></span>`+
+    `<span><span class="l">C_max =</span> <span class="v">${mx.toFixed(4)}</span></span>`+
+    `<span><span class="l">C_mean =</span> <span class="v">${(tot/(COLS*ROWS)).toFixed(5)}</span></span>`+
+    `<span><span class="l">D =</span> <span class="v">${D.toFixed(3)}</span></span>`+
+    `<span><span class="l">dt =</span> <span class="v">${dt.toFixed(2)}</span></span>`+
+    `<span><span class="l">S_diff =</span> <span class="v">${ent.toFixed(3)}</span></span>`+
+    `<span><span class="l">∇C_avg =</span> <span class="v">${gr.toFixed(3)}</span></span>`+
+    `<span><span class="l">Gauss_sig =</span> <span class="v">${Math.sqrt(2*D*time).toFixed(3)}</span></span>`+
+    `<span><span class="l">D_meas =</span> <span class="v">${D_m.toFixed(4)}</span></span>`+
+    `<span><span class="l">N_steps =</span> <span class="v">${tHist.length}</span></span>`+
+    `<span><span class="l">Resolution</span> <span class="v">${COLS}×${ROWS}</span></span>`
+}
+function loop(){if(running&&!paused)step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

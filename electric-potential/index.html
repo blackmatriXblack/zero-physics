@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electric Potential · V = kq/r · ∇²V = −ρ/ε₀</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:crosshair}
+canvas:active{cursor:grabbing}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Electric Potential</h1>
+<p>V = kq/r — Grayscale = V — Contours = equipotentials — Click to add charge</p>
+<canvas id="c" width="920" height="440"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),c=C.getContext('2d');
+const W=920,H=440,charges=[],k=2500;
+let sign=1,qMag=1,contours=12,step=4,showE=true,dragging=-1;
+let probeX=W/2,probeY=H/2,probeSet=false;
+let paused=false,speed=1,px=300,py=300,pvx=0,pvy=0,pt=0,particleMode=false;
+const hist={t:[],x:[],y:[],v:[],ex:[],ey:[],vm:[],ke:[],pe:[]};
+const maxH=400;
+
+function V(x,y){let v=0;for(const c of charges){const r=Math.hypot(x-c.x,y-c.y);if(r<3)continue;v+=k*c.q/r;}return v;}
+function gradV(x,y){const d=2;return {x:-(V(x+d,y)-V(x-d,y))/(2*d),y:-(V(x,y+d)-V(x,y-d))/(2*d)};}
+
+function step(){
+  if(paused)return;
+  for(let s=0;s<speed&&particleMode;s++){
+    const g=gradV(px,py);
+    pvx+=g.x*0.002;px+=pvx*0.005;
+    pvy+=g.y*0.002;py+=pvy*0.005;
+    if(px<0||px>W||py<0||py>H){px=300;py=300;pvx=0;pvy=0;}
+    const vm=Math.hypot(g.x,g.y),ke=0.5*(pvx*pvx+pvy*pvy);
+    let pe=0;for(const c of charges){const r=Math.hypot(px-c.x,py-c.y);if(r>2)pe-=k*1*c.q/r;}
+    hist.t.push(pt);hist.x.push(px);hist.y.push(py);hist.v.push(V(px,py));hist.ex.push(g.x);hist.ey.push(g.y);
+    hist.vm.push(vm);hist.ke.push(ke);hist.pe.push(pe);
+    if(hist.t.length>maxH)Object.values(hist).forEach(a=>a.shift());
+    pt+=0.005;
+  }
+}
+
+function resetSim(){
+  if(particleMode){px=300;py=300;pvx=0;pvy=0;pt=0;Object.values(hist).forEach(a=>a.length=0);}
+  else{charges.length=0;}
+  paused=false;document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function draw(){
+  c.fillStyle='#fff';c.fillRect(0,0,W,H);
+  const gx=20,gw=500,gy=20,gh=400;
+
+  // Potential map
+  const img=c.getImageData(0,0,W,H),d=img.data;
+  let minV=Infinity,maxV=-Infinity;const vals=[];
+  for(let y=0;y<H;y+=step)for(let x=0;x<W;x+=step){const v=V(x,y);vals.push({x,y,v});if(v<minV)minV=v;if(v>maxV)maxV=v;}
+  const range=maxV-minV||1;
+  for(const g of vals){const cval=Math.max(0,Math.min(255,Math.floor((g.v-minV)/range*255)));for(let dy=0;dy<step&&g.y+dy<H;dy++)for(let dx=0;dx<step&&g.x+dx<W;dx++){const idx=((g.y+dy)*W+(g.x+dx))*4;d[idx]=cval;d[idx+1]=cval;d[idx+2]=cval;d[idx+3]=255;}}
+  c.putImageData(img,0,0);
+
+  // Contour lines
+  for(let i=1;i<contours;i++){const t=i/contours,target=minV+t*range;c.beginPath();c.strokeStyle=`rgba(0,0,0,${0.15+0.3*(1-Math.abs(t-0.5)*2)})`;c.lineWidth=0.5;for(let y=0;y<H;y+=4){let started=false;for(let x=0;x<W;x+=4){const vv=V(x,y),prev=x>0?V(x-4,y):vv;if((vv>=target&&prev<target)||(vv<target&&prev>=target)){const interp=(target-prev)/(vv-prev)||0,pxx=(x-4)+4*interp;started?c.lineTo(pxx,y):c.moveTo(pxx,y);started=true;}}c.stroke();}}
+
+  // E field vectors
+  if(showE&&charges.length>0){const eStep=40;for(let y=eStep;y<H;y+=eStep)for(let x=eStep;x<W;x+=eStep){const g=gradV(x,y),gm=Math.hypot(g.x,g.y);if(gm<0.5)continue;const sc=Math.min(15/gm,12);c.strokeStyle=`rgba(0,0,0,${0.08+0.2*gm/(gm+10)})`;c.lineWidth=0.4;const ang=Math.atan2(g.y,g.x);c.beginPath();c.moveTo(x,y);c.lineTo(x+g.x*sc,y+g.y*sc);c.stroke();c.beginPath();c.moveTo(x+g.x*sc,y+g.y*sc);c.lineTo(x+g.x*sc-2.5*Math.cos(ang-0.5),y+g.y*sc-2.5*Math.sin(ang-0.5));c.moveTo(x+g.x*sc,y+g.y*sc);c.lineTo(x+g.x*sc-2.5*Math.cos(ang+0.5),y+g.y*sc-2.5*Math.sin(ang+0.5));c.stroke();}}
+
+  // Charges
+  for(const ch of charges){c.beginPath();c.arc(ch.x,ch.y,8,0,Math.PI*2);c.fillStyle=ch.q>0?'#fff':'#111';c.fill();c.strokeStyle='#111';c.lineWidth=1.5;c.stroke();c.fillStyle=ch.q>0?'#111':'#fff';c.font='bold 11px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(ch.q>0?'+':'−',ch.x,ch.y+1);}
+
+  // Probe crosshair
+  if(probeSet){c.strokeStyle='rgba(0,0,0,0.3)';c.lineWidth=0.4;c.setLineDash([3,4]);c.beginPath();c.moveTo(probeX,gy);c.lineTo(probeX,gy+gh);c.stroke();c.beginPath();c.moveTo(gx,probeY);c.lineTo(gx+gw,probeY);c.stroke();c.setLineDash([]);const vv=V(probeX,probeY);c.fillStyle='#111';c.beginPath();c.arc(probeX,probeY,3,0,Math.PI*2);c.fill();c.fillStyle='rgba(0,0,0,0.5)';c.font='7px monospace';c.fillText(`V=${vv.toFixed(2)}`,probeX+6,probeY-4);}
+
+  // Test particle
+  if(particleMode){c.fillStyle='#111';c.beginPath();c.arc(px,py,4,0,Math.PI*2);c.fill();if(hist.x.length>2){c.beginPath();for(let i=0;i<hist.x.length;i++){i===0?c.moveTo(hist.x[i],hist.y[i]):c.lineTo(hist.x[i],hist.y[i]);}c.strokeStyle='rgba(0,0,0,0.06)';c.lineWidth=0.4;c.stroke();}}
+
+  // Phase space: Ex vs Ey
+  const psX=560,psY=20,psW=330,psH=150;
+  c.strokeStyle='#ddd';c.lineWidth=0.5;c.strokeRect(psX,psY,psW,psH);
+  c.fillStyle='#999';c.font='7px monospace';c.fillText('Ex vs Ey at probe (E-field phase)',psX+3,psY+10);
+  c.strokeStyle='rgba(0,0,0,0.1)';c.lineWidth=0.5;
+  c.beginPath();c.moveTo(psX+psW/2,psY);c.lineTo(psX+psW/2,psY+psH);c.stroke();
+  c.beginPath();c.moveTo(psX,psY+psH/2);c.lineTo(psX+psW,psY+psH/2);c.stroke();
+  if(hist.ex.length>2&&particleMode){
+    const exMax=Math.max(...hist.ex.map(Math.abs))*1.2||1,eyMax=Math.max(...hist.ey.map(Math.abs))*1.2||1;
+    c.beginPath();for(let i=0;i<hist.ex.length;i++){const sx=psX+psW/2+(hist.ex[i]/exMax)*(psW/2-6),sy=psY+psH/2-(hist.ey[i]/eyMax)*(psH/2-6);i===0?c.moveTo(sx,sy):c.lineTo(sx,sy);}
+    c.strokeStyle='rgba(0,0,0,0.25)';c.lineWidth=0.8;c.stroke();
+    const g=gradV(px,py);c.fillStyle='#111';c.beginPath();c.arc(psX+psW/2+(g.x/exMax)*(psW/2-6),psY+psH/2-(g.y/eyMax)*(psH/2-6),3,0,Math.PI*2);c.fill();
+  }
+
+  // V time graph at probe/cursor
+  const vgX=560,vgY=190,vgW=psW,vgH=110;
+  c.strokeStyle='#ddd';c.lineWidth=0.5;c.strokeRect(vgX,vgY,vgW,vgH);
+  c.fillStyle='#999';c.font='7px monospace';c.fillText('V & |∇V| at test particle',vgX+3,vgY+10);
+  if(hist.v.length>2&&particleMode){
+    const vMax=Math.max(...hist.v.map(Math.abs))*1.2||1;
+    c.beginPath();for(let i=0;i<hist.v.length;i++){const sx=vgX+(i/hist.v.length)*vgW,sy=vgY+vgH/2-(hist.v[i]/vMax)*(vgH/2-4);i===0?c.moveTo(sx,sy):c.lineTo(sx,sy);}
+    c.strokeStyle='#111';c.lineWidth=0.8;c.stroke();
+  }
+  c.fillStyle='rgba(0,0,0,0.4)';c.font='6px monospace';c.fillText('V',vgX+vgW-10,vgY+vgH-4);
+
+  // Energy graph
+  const egX=560,egY=320,egW=psW,egH=95;
+  c.strokeStyle='#ddd';c.lineWidth=0.5;c.strokeRect(egX,egY,egW,egH);
+  c.fillStyle='#999';c.font='7px monospace';c.fillText('KE & PE of test charge',egX+3,egY+10);
+  if(hist.ke.length>2&&particleMode){
+    const eMax=Math.max(...hist.ke.map((k,i)=>k+hist.pe[i]))*1.1||1;
+    c.beginPath();for(let i=0;i<hist.ke.length;i++){const sx=egX+(i/hist.ke.length)*egW,sy=egY+egH-(hist.ke[i]/eMax)*egH;i===0?c.moveTo(sx,sy):c.lineTo(sx,sy);}
+    c.strokeStyle='#111';c.lineWidth=0.8;c.stroke();
+    c.beginPath();for(let i=0;i<hist.pe.length;i++){const sx=egX+(i/hist.pe.length)*egW,sy=egY+egH-(hist.pe[i]/eMax)*egH;i===0?c.moveTo(sx,sy):c.lineTo(sx,sy);}
+    c.strokeStyle='rgba(0,0,0,0.3)';c.lineWidth=0.6;c.setLineDash([2,3]);c.stroke();c.setLineDash([]);
+  }
+
+  const vProbe=probeSet?V(probeX,probeY):0;
+  const gProbe=probeSet?gradV(probeX,probeY):{x:0,y:0};
+  const gMag=Math.hypot(gProbe.x,gProbe.y);
+  const totalQ=charges.reduce((s,ch)=>s+ch.q,0);
+  let nrg=0;for(let i=0;i<charges.length;i++)for(let j=i+1;j<charges.length;j++){const dx=charges[j].x-charges[i].x,dy=charges[j].y-charges[i].y,r=Math.hypot(dx,dy);if(r>1)nrg+=k*charges[i].q*charges[j].q/r;}
+  let lap=0;if(probeSet){const d=4;lap=(V(probeX+d,probeY)+V(probeX-d,probeY)+V(probeX,probeY+d)+V(probeX,probeY-d)-4*V(probeX,probeY))/(d*d);}
+  const keP=0.5*(pvx*pvx+pvy*pvy);
+  let peP=0;for(const c of charges){const r=Math.hypot(px-c.x,py-c.y);if(r>2)peP-=k*1*c.q/r;}
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<button id="posBtn" class="${sign>0?'active':''}">+ Pos</button>`+
+    `<button id="negBtn" class="${sign<0?'active':''}">− Neg</button>`+
+    `<button id="clearBtn">Clear</button>`+
+    `<button id="dipoleBtn">Dipole</button>`+
+    `<div class="ctrl-group"><label>|q|</label><input type="range" id="qS" min="0.5" max="3" step="0.5" value="${qMag}"><span class="val" id="qV">${qMag.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Cont</label><input type="range" id="contS" min="4" max="24" step="1" value="${contours}"><span class="val" id="contV">${contours}</span></div>`+
+    `<button id="eVecBtn" class="${showE?'active':''}">E vec</button>`+
+    `<button id="partBtn" class="${particleMode?'active':''}">Particle</button>`+
+    `<button id="pauseBtn">${paused?'Play':'Pause'}</button>`+
+    `<button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+
+  document.getElementById('posBtn').onclick=function(){sign=1;this.className='active';document.getElementById('negBtn').className='';};
+  document.getElementById('negBtn').onclick=function(){sign=-1;this.className='active';document.getElementById('posBtn').className='';};
+  document.getElementById('clearBtn').onclick=function(){charges.length=0;};
+  document.getElementById('dipoleBtn').onclick=function(){charges.length=0;charges.push({x:380,y:200,q:1},{x:440,y:240,q:-1});};
+  document.getElementById('qS').oninput=function(){qMag=parseFloat(this.value);document.getElementById('qV').textContent=qMag.toFixed(1);};
+  document.getElementById('contS').oninput=function(){contours=parseInt(this.value);document.getElementById('contV').textContent=contours;};
+  document.getElementById('eVecBtn').onclick=function(){showE=!showE;this.className=showE?'active':'';};
+  document.getElementById('partBtn').onclick=function(){particleMode=!particleMode;this.className=particleMode?'active':'';if(!particleMode){Object.values(hist).forEach(a=>a.length=0);}};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=resetSim;
+  document.getElementById('speedS').oninput=function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x';};
+
+  C.onmousedown=function(e){
+    const r=C.getBoundingClientRect(),mx=(e.clientX-r.left)*(W/r.width),my=(e.clientY-r.top)*(H/r.height);
+    for(let i=charges.length-1;i>=0;i--){if(Math.hypot(mx-charges[i].x,my-charges[i].y)<12){dragging=i;C.style.cursor='grabbing';return;}}
+    probeX=mx;probeY=my;probeSet=true;
+    if(probeX>=gx&&probeX<=gx+gw&&probeY>=gy&&probeY<=gy+gh){}else charges.push({x:mx,y:my,q:sign*qMag});
+  };
+  C.onmousemove=function(e){if(dragging<0)return;const r=C.getBoundingClientRect();charges[dragging].x=(e.clientX-r.left)*(W/r.width);charges[dragging].y=(e.clientY-r.top)*(H/r.height);};
+  C.onmouseup=C.onmouseleave=function(){dragging=-1;C.style.cursor='crosshair';};
+  C.oncontextmenu=function(e){e.preventDefault();const r=C.getBoundingClientRect(),mx=(e.clientX-r.left)*(W/r.width),my=(e.clientY-r.top)*(H/r.height);for(let i=charges.length-1;i>=0;i--){if(Math.hypot(mx-charges[i].x,my-charges[i].y)<15){charges.splice(i,1);break;}}};
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">t =</span> <span class="val">${pt.toFixed(4)}</span> s</span>`+
+    `<span><span class="label">V<sub>p</sub> =</span> <span class="val">${probeSet?vProbe.toFixed(4):'—'}</span></span>`+
+    `<span><span class="label">Ex =</span> <span class="val">${gProbe.x.toFixed(4)}</span></span>`+
+    `<span><span class="label">Ey =</span> <span class="val">${gProbe.y.toFixed(4)}</span></span>`+
+    `<span><span class="label">|E| =</span> <span class="val">${gMag.toFixed(4)}</span></span>`+
+    `<span><span class="label">∇²V ≈</span> <span class="val">${lap.toFixed(4)}</span></span>`+
+    `<span><span class="label">N =</span> <span class="val">${charges.length}</span></span>`+
+    `<span><span class="label">Σq =</span> <span class="val">${totalQ.toFixed(4)}</span></span>`+
+    `<span><span class="label">U<sub>el</sub> =</span> <span class="val">${nrg.toFixed(4)}</span></span>`+
+    `<span><span class="label">V<sub>min</sub> =</span> <span class="val">${minV.toFixed(2)}</span></span>`+
+    `<span><span class="label">V<sub>max</sub> =</span> <span class="val">${maxV.toFixed(2)}</span></span>`+
+    `<span><span class="label">ΔV =</span> <span class="val">${(maxV-minV).toFixed(2)}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

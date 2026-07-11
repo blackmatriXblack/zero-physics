@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Bell's Inequality · S ≤ 2</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Bell's Inequality</h1>
+<p>E(θ) = −cos(θ) · S = |E(a,b)−E(a,c)|+|E(a,c)−E(b,c)| ≤ 2</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let aA=0,aB=30,trials=0,corr=[],paused=0,spd=1,run=1,maxT=5000
+let hx=[],hy=[]
+function qC(th){return-Math.cos(th*Math.PI/180)}
+function cC(th){const r=th*Math.PI/180;return-1+2*r/Math.PI}
+function simQ(aD,bD){const aR=aD*Math.PI/180,bR=bD*Math.PI/180
+if(Math.random()<0.5){const rA=Math.random()<0.5?1:-1,ad=aR-bR,pS=Math.cos(ad)**2,rB=Math.random()<pS?rA:-rA;return{rA,rB}}
+else{const rB=Math.random()<0.5?1:-1,ad=aR-bR,pS=Math.cos(ad)**2,rA=Math.random()<pS?rB:-rB;return{rA,rB}}}
+function simC(aD,bD){const aR=aD*Math.PI/180,bR=bD*Math.PI/180,lam=Math.random()*2*Math.PI
+const sA=Math.cos(lam-aR)>0?1:-1,sB=Math.cos(lam-bR)>0?1:-1;return{rA:sA,rB:sB}}
+function runT(n){for(let i=0;i<n;i++){const th=Math.random()*180,q=simQ(0,th),c=simC(0,th);corr.push({th,cor:q.rA*q.rB,ty:'q'});corr.push({th,cor:c.rA*c.rB,ty:'c'})}trials+=n}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const pX=70,pY=70,pW=600,pH=380
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(pX,pY,pW,pH)
+ctx.fillStyle='#888';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('Correlation E(θ)',pX+pW/2,pY-6)
+ctx.fillText('+1',pX-20,pY+5);ctx.fillText('0',pX-15,pY+pH/2+3);ctx.fillText('−1',pX-20,pY+pH-3)
+ctx.fillText('0°',pX,pY+pH+15);ctx.fillText('45°',pX+pW/4,pY+pH+15);ctx.fillText('90°',pX+pW/2,pY+pH+15);ctx.fillText('135°',pX+3*pW/4,pY+pH+15);ctx.fillText('180°',pX+pW,pY+pH+15)
+ctx.strokeStyle='#ccc';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pX,pY+pH/2);ctx.lineTo(pX+pW,pY+pH/2);ctx.stroke();ctx.setLineDash([])
+const qAvg={},cAvg={};let qCnt=0,cCnt=0
+for(const r of corr){const bin=Math.round(r.th/5)*5
+if(r.ty==='q'){if(!qAvg[bin])qAvg[bin]={s:0,c:0};qAvg[bin].s+=r.cor;qAvg[bin].c++;qCnt++}
+else{if(!cAvg[bin])cAvg[bin]={s:0,c:0};cAvg[bin].s+=r.cor;cAvg[bin].c++;cCnt++}}
+ctx.lineWidth=1.5
+if(qCnt>0){ctx.strokeStyle='#000';ctx.beginPath();let fst=1
+for(let th=0;th<=180;th+=1){const q=qC(th),x=pX+(th/180)*pW,y=pY+pH/2-q*pH/2;fst?ctx.moveTo(x,y):ctx.lineTo(x,y);fst=0}ctx.stroke()}
+if(cCnt>0){ctx.strokeStyle='#888';ctx.setLineDash([4,4]);ctx.beginPath();let fst=1
+for(let th=0;th<=180;th+=1){const cc=cC(th),x=pX+(th/180)*pW,y=pY+pH/2-cc*pH/2;fst?ctx.moveTo(x,y):ctx.lineTo(x,y);fst=0}ctx.stroke();ctx.setLineDash([])}
+for(const b in qAvg){const d=qAvg[b],avg=d.s/d.c,x=pX+(parseInt(b)/180)*pW,y=pY+pH/2-avg*pH/2
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fill()}
+for(const b in cAvg){const d=cAvg[b],avg=d.s/d.c,x=pX+(parseInt(b)/180)*pW,y=pY+pH/2-avg*pH/2
+ctx.fillStyle='#888';ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fill()}
+const sQM=Math.abs(qC(0)-qC(45))+Math.abs(qC(45)-qC(90))
+const sCL=Math.abs(cC(0)-cC(45))+Math.abs(cC(45)-cC(90))
+ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='left'
+ctx.fillText('Quantum −cos(θ) — VIOLATES Bell',15,30);ctx.fillStyle='#888';ctx.fillText('Classical linear — satisfies Bell',15,47)
+ctx.fillStyle='#000';ctx.fillText('Trials: '+trials*2,15,64)
+ctx.fillText('S(QM)='+sQM.toFixed(2)+(sQM>2?' > 2 VIOLATION!':''),350,30)
+ctx.fillStyle='#888';ctx.fillText('S(CL)='+sCL.toFixed(2)+' (≤ 2)',350,47)
+if(hx.length>1){const mgX=690,mgY=440,mgW=200,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('S QM(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(i/hx.length)*mgW,yy=mgY+mgH-(hy[i]/3)*mgH*0.8
+i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()
+ctx.strokeStyle='#aaa';ctx.lineWidth=0.5;ctx.setLineDash([2,2]);ctx.beginPath()
+ctx.moveTo(mgX,mgY+mgH-2/3*mgH*0.8);ctx.lineTo(mgX+mgW,mgY+mgH-2/3*mgH*0.8);ctx.stroke();ctx.setLineDash([])
+ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='right';ctx.fillText('S=2',mgX+mgW-2,mgY+mgH-2/3*mgH*0.8+8)}
+const viol=sQM>2
+document.getElementById('st').innerHTML=
+`<span><span class="l">Trials =</span> <span class="v">${trials*2}</span></span>`+
+`<span><span class="l">S(QM) =</span> <span class="v">${sQM.toFixed(3)}</span></span>`+
+`<span><span class="l">S(CL) =</span> <span class="v">${sCL.toFixed(3)}</span></span>`+
+`<span><span class="l">Violation =</span> <span class="v">${viol?'✓ YES > 2':'none'}</span></span>`+
+`<span><span class="l">E(0°) =</span> <span class="v">${qC(0).toFixed(3)}</span></span>`+
+`<span><span class="l">E(45°) =</span> <span class="v">${qC(45).toFixed(3)}</span></span>`+
+`<span><span class="l">E(90°) =</span> <span class="v">${qC(90).toFixed(3)}</span></span>`+
+`<span><span class="l">ΔE(0−45) =</span> <span class="v">${(qC(0)-qC(45)).toFixed(3)}</span></span>`+
+`<span><span class="l">ΔE(45−90) =</span> <span class="v">${(qC(45)-qC(90)).toFixed(3)}</span></span>`+
+`<span><span class="l">Q points =</span> <span class="v">${qCnt}</span></span>`+
+`<span><span class="l">CL points =</span> <span class="v">${cCnt}</span></span>`+
+`<span><span class="l">θ_max viol =</span> <span class="v">45°</span></span>`
+if(!paused&&trials<maxT){runT(1*spd);if(!hx.length||trials%10===0){hx.push(trials);hy.push(sQM);if(hx.length>150){hx.shift();hy.shift()}}}
+}
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){corr=[];trials=0;hx=[];hy=[]}
+}
+anim()
+</script></body></html>

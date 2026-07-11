@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Density Matrix · ρ = Σ pᵢ|ψᵢ⟩⟨ψᵢ|</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+p{font-size:0.7em;color:#666;margin:5px 0 10px;text-align:center;max-width:920px;line-height:1.5}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.ctrl-group input[type=range]{width:72px;accent-color:#000;height:14px;cursor:pointer}
+.ctrl-group .val{font-size:0.65em;color:#000;min-width:24px;text-align:right;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font:0.65em 'Courier New',monospace;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.1s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 16px;margin-top:6px;font-size:0.65em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Density Matrix</h1>
+<p>ρ = Σ pᵢ|ψᵢ⟩⟨ψᵢ| &nbsp; Tr(ρ) = 1 &nbsp; Tr(ρ²) ≤ 1 &nbsp; S = −Tr(ρ ln ρ) &nbsp; |Bloch| = |2p−1|</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const ca = document.getElementById('c')
+const cx = ca.getContext('2d')
+const W = 920
+const H = 520
+let p = 0.7
+let cOh = 0.5
+let sp = 1
+let pl = true
+let an = 0
+let ti = 0
+const hPu = []
+const hBl = []
+function dr(){
+  cx.fillStyle = '#fff'
+  cx.fillRect(0, 0, W, H)
+  if (pl) {
+    ti += sp * 0.016
+    if (an) p = 0.5 + 0.5 * Math.sin(ti * 0.4)
+  }
+  const r00 = p
+  const r11 = 1 - p
+  const coh = cOh * Math.sqrt(p * (1 - p))
+  const r01 = coh
+  const r10 = coh
+  const mX = 140
+  const mY = 80
+  const mW = 240
+  const mH = 240
+  cx.strokeStyle = '#ddd'
+  cx.lineWidth = 0.5
+  cx.strokeRect(mX, mY, mW, mH)
+  cx.fillStyle = '#999'
+  cx.font = '8px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('Density matrix ρ (2×2)', mX + mW / 2, mY - 8)
+  const cw = mW / 2
+  const ch = mH / 2
+  for (let i = 0; i < 4; i++) {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    const x = mX + col * cw
+    const y = mY + row * ch
+    const val = [r00, r01, r10, r11][i]
+    cx.fillStyle = 'rgba(0,0,0,' + (0.02 + Math.abs(val) * 0.22) + ')'
+    cx.fillRect(x, y, cw, ch)
+    cx.strokeStyle = 'rgba(0,0,0,0.06)'
+    cx.lineWidth = 0.3
+    cx.strokeRect(x, y, cw, ch)
+    cx.fillStyle = '#111'
+    cx.font = '10px monospace'
+    cx.textAlign = 'center'
+    cx.textBaseline = 'middle'
+    cx.fillText(val.toFixed(4), x + cw / 2, y + ch / 2)
+  }
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'center'
+  cx.textBaseline = 'alphabetic'
+  const lbs = ['⟨0|ρ|0⟩', '⟨0|ρ|1⟩', '⟨1|ρ|0⟩', '⟨1|ρ|1⟩']
+  for (let i = 0; i < 4; i++) {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    cx.fillText(lbs[i], mX + col * cw + cw / 2, mY + row * ch - 4)
+  }
+  const pur = r00 * r00 + r11 * r11 + 2 * r01 * r10
+  const vN = -r00 * Math.log(r00 || 1) - r11 * Math.log(r11 || 1)
+  const bx = 480
+  const by = 250
+  const r = 130
+  cx.strokeStyle = 'rgba(0,0,0,0.04)'
+  cx.lineWidth = 0.3
+  cx.beginPath()
+  cx.arc(bx, by, r, 0, Math.PI * 2)
+  cx.stroke()
+  const bLen = 2 * p - 1
+  cx.strokeStyle = '#111'
+  cx.lineWidth = 2.5
+  cx.beginPath()
+  cx.moveTo(bx, by)
+  cx.lineTo(bx, by - bLen * r)
+  cx.stroke()
+  cx.fillStyle = '#111'
+  cx.beginPath()
+  cx.arc(bx, by - bLen * r, 5, 0, Math.PI * 2)
+  cx.fill()
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'center'
+  cx.fillText('Bloch vector length = |2p−1| = ' + Math.abs(bLen).toFixed(3), bx, by - bLen * r - 12)
+  cx.fillText('|0⟩', bx, by - r - 10)
+  cx.fillText('|1⟩', bx, by + r + 14)
+  cx.fillStyle = '#111'
+  cx.font = '9px monospace'
+  cx.fillText('Purity Tr(ρ²) = ' + pur.toFixed(4), bx, by + r + 45)
+  const stateType = pur > 0.98 ? 'PURE' : (pur > 0.5 ? 'MIXED' : 'MAX MIXED')
+  cx.fillText('State: ' + stateType, bx, by + r + 62)
+  const b2X = 640
+  const b2Y = 70
+  const b2W = 250
+  const b2H = 20
+  cx.fillStyle = 'rgba(0,0,0,0.06)'
+  cx.fillRect(b2X, b2Y, b2W, b2H)
+  cx.fillStyle = '#111'
+  cx.fillRect(b2X, b2Y, b2W * r00, b2H)
+  cx.strokeStyle = 'rgba(0,0,0,0.08)'
+  cx.lineWidth = 0.5
+  cx.strokeRect(b2X, b2Y, b2W, b2H)
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('P(|0⟩) = ρ₀₀ = ' + (r00 * 100).toFixed(1) + '%', b2X, b2Y - 4)
+  cx.fillStyle = 'rgba(0,0,0,0.06)'
+  cx.fillRect(b2X, b2Y + 34, b2W, b2H)
+  cx.fillStyle = '#111'
+  cx.fillRect(b2X, b2Y + 34, b2W * r11, b2H)
+  cx.strokeStyle = 'rgba(0,0,0,0.08)'
+  cx.lineWidth = 0.5
+  cx.strokeRect(b2X, b2Y + 34, b2W, b2H)
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('P(|1⟩) = ρ₁₁ = ' + (r11 * 100).toFixed(1) + '%', b2X, b2Y + 30)
+  const cohVal = 2 * Math.abs(r01)
+  cx.fillStyle = 'rgba(0,0,0,0.06)'
+  cx.fillRect(b2X, b2Y + 68, b2W, b2H)
+  cx.fillStyle = '#111'
+  cx.fillRect(b2X, b2Y + 68, b2W * cohVal, b2H)
+  cx.strokeStyle = 'rgba(0,0,0,0.08)'
+  cx.lineWidth = 0.5
+  cx.strokeRect(b2X, b2Y + 68, b2W, b2H)
+  cx.fillStyle = '#999'
+  cx.font = '7px monospace'
+  cx.textAlign = 'left'
+  cx.fillText('Coherence 2|ρ₀₁| = ' + cohVal.toFixed(3), b2X, b2Y + 64)
+  hPu.push(pur)
+  hBl.push(Math.abs(bLen))
+  if (hPu.length > 85) { hPu.shift(); hBl.shift() }
+  const mgX = 640
+  const mgY = 180
+  const mgW = 250
+  const mgH = 100
+  for (let k = 0; k < 2; k++) {
+    const arr = k ? hBl : hPu
+    const my = mgY + k * 120
+    cx.strokeStyle = '#ddd'
+    cx.lineWidth = 0.5
+    cx.strokeRect(mgX, my, mgW, mgH)
+    cx.fillStyle = '#999'
+    cx.font = '7px monospace'
+    cx.textAlign = 'left'
+    cx.fillText(k ? '|Bloch| history' : 'Purity Tr(ρ²) history', mgX + 4, my + 12)
+    if (arr.length > 1) {
+      const mx = Math.max(...arr)
+      const mn = Math.min(...arr)
+      const rg = mx - mn || 1
+      cx.strokeStyle = k ? 'rgba(0,0,0,0.5)' : '#111'
+      cx.lineWidth = 0.9
+      cx.beginPath()
+      for (let i = 0; i < arr.length; i++) {
+        const x = mgX + i / (arr.length - 1) * mgW
+        const y = my + mgH - (arr[i] - mn) / rg * (mgH - 16)
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      cx.stroke()
+    }
+  }
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML =
+    '<div class="ctrl-group"><label>p(mix)</label><input type="range" id="pS" min="0" max="1" step="0.01" value="' + p + '"><span class="val" id="pV">' + p.toFixed(2) + '</span></div>' +
+    '<div class="ctrl-group"><label>COH</label><input type="range" id="cS" min="0" max="1" step="0.01" value="' + cOh + '"><span class="val" id="cV">' + cOh.toFixed(2) + '</span></div>' +
+    '<div class="ctrl-group"><label>SPEED</label><input type="range" id="spS" min="0" max="5" step="0.1" value="' + sp + '"><span class="val" id="spV">' + sp.toFixed(1) + '</span></div>' +
+    '<button id="plBtn">' + (pl ? '⏸PAUSE' : '▶PLAY') + '</button>' +
+    '<button id="rsBtn">↺RESET</button>' +
+    '<button id="anBtn">' + (an ? '⊙SWEEP' : '○SWEEP') + '</button>'
+  document.getElementById('pS').oninput = function(){ p = +this.value; pV.textContent = p.toFixed(2) }
+  document.getElementById('cS').oninput = function(){ cOh = +this.value; cV.textContent = cOh.toFixed(2) }
+  document.getElementById('spS').oninput = function(){ sp = +this.value; spV.textContent = sp.toFixed(1) }
+  document.getElementById('plBtn').onclick = function(){ pl = !pl; this.textContent = pl ? '⏸PAUSE' : '▶PLAY' }
+  document.getElementById('rsBtn').onclick = function(){ p = 0.7; cOh = 0.5; ti = 0; hPu.length = 0; hBl.length = 0 }
+  document.getElementById('anBtn').onclick = function(){ an = 1 - an; this.textContent = an ? '⊙SWEEP' : '○SWEEP' }
+}
+  document.getElementById('stats').innerHTML =
+    '<span><span class="label">p =</span> <span class="val">' + p.toFixed(3) + '</span></span>' +
+    '<span><span class="label">1−p =</span> <span class="val">' + (1-p).toFixed(3) + '</span></span>' +
+    '<span><span class="label">Tr(ρ) =</span> <span class="val">' + (r00+r11).toFixed(3) + '</span></span>' +
+    '<span><span class="label">Tr(ρ²) =</span> <span class="val">' + pur.toFixed(4) + '</span></span>' +
+    '<span><span class="label">S(vN) =</span> <span class="val">' + vN.toFixed(4) + '</span></span>' +
+    '<span><span class="label">|ρ₀₁| =</span> <span class="val">' + Math.abs(r01).toFixed(4) + '</span></span>' +
+    '<span><span class="label">|ρ₁₀| =</span> <span class="val">' + Math.abs(r10).toFixed(4) + '</span></span>' +
+    '<span><span class="label">|Bloch| =</span> <span class="val">' + Math.abs(bLen).toFixed(4) + '</span></span>' +
+    '<span><span class="label">ρ₀₀ =</span> <span class="val">' + r00.toFixed(4) + '</span></span>' +
+    '<span><span class="label">ρ₁₁ =</span> <span class="val">' + r11.toFixed(4) + '</span></span>' +
+    '<span><span class="label">Coherence =</span> <span class="val">' + (2*Math.abs(r01)).toFixed(4) + '</span></span>' +
+    '<span><span class="label">Type =</span> <span class="val">' + stateType + '</span></span>' +
+    '<span><span class="label">1−Tr(ρ²) =</span> <span class="val">' + (1-pur).toFixed(4) + '</span></span>' +
+    '<span><span class="label">√(p(1−p)) =</span> <span class="val">' + Math.sqrt(p*(1-p)).toFixed(4) + '</span></span>'
+}
+setInterval(dr, 16)
+</script>
+</body>
+</html>

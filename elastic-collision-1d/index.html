@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elastic Collision 1D · m₁v₁ + m₂v₂ = const</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}p{font-size:0.75em;color:#666;margin-bottom:10px}canvas{border:1px solid #000;display:block}.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}.ctrl-group input[type=range]{width:70px;accent-color:#000}.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}button:hover{background:#000;color:#fff}.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}</style>
+</head>
+<body>
+<h1>Elastic Collision 1D</h1>
+<p>m₁v₁ + m₂v₂ = const · ½m₁v₁² + ½m₂v₂² = const</p>
+<canvas id="c" width="900" height="400"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+let m1=2,m2=2,v1=3,v2=-1;
+let x1=150,x2=400;
+const leftWall=50,rightWall=850,size=30;
+const dt=0.016;
+let run=true,paused=false;
+let collisionCount=0;
+const history={t:[],v1:[],v2:[],p:[],ke:[]};
+let simTime=0;
+
+const p0=m1*v1+m2*v2;
+const ke0=0.5*m1*v1*v1+0.5*m2*v2*v2;
+
+function getVcm(){return (m1*v1+m2*v2)/(m1+m2);}
+
+function step(){
+  if(!run||paused)return;
+  const sep=size;
+  if(Math.abs(x1-x2)<sep&&x1<x2){
+    const vcm=getVcm();
+    v1=2*vcm-v1;v2=2*vcm-v2;
+    collisionCount++;
+  }
+  if(x1-size/2<leftWall){x1=leftWall+size/2;v1=-v1;}
+  if(x1+size/2>rightWall){x1=rightWall-size/2;v1=-v1;}
+  if(x2-size/2<leftWall){x2=leftWall+size/2;v2=-v2;}
+  if(x2+size/2>rightWall){x2=rightWall-size/2;v2=-v2;}
+  x1+=v1*dt*60;x2+=v2*dt*60;
+  simTime+=dt;
+  history.t.push(simTime);history.v1.push(v1);history.v2.push(v2);
+  history.p.push(m1*v1+m2*v2);history.ke.push(0.5*m1*v1*v1+0.5*m2*v2*v2);
+  if(history.t.length>500){history.t.shift();history.v1.shift();history.v2.shift();history.p.shift();history.ke.shift();}
+}
+
+function resetSim(){
+  v1=parseFloat(document.getElementById('v1S').value);
+  v2=parseFloat(document.getElementById('v2S').value);
+  m1=parseFloat(document.getElementById('m1S').value);
+  m2=parseFloat(document.getElementById('m2S').value);
+  x1=150;x2=400;collisionCount=0;simTime=0;
+  history.t.length=0;history.v1.length=0;history.v2.length=0;history.p.length=0;history.ke.length=0;
+  paused=false;document.getElementById('pauseBtn').textContent='Pause';
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Track
+  const trackY=220;
+  ctx.strokeStyle='#111';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(leftWall,trackY);ctx.lineTo(rightWall,trackY);ctx.stroke();
+  for(let x=leftWall+20;x<rightWall;x+=20){
+    ctx.beginPath();ctx.moveTo(x,trackY-6);ctx.lineTo(x,trackY+6);ctx.stroke();
+  }
+  ctx.fillStyle='#111';
+  ctx.fillRect(leftWall-6,trackY-22,8,44);
+  ctx.fillRect(rightWall-2,trackY-22,8,44);
+
+  // Mass 1 with gradient
+  const grad1=ctx.createLinearGradient(x1-size/2,trackY-size,x1+size/2,trackY);
+  grad1.addColorStop(0,'#333');grad1.addColorStop(1,'#000');
+  ctx.fillStyle=grad1;ctx.fillRect(x1-size/2,trackY-size,size,size);
+  ctx.strokeStyle='#fff';ctx.lineWidth=0.5;ctx.strokeRect(x1-size/2,trackY-size,size,size);
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('m₁='+m1.toFixed(1),x1,trackY-size-8);
+
+  // Mass 2
+  const grad2=ctx.createLinearGradient(x2-size/2,trackY-size,x2+size/2,trackY);
+  grad2.addColorStop(0,'#555');grad2.addColorStop(1,'#222');
+  ctx.fillStyle=grad2;ctx.fillRect(x2-size/2,trackY-size,size,size);
+  ctx.strokeStyle='#fff';ctx.lineWidth=0.5;ctx.strokeRect(x2-size/2,trackY-size,size,size);
+  ctx.fillStyle='#fff';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('m₂='+m2.toFixed(1),x2,trackY-size-8);
+
+  // Velocity arrows
+  const arrowScale=5;
+  ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1;
+  // v1
+  if(Math.abs(v1)>0.01){
+    ctx.beginPath();ctx.moveTo(x1,trackY+size+6);ctx.lineTo(x1+v1*arrowScale,trackY+size+6);ctx.stroke();
+    if(v1>0){ctx.beginPath();ctx.moveTo(x1+v1*arrowScale-5,trackY+size+2);ctx.lineTo(x1+v1*arrowScale,trackY+size+6);ctx.lineTo(x1+v1*arrowScale-5,trackY+size+10);ctx.fill();}
+    else{ctx.beginPath();ctx.moveTo(x1+v1*arrowScale+5,trackY+size+2);ctx.lineTo(x1+v1*arrowScale,trackY+size+6);ctx.lineTo(x1+v1*arrowScale+5,trackY+size+10);ctx.fill();}
+  }
+  // v2
+  if(Math.abs(v2)>0.01){
+    ctx.beginPath();ctx.moveTo(x2,trackY+size+6);ctx.lineTo(x2+v2*arrowScale,trackY+size+6);ctx.stroke();
+    if(v2>0){ctx.beginPath();ctx.moveTo(x2+v2*arrowScale-5,trackY+size+2);ctx.lineTo(x2+v2*arrowScale,trackY+size+6);ctx.lineTo(x2+v2*arrowScale-5,trackY+size+10);ctx.fill();}
+    else{ctx.beginPath();ctx.moveTo(x2+v2*arrowScale+5,trackY+size+2);ctx.lineTo(x2+v2*arrowScale,trackY+size+6);ctx.lineTo(x2+v2*arrowScale+5,trackY+size+10);ctx.fill();}
+  }
+
+  // Velocity graph
+  const gx=20,gy=20,gW=400,gH=70;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gW,gH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('v(t)',gx+3,gy+10);
+  if(history.v1.length>2){
+    const vMin=Math.min(...history.v1,...history.v2)*1.1;
+    const vMax=Math.max(...history.v1,...history.v2)*1.1;
+    const vR=vMax-vMin||1;
+    ctx.beginPath();
+    for(let i=0;i<history.v1.length;i++){const sx=gx+(i/history.v1.length)*gW;const sy=gy+gH-(history.v1[i]-vMin)/vR*gH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<history.v2.length;i++){const sx=gx+(i/history.v2.length)*gW;const sy=gy+gH-(history.v2[i]-vMin)/vR*gH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;ctx.stroke();
+  }
+
+  // Momentum & KE graph
+  const mx=440,my=20,mW=220,mH=70;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mx,my,mW,mH);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.fillText('p(t) & KE(t)',mx+3,my+10);
+  if(history.p.length>2){
+    const pMax=Math.max(...history.p.map(Math.abs))*1.1||1;
+    const keMax=Math.max(...history.ke)*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<history.p.length;i++){const sx=mx+(i/history.p.length)*mW;const sy=my+mH/2-(history.p[i]/pMax)*(mH/2-4);i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<history.ke.length;i++){const sx=mx+(i/history.ke.length)*mW;const sy=my+mH-(history.ke[i]/keMax)*mH;i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);}
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.stroke();
+  }
+
+  // Final velocity formulas
+  const v1f=((m1-m2)*v1+2*m2*v2)/(m1+m2);
+  const v2f=((m2-m1)*v2+2*m1*v1)/(m1+m2);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>m₁</label><input type="range" id="m1S" min="0.1" max="10" step="0.1" value="${m1}"><span class="val" id="m1V">${m1.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>m₂</label><input type="range" id="m2S" min="0.1" max="10" step="0.1" value="${m2}"><span class="val" id="m2V">${m2.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>v₁</label><input type="range" id="v1S" min="-6" max="6" step="0.1" value="${v1}"><span class="val" id="v1V">${v1.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>v₂</label><input type="range" id="v2S" min="-6" max="6" step="0.1" value="${v2}"><span class="val" id="v2V">${v2.toFixed(1)}</span></div>`+
+    `<button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`;
+
+  document.getElementById('m1S').addEventListener('input',function(){m1=parseFloat(this.value);document.getElementById('m1V').textContent=m1.toFixed(1);resetSim();});
+  document.getElementById('m2S').addEventListener('input',function(){m2=parseFloat(this.value);document.getElementById('m2V').textContent=m2.toFixed(1);resetSim();});
+  document.getElementById('v1S').addEventListener('input',function(){v1=parseFloat(this.value);document.getElementById('v1V').textContent=v1.toFixed(1);resetSim();});
+  document.getElementById('v2S').addEventListener('input',function(){v2=parseFloat(this.value);document.getElementById('v2V').textContent=v2.toFixed(1);resetSim();});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+}
+
+  const p=m1*v1+m2*v2;
+  const ke=0.5*m1*v1*v1+0.5*m2*v2*v2;
+  const vcm=getVcm();
+
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">v₁ =</span> <span class="val">${v1.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">v₂ =</span> <span class="val">${v2.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">p =</span> <span class="val">${p.toFixed(4)}</span> (init ${p0.toFixed(4)})</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${ke.toFixed(4)}</span> (init ${ke0.toFixed(4)})</span>`+
+    `<span><span class="label">v_cm =</span> <span class="val">${vcm.toFixed(3)}</span></span>`+
+    `<span><span class="label">v₁' =</span> <span class="val">${v1f.toFixed(3)}</span></span>`+
+    `<span><span class="label">v₂' =</span> <span class="val">${v2f.toFixed(3)}</span></span>`+
+    `<span><span class="label">Collisions:</span> <span class="val">${collisionCount}</span></span>`+
+    `<span><span class="label">Δp =</span> <span class="val">${(p-p0).toFixed(6)}</span> ${Math.abs(p-p0)<0.001?'✓':'⚠'}</span>`;
+}
+
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

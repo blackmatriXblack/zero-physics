@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entropy · S = k ln W</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;background:#fff}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 10px;font-family:'Courier New',monospace;font-size:0.68em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Entropy</h1>
+<p>S = k<sub>B</sub> ln Ω — ΔS ≥ 0 — lattice gas microstates &amp; disorder</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="ctrl"></div>
+<div class="stats" id="stat"></div>
+<script>
+const c = document.getElementById('c');
+const x = c.getContext('2d');
+const W = 900, H = 520;
+
+let C = 8, R = 8;
+let paused = 0, speed = 1, steps = 0;
+let grid = [];
+let hS = [], hN = [], hT = [];
+
+function init() {
+  grid = [];
+  for (let i = 0; i < C; i++) {
+    grid[i] = [];
+    for (let j = 0; j < R; j++) {
+      grid[i][j] = Math.random() < 0.5 ? 1 : 0;
+    }
+  }
+  steps = 0; hS = []; hN = []; hT = [];
+}
+init();
+
+function entropy() {
+  let up = 0, down = 0;
+  for (let i of grid) for (let j of i) j ? up++ : down++;
+  const total = C * R, pu = up / total, pd = down / total;
+  return pu && pd ? -(pu * Math.log(pu) + pd * Math.log(pd)) : 0;
+}
+
+function update() {
+  if (paused) return;
+  for (let s = 0; s < 10 * speed; s++) {
+    grid[Math.floor(Math.random() * C)][Math.floor(Math.random() * R)] ^= 1;
+  }
+  steps++;
+}
+
+function fact(n) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+
+function draw() {
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+
+  const S = entropy();
+  let up = 0; for (let i of grid) for (let j of i) if (j) up++;
+  const Smax = Math.log(C * R);
+
+  hS.push(S); hT.push(steps); hN.push(up);
+  if (hS.length > 300) { hS.shift(); hT.shift(); hN.shift(); }
+
+  // Lattice gas grid
+  const cs = 38, ox = 18, oy = 68;
+  for (let i = 0; i < C; i++) {
+    for (let j = 0; j < R; j++) {
+      const px = ox + i * cs, py = oy + j * cs;
+      x.fillStyle = grid[i][j] ? '#111' : '#fff';
+      x.fillRect(px, py, cs - 2, cs - 2);
+      x.strokeStyle = '#ddd'; x.lineWidth = 0.3;
+      x.strokeRect(px, py, cs - 2, cs - 2);
+    }
+  }
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText('● occupied  /  ○ empty', ox + C * cs / 2, oy + R * cs + 22);
+
+  // S/k mini graph
+  const gX = 400, gY = 38, gW = 470, gH = 175;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(gX, gY, gW, gH);
+  x.fillStyle = '#999'; x.font = '7px monospace'; x.textAlign = 'left';
+  x.fillText('S/k vs steps — Boltzmann entropy', gX + 3, gY + 10);
+  x.strokeStyle = 'rgba(0,0,0,0.1)'; x.lineWidth = 0.5;
+  x.beginPath(); x.moveTo(gX, gY + gH / 2); x.lineTo(gX + gW, gY + gH / 2); x.stroke();
+  if (hS.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 1.2; x.beginPath();
+    for (let i = 0; i < hS.length; i++) {
+      const px = gX + (i / 300) * gW, py = gY + gH - (hS[i] / Smax) * (gH - 10);
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+  x.fillStyle = '#111'; x.font = '7px monospace'; x.textAlign = 'center';
+  x.fillText(`S/k = ${S.toFixed(4)}  max = ${Smax.toFixed(4)}`, gX + gW / 2, gY + gH - 4);
+
+  // n↑ mini graph
+  const g2X = 400, g2Y = 218, g2W = 240, g2H = 70;
+  x.strokeStyle = '#ddd'; x.lineWidth = 0.5; x.strokeRect(g2X, g2Y, g2W, g2H);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'left';
+  x.fillText('n↑(t) — occupied count', g2X + 3, g2Y + 10);
+  if (hN.length > 1) {
+    x.strokeStyle = '#111'; x.lineWidth = 0.8; x.beginPath();
+    for (let i = 0; i < hN.length; i++) {
+      const px = g2X + (i / 300) * g2W, py = g2Y + g2H - (hN[i] / (C * R)) * g2H;
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+  }
+
+  // S/S_max bar
+  const bX = 650, bY = 218, bW = 220, bH = 14;
+  x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(bX, bY, bW, bH);
+  x.fillStyle = '#111'; x.fillRect(bX, bY, Math.min(bW, S / Smax * bW), bH);
+  x.fillStyle = '#999'; x.font = '6px monospace'; x.textAlign = 'center';
+  x.fillText(`S/S_max = ${(S / Smax * 100).toFixed(1)}%`, bX + bW / 2, bY - 3);
+
+  // Equations
+  x.fillStyle = '#111'; x.font = '8px monospace'; x.textAlign = 'center';
+  x.fillText('ΔS ≥ 0  ·  S = k_B ln Ω  ·  Ω = N! / (n↑! n↓!)', 450, 330);
+  x.fillStyle = '#999'; x.font = '6px monospace';
+  x.fillText('Maximum entropy → equiprobable microstates → maximum disorder', 450, 346);
+
+  // Controls
+if(!document.getElementById('ctrl').querySelector('button')){
+  document.getElementById('ctrl').innerHTML =
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="sS" min="0" max="20" step="1" value="${speed}"><span class="val" id="sV">${speed}</span></div>` +
+    `<div class="ctrl-group"><label>Cols</label><input type="range" id="cS" min="4" max="20" step="1" value="${C}"><span class="val" id="cV">${C}</span></div>` +
+    `<div class="ctrl-group"><label>Rows</label><input type="range" id="rS" min="4" max="20" step="1" value="${R}"><span class="val" id="rV">${R}</span></div>` +
+    `<button id="pB">${paused ? 'Play' : 'Pause'}</button>` +
+    `<button id="rB">Reset</button><button id="ndB">Shuffle</button>`;
+
+  document.getElementById('sS').oninput = function () { speed = +this.value; document.getElementById('sV').textContent = speed; };
+  document.getElementById('cS').oninput = function () { C = +this.value; init(); document.getElementById('cV').textContent = C; };
+  document.getElementById('rS').oninput = function () { R = +this.value; init(); document.getElementById('rV').textContent = R; };
+  document.getElementById('pB').onclick = function () { paused = !paused; this.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('rB').onclick = init;
+  document.getElementById('ndB').onclick = function () {
+}
+    for (let i = 0; i < C; i++) for (let j = 0; j < R; j++) grid[i][j] = Math.random() < 0.5 ? 1 : 0;
+    steps = 0; hS = []; hN = []; hT = [];
+  };
+
+  // Stats
+  const Wm = fact(C * R) / (fact(up) * fact(C * R - up));
+  const trend = hS.length > 10 ? (hS[hS.length - 1] - hS[hS.length - 11] > 1e-8 ? '↑ ↗' : '↔ ≈') : '...';
+  document.getElementById('stat').innerHTML =
+    `<span><span class="label">S/k =</span> <span class="val">${S.toFixed(4)}</span></span>` +
+    `<span><span class="label">S_max =</span> <span class="val">${Smax.toFixed(4)}</span></span>` +
+    `<span><span class="label">Ω =</span> <span class="val">${Wm.toExponential(2)}</span></span>` +
+    `<span><span class="label">N =</span> <span class="val">${C * R}</span></span>` +
+    `<span><span class="label">n↑ =</span> <span class="val">${up}</span></span>` +
+    `<span><span class="label">n↓ =</span> <span class="val">${C * R - up}</span></span>` +
+    `<span><span class="label">f↑ =</span> <span class="val">${(up / (C * R) * 100).toFixed(1)}%</span></span>` +
+    `<span><span class="label">Steps =</span> <span class="val">${steps}</span></span>` +
+    `<span><span class="label">S/S_max =</span> <span class="val">${(S / Smax * 100).toFixed(1)}%</span></span>` +
+    `<span><span class="label">ΔS ≥ 0</span> <span class="val">✓</span></span>` +
+    `<span><span class="label">DOF =</span> <span class="val">${C * R}</span></span>` +
+    `<span><span class="label">Trend</span> <span class="val">${trend}</span></span>`;
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

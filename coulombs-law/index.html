@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coulomb's Law · F = k|q₁q₂|/r²</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+button.active{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+.graph-container{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.graph-box{border:1px solid #ddd;position:relative}
+.graph-box .gtitle{position:absolute;top:3px;left:6px;font-size:0.6em;color:#999;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<h1>Coulomb's Law</h1>
+<p>F = k|q₁q₂|/r² — Drag charges to adjust separation</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<div class="graph-container" id="graphs"></div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width, H=canvas.height;
+const k=500;
+let q1=3, q2=-3;
+let x1=280, y1=240, x2=520, y2=240;
+let dragging=-1, paused=false;
+const fHist=[], rHist=[], tHist=[], peHist=[], eFieldHist=[];
+let simTime=0;
+const maxHist=400;
+
+function getForce(){
+  const dx=x2-x1, dy=y2-y1, r=Math.hypot(dx,dy)||1;
+  const fMag=k*Math.abs(q1*q2)/(r*r);
+  const angle=Math.atan2(dy,dx);
+  const att=q1*q2<0;
+  return {mag:fMag, angle, att, r, dx, dy};
+}
+
+function step(){
+  if(paused)return;
+  const f=getForce();
+  const pe=k*q1*q2/f.r;
+  const eMid=k*Math.abs(q1-q2)/((f.r/2)*(f.r/2)||1);
+  fHist.push(f.mag); rHist.push(f.r); tHist.push(simTime); peHist.push(pe); eFieldHist.push(eMid);
+  if(fHist.length>maxHist){fHist.shift();rHist.shift();tHist.shift();peHist.shift();eFieldHist.shift();}
+  simTime+=0.008;
+}
+
+function resetPos(){x1=280;y1=240;x2=520;y2=240;simTime=0;fHist.length=0;rHist.length=0;tHist.length=0;peHist.length=0;eFieldHist.length=0;}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const f=getForce();
+
+  // Grid
+  ctx.strokeStyle='rgba(0,0,0,0.03)';ctx.lineWidth=0.3;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Connection line
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.8;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.setLineDash([]);
+
+  // Distance label
+  ctx.fillStyle='#999';ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText(`r = ${f.r.toFixed(0)} px`,(x1+x2)/2,(y1+y2)/2-12);
+
+  // E-field equipotential rings
+  const midX=(x1+x2)/2, midY=(y1+y2)/2;
+  ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=0.4;
+  for(let i=1;i<6;i++){
+    ctx.beginPath();ctx.arc(midX,midY,i*12,0,Math.PI*2);ctx.stroke();
+  }
+
+  // Force vectors
+  const sc=Math.min(f.mag*0.5,80);
+  function drawArrow(x,y,angle,label){
+    ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+sc*Math.cos(angle),y+sc*Math.sin(angle));ctx.stroke();
+    ctx.fillStyle='#111';
+    const ex=x+sc*Math.cos(angle),ey=y+sc*Math.sin(angle);
+    ctx.beginPath();ctx.moveTo(ex,ey);
+    ctx.lineTo(ex-5*Math.cos(angle-0.4),ey-5*Math.sin(angle-0.4));
+    ctx.lineTo(ex-5*Math.cos(angle+0.4),ey-5*Math.sin(angle+0.4));ctx.fill();
+    ctx.font='8px monospace';ctx.fillText(label,(x+ex)/2-8,(y+ey)/2-8);
+  }
+
+  if(f.mag>0.1){
+    if(f.att){drawArrow(x1,y1,f.angle,'F₁₂');drawArrow(x2,y2,f.angle+Math.PI,'F₂₁');}
+    else{drawArrow(x1,y1,f.angle+Math.PI,'F₁₂');drawArrow(x2,y2,f.angle,'F₂₁');}
+  }
+
+  // Draw charges
+  for(const c of[{x:x1,y:y1,q:q1},{x:x2,y:y2,q:q2}]){
+    const r=14;
+    const grad=ctx.createRadialGradient(c.x-4,c.y-4,1,c.x,c.y,r);
+    grad.addColorStop(0,c.q>0?'#ddd':'#333');grad.addColorStop(1,c.q>0?'#fff':'#111');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(c.x,c.y,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle=c.q>0?'#111':'#fff';ctx.font='bold 14px monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(c.q>0?'+':'−',c.x,c.y);
+    ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textBaseline='top';
+    ctx.fillText(`q=${(c.q).toFixed(0)}`,c.x-12,c.y+16);
+  }
+
+  // |F| vs r graph
+  const gX=620,gY=15,gW=260,gH=130;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('|F| vs r',gX+3,gY+10);
+  if(fHist.length>2){
+    const fMax=Math.max(...fHist)*1.1||1;
+    const rMin=Math.min(...rHist),rMax=Math.max(...rHist),rR=rMax-rMin||1;
+    ctx.beginPath();
+    for(let i=0;i<fHist.length;i++){
+      const px2=gX+(rHist[i]-rMin)/rR*gW,py2=gY+gH-(fHist[i]/fMax)*gH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='#111';ctx.lineWidth=0.7;ctx.stroke();
+  }
+  ctx.font='6px monospace';ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillText('F ∝ 1/r²',gX+5,gY+gH-4);
+
+  // PE vs r graph
+  const peX=620,peY=150,peW=260,peH=90;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(peX,peY,peW,peH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('U = kq₁q₂/r vs r',peX+3,peY+10);
+  if(peHist.length>2){
+    const peMax=Math.max(...peHist.map(Math.abs))*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<peHist.length;i++){
+      const px2=peX+(rHist[i]-Math.min(...rHist))/(Math.max(...rHist)-Math.min(...rHist)||1)*peW;
+      const py2=peY+peH/2-(peHist[i]/peMax)*(peH/2-6);
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.7;ctx.stroke();
+  }
+  ctx.font='6px monospace';ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillText('U ∝ 1/r',peX+5,peY+peH-4);
+
+  // E field at midpoint vs r
+  const eX=620,eY=245,eW=260,eH=70;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(eX,eY,eW,eH);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('E<sub>mid</sub> vs r',eX+3,eY+10);
+  if(eFieldHist.length>2){
+    const eMax=Math.max(...eFieldHist)*1.1||1;
+    ctx.beginPath();
+    for(let i=0;i<eFieldHist.length;i++){
+      const px2=eX+(i/eFieldHist.length)*eW,py2=eY+eH-(eFieldHist[i]/eMax)*eH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.stroke();
+  }
+
+  // Mouse drag
+  canvas.onmousedown=function(e){
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(W/rect.width),my_=(e.clientY-rect.top)*(H/rect.height);
+    if(Math.hypot(mx-x1,my_-y1)<20){dragging=1;canvas.style.cursor='grabbing';}
+    else if(Math.hypot(mx-x2,my_-y2)<20){dragging=2;canvas.style.cursor='grabbing';}
+  };
+  canvas.onmousemove=function(e){
+    if(dragging<0)return;
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(W/rect.width),my_=(e.clientY-rect.top)*(H/rect.height);
+    if(dragging===1){x1=mx;y1=my_;} else{x2=mx;y2=my_;}
+  };
+  canvas.onmouseup=canvas.onmouseleave=function(){dragging=-1;canvas.style.cursor='grab';};
+
+  const pe=k*q1*q2/f.r;
+  const eField=k*Math.abs(q1-q2)/((f.r/2)*(f.r/2)||1);
+  const fMax=fHist.length>0?Math.max(...fHist):0;
+  const fMean=fHist.length>0?fHist.reduce((a,b)=>a+b,0)/fHist.length:0;
+
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>q₁</label><input type="range" id="q1S" min="-10" max="10" step="1" value="${q1}"><span class="val" id="q1V">${q1}</span></div>`+
+    `<div class="ctrl-group"><label>q₂</label><input type="range" id="q2S" min="-10" max="10" step="1" value="${q2}"><span class="val" id="q2V">${q2}</span></div>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset Pos</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="6" step="1" value="1"><span class="val" id="speedV">1x</span></div>`;
+
+  document.getElementById('q1S').addEventListener('input',function(){q1=parseInt(this.value);document.getElementById('q1V').textContent=q1;});
+  document.getElementById('q2S').addEventListener('input',function(){q2=parseInt(this.value);document.getElementById('q2V').textContent=q2;});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetPos);
+  document.getElementById('speedS').addEventListener('input',function(){const s=parseInt(this.value);document.getElementById('speedV').textContent=s+'x';});
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">F =</span> <span class="val">${f.mag.toFixed(3)}</span> N</span>`+
+    `<span><span class="label">F<sub>max</sub> =</span> <span class="val">${fMax.toFixed(2)}</span> N</span>`+
+    `<span><span class="label">F<sub>avg</sub> =</span> <span class="val">${fMean.toFixed(2)}</span> N</span>`+
+    `<span><span class="label">r =</span> <span class="val">${f.r.toFixed(1)}</span> px</span>`+
+    `<span><span class="label">U =</span> <span class="val">${pe.toFixed(2)}</span> J</span>`+
+    `<span><span class="label">E<sub>mid</sub> =</span> <span class="val">${eField.toFixed(2)}</span> N/C</span>`+
+    `<span><span class="label">q₁ =</span> <span class="val">${q1}</span></span>`+
+    `<span><span class="label">q₂ =</span> <span class="val">${q2}</span></span>`+
+    `<span><span class="label">|q₁q₂| =</span> <span class="val">${Math.abs(q1*q2)}</span></span>`+
+    `<span><span class="label">Type =</span> <span class="val">${f.att?'ATTRACTIVE':'REPULSIVE'}</span></span>`+
+    `<span><span class="label">k =</span> <span class="val">${k}</span></span>`+
+    `<span><span class="label">F ∝ |q₁q₂|/r²</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

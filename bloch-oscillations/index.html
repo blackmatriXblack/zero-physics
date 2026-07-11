@@ -1,0 +1,86 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Bloch Oscillations</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#000;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.7em;color:#666;margin-bottom:8px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:6px;max-width:900px}
+.ctrl-g{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.ctrl-g label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-g input[type=range]{width:70px;accent-color:#000}
+.ctrl-g .val{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+.st{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:5px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#000;color:#fff}
+</style></head><body>
+<h1>Bloch Oscillations</h1>
+<p>ℏ·dk/dt = −eE · v = (1/ℏ)dE/dk</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="ctrl" id="ctrl"></div><div class="st" id="st"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=520;
+let t=0,paused=0,field=1.0,spd=1,a=40,bw=1.5
+let hx=[],hy=[],hxt=[]
+const kMax=2*Math.PI/a*3,bandY=200,bandH=130
+function Ek(k){return -bw/2*Math.cos(k*a)+bw/2}
+function vg(k){return bw/2*a*Math.sin(k*a)}
+function getK(t){return Math.PI/a+field*0.015*t}
+function xPos(t){const k=getK(t);return 300+35*Math.sin(k*a)}
+function drw(){
+ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H)
+ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20)
+const potY=50;ctx.strokeStyle='#888';ctx.lineWidth=0.5
+for(let x=20;x<W-20;x+=a)for(let px=0;px<a;px++){const v=15*(1-Math.cos(2*Math.PI*px/a))/2;ctx.fillStyle='#ddd';ctx.fillRect(x+px,potY,1,v)}
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('V(x)=V₀cos(2πx/a)',W/2,potY-4)
+ctx.strokeStyle='#000';ctx.lineWidth=0.5;ctx.strokeRect(40,bandY,W-80,bandH)
+ctx.fillStyle='#666';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('E(k)=−Δ/2·cos(ka)',W/2,bandY-4)
+ctx.fillText('k',W-20,bandY+bandH/2+3);ctx.fillText('E',35,bandY+10)
+ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath()
+for(let px=40;px<=W-40;px+=1){const k=(px-40)/(W-80)*kMax*2-kMax,Ek=Ek(k),ey=bandY+bandH-(Ek/bw)*bandH;px===40?ctx.moveTo(px,ey):ctx.lineTo(px,ey)}ctx.stroke()
+const kc=getK(t),kNorm=(kc+kMax)/(2*kMax),kx=40+kNorm*(W-80),Ekv=Ek(kc),ky=bandY+bandH-(Ekv/bw)*bandH
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(kx,ky,5,0,Math.PI*2);ctx.fill()
+ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('e⁻',kx+8,ky+3)
+const posY=360,xP=xPos(t)
+ctx.fillStyle='#000';ctx.font='10px monospace';ctx.textAlign='left';ctx.fillText('Real Space Oscillation',20,posY+12)
+ctx.fillStyle='#000';ctx.beginPath();ctx.arc(xP,posY+35,8,0,Math.PI*2);ctx.fill()
+ctx.strokeStyle='#888';ctx.beginPath();ctx.arc(xP,posY+35,12,0,Math.PI);ctx.stroke()
+for(let x=20;x<W-20;x+=a){ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(x,posY+18);ctx.lineTo(x,posY+55);ctx.stroke()}
+const vgv=vg(kc),TB=2*Math.PI/(field*0.015)
+if(!paused){t+=0.5*spd
+hx.push(t);hy.push(kc);hxt.push(xP);if(hx.length>200){hx.shift();hy.shift();hxt.shift()}}
+if(hx.length>1){const mgX=620,mgY=440,mgW=250,mgH=60
+ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(mgX,mgY,mgW,mgH)
+ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('k(t)',mgX+2,mgY+8)
+ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=0.8;ctx.beginPath()
+for(let i=0;i<hx.length;i++){const xx=mgX+(hx[i]/hx[hx.length-1]||1)*mgW,kMin=Math.min(...hy),kRange=Math.max(...hy)-kMin||1
+const yy=mgY+mgH-(hy[i]-kMin)/kRange*mgH*0.8;i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy)}ctx.stroke()}
+document.getElementById('st').innerHTML=
+`<span><span class="l">t =</span> <span class="v">${t.toFixed(1)}</span></span>`+
+`<span><span class="l">k =</span> <span class="v">${kc.toFixed(3)}</span></span>`+
+`<span><span class="l">E(k) =</span> <span class="v">${Ekv.toFixed(3)}</span></span>`+
+`<span><span class="l">v_g =</span> <span class="v">${vgv.toFixed(3)}</span></span>`+
+`<span><span class="l">E field =</span> <span class="v">${field.toFixed(2)}</span></span>`+
+`<span><span class="l">T_B =</span> <span class="v">${TB.toFixed(1)}</span></span>`+
+`<span><span class="l">a (lattice) =</span> <span class="v">${a}</span></span>`+
+`<span><span class="l">Δ (BW) =</span> <span class="v">${bw}</span></span>`+
+`<span><span class="l">x(t) =</span> <span class="v">${xP.toFixed(1)}</span></span>`+
+`<span><span class="l">k·a =</span> <span class="v">${(kc*a).toFixed(2)}</span></span>`+
+`<span><span class="l">ω_B = 2π/T_B =</span> <span class="v">${(2*Math.PI/TB).toFixed(3)}</span></span>`+
+`<span><span class="l">v_max =</span> <span class="v">${(bw*a/2).toFixed(2)}</span></span>`
+}
+function anim(){drw();requestAnimationFrame(anim)}
+if(!document.getElementById('ctrl').querySelector('button')){
+document.getElementById('ctrl').innerHTML=
+`<div class="ctrl-g"><label>E field</label><input type="range" id="fS" min="0.2" max="4" step="0.1" value="${field}"><span class="val" id="fV">${field}</span></div>`+
+`<div class="ctrl-g"><label>SPD</label><input type="range" id="spdS" min="0" max="5" step="0.5" value="${spd}"><span class="val" id="spdV">${spd}x</span></div>`+
+`<button id="playB">${paused?'▶ PLAY':'❚❚ PAUSE'}</button><button id="rstB">⟳ RESET</button>`
+document.getElementById('fS').oninput=function(){field=+this.value;document.getElementById('fV').textContent=field}
+document.getElementById('spdS').oninput=function(){spd=+this.value;document.getElementById('spdV').textContent=spd+'x'}
+document.getElementById('playB').onclick=function(){paused=!paused;this.textContent=paused?'▶ PLAY':'❚❚ PAUSE'}
+document.getElementById('rstB').onclick=function(){t=0;hx=[];hy=[];hxt=[]}
+}
+anim()
+</script></body></html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acoustic Resonance · fₙ = n·v/(2L)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:920px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:72px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:26px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.66em;color:#666;max-width:920px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Acoustic Resonance</h1>
+<p>fₙ = n·v/(2L) — Standing waves in an open pipe</p>
+<canvas id="c" width="920" height="580"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=920,H=580;
+let n=1,fDrive=200,time=0,paused=false,speed=1,pipeAmp=0;
+const L=340,v=340,drivingAmp=1;
+const hMax=300;const hist=[],frHist=[];
+for(let i=0;i<hMax;i++){hist.push(0);frHist.push(0);}
+
+function step(){
+ if(paused)return;
+ const fn=n*v/(2*L);
+ const driving=drivingAmp*Math.sin(2*Math.PI*fDrive*time);
+ const Q=20,omega0=2*Math.PI*fn,omega=2*Math.PI*fDrive;
+ const H=1/Math.sqrt((omega0*omega0-omega*omega)**2+(omega0*omega/Q)**2);
+ pipeAmp+=H*driving*0.005;
+ const amp=Math.abs(pipeAmp);
+ hist.push(amp);frHist.push(fDrive);if(hist.length>hMax){hist.shift();frHist.shift();}
+}
+
+function draw(){
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+ const fn=n*v/(2*L),omega=2*Math.PI*fDrive;
+ const Q=20,omega0=2*Math.PI*fn;
+ const H=1/Math.sqrt((omega0*omega0-omega*omega)**2+(omega0*omega/Q)**2);
+ const pipeX=80,pipeY=180,pipeW=760,pipeH=30;
+ ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.strokeRect(pipeX,pipeY,pipeW,pipeH);
+ ctx.fillStyle='rgba(0,0,0,0.01)';ctx.fillRect(pipeX,pipeY,pipeW,pipeH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('L = 1 m (open pipe)',pipeX+pipeW/2,pipeY-8);
+ const ampFactor=H>0.1?1:0.3;
+ ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.beginPath();
+ for(let x=0;x<=pipeW;x++){const xx=x/pipeW;const val=Math.sin(n*Math.PI*xx)*Math.sin(omega*time)*ampFactor;const py=pipeY+pipeH/2-val*14;x===0?ctx.moveTo(pipeX+x,py):ctx.lineTo(pipeX+x,py);}
+ ctx.stroke();
+ for(let x=0;x<=pipeW;x+=pipeW/n){ctx.fillStyle='rgba(0,0,0,0.1)';ctx.beginPath();ctx.arc(pipeX+x,pipeY+pipeH/2,3,0,Math.PI*2);ctx.fill();}
+ const gX=80,gY=240,gW=760,gH=160;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+ ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('|H(f)| — frequency response',gX+3,gY+10);
+ ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(gX,gY+gH);ctx.lineTo(gX+gW,gY+gH);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+ ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();let first=true;
+ for(let f=20;f<=1000;f+=2){let res=0;for(let h=1;h<=5;h++){const fh=h*v/(2*L);res+=1/Math.sqrt((f-fh)**2+50);}const px=gX+(f/1000)*gW;const py=gY+gH-res*10;first?ctx.moveTo(px,py):ctx.lineTo(px,py);first=false;}
+ ctx.stroke();
+ const fPx=gX+(fDrive/1000)*gW;ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(fPx,gY);ctx.lineTo(fPx,gY+gH);ctx.stroke();ctx.setLineDash([]);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';ctx.fillText(`${fDrive}Hz`,fPx,gY+gH+12);
+ for(let h=1;h<=5;h++){const fh=h*v/(2*L);const hx=gX+(fh/1000)*gW;if(hx>gX&&hx<gX+gW){ctx.fillStyle='#999';ctx.font='5px monospace';ctx.textAlign='center';ctx.fillText(`fₙ=${h}`,hx,gY+gH-4);ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=0.3;ctx.beginPath();ctx.moveTo(hx,gY);ctx.lineTo(hx,gY+gH);ctx.stroke();}}
+ const hX=80,hY=420,hW=760,hH=80;
+ ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(hX,hY,hW,hH);
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('Amplitude A(t)',hX+3,hY+10);
+ ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.beginPath();
+ for(let i=0;i<hist.length;i++){const px=hX+(i/hMax)*hW,py=hY+hH-4-Math.min(hist[i],0.5)*(hH-8)/0.5;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+ ctx.stroke();
+ ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText(`fₙ = n·v/(2L)    Q ≈ ${Q.toFixed(0)}`,10,H-60);
+ ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText(`Mode ${n}: fₙ=${fn.toFixed(1)}Hz  drive=${fDrive}Hz  Δf=${(fDrive-fn).toFixed(1)}Hz  H=${H.toFixed(4)}`,10,H-76);
+
+if(!document.getElementById('controls').querySelector('button')){
+ document.getElementById('controls').innerHTML=
+ `<div class="ctrl-group"><label>n (mode)</label><input type="range" id="nS" min="1" max="6" step="1" value="${n}"><span class="val" id="nV">${n}</span></div>`+
+ `<div class="ctrl-group"><label>f<sub>d</sub> (Hz)</label><input type="range" id="fS" min="50" max="1200" step="5" value="${fDrive}"><span class="val" id="fV">${fDrive}</span></div>`+
+ `<button id="pauseBtn">${paused?'Play':'Pause'}</button><button id="resetBtn">Reset</button>`+
+ `<div class="ctrl-group"><label>Speed</label><input type="range" id="spdS" min="0.1" max="5" step="0.1" value="${speed}"><span class="val" id="spdV">${speed.toFixed(1)}×</span></div>`;
+ document.getElementById('nS').oninput=function(){n=+this.value;nV.textContent=n;};
+ document.getElementById('fS').oninput=function(){fDrive=+this.value;fV.textContent=fDrive;};
+ document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+ document.getElementById('resetBtn').onclick=function(){time=0;pipeAmp=0;hist.fill(0);paused=false;document.getElementById('pauseBtn').textContent='Pause';};
+ document.getElementById('spdS').oninput=function(){speed=+this.value;spdV.textContent=speed.toFixed(1)+'×';};
+
+}
+ document.getElementById('stats').innerHTML=
+ `<span><span class="label">fₙ (mode ${n}) =</span> <span class="val">${fn.toFixed(1)}</span> Hz</span>`+
+ `<span><span class="label">f<sub>drive</sub> =</span> <span class="val">${fDrive}</span> Hz</span>`+
+ `<span><span class="label">Δf = f−fₙ =</span> <span class="val">${(fDrive-fn).toFixed(1)}</span> Hz</span>`+
+ `<span><span class="label">|H(f)| ∝</span> <span class="val">${H.toFixed(4)}</span></span>`+
+ `<span><span class="label">Q factor ≈</span> <span class="val">${Q.toFixed(0)}</span></span>`+
+ `<span><span class="label">Pipe L =</span> <span class="val">${L}</span> cm</span>`+
+ `<span><span class="label">v =</span> <span class="val">340 m/s</span></span>`+
+ `<span><span class="label">f₁ = v/(2L) =</span> <span class="val">${(v/(2*L)).toFixed(1)}</span> Hz</span>`+
+ `<span><span class="label">ω₀ =</span> <span class="val">${omega0.toFixed(1)}</span></span>`+
+ `<span><span class="label">Amp =</span> <span class="val">${pipeAmp.toFixed(4)}</span></span>`+
+ `<span><span class="label">Resonance?</span> <span class="val">${H>0.3?'✓ Yes':'✗ Off'}</span></span>`+
+ `<span><span class="label">t =</span> <span class="val">${time.toFixed(2)}</span></span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

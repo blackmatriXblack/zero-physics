@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AC Circuit · V = IZ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>AC Circuit / Phasors</h1>
+<p>V = IZ — Z = √(R²+(X<sub>L</sub>−X<sub>C</sub>)²), φ = arctan((X<sub>L</sub>−X<sub>C</sub>)/R)</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=900,H=500;
+let R=50,L=0.05,Cv=50e-6,f=50,time=0,paused=false,spd=1;
+const vH=[],iH=[],tH=[],pH=[];const maxH=400;
+function step(){
+  if(paused)return;
+  const dt=0.016*spd,omega=2*Math.PI*f;
+  time+=dt;
+  const XL=omega*L,XC=1/(omega*Cv),Z=Math.sqrt(R*R+(XL-XC)**2);
+  const I0=10/Z,phi=Math.atan2(XL-XC,R);
+  const V=10*Math.sin(omega*time),I=I0*Math.sin(omega*time-phi);
+  vH.push(V);iH.push(I*10);tH.push(time);pH.push(phi);
+  if(vH.length>maxH){vH.shift();iH.shift();tH.shift();pH.shift();}
+}
+function reset(){time=0;vH.length=0;iH.length=0;tH.length=0;pH.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const omega=2*Math.PI*f,XL=omega*L,XC=1/(omega*Cv),Z=Math.sqrt(R*R+(XL-XC)**2);
+  const I0=10/Z,phi=Math.atan2(XL-XC,R),V=10*Math.sin(omega*time),I=I0*Math.sin(omega*time-phi);
+  const gX=40,gY=30,gW=500,gH=160;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('V(t), I(t)',gX+3,gY+10);
+  if(vH.length>2){
+    ctx.beginPath();
+    for(let i=0;i<vH.length;i++){const px=gX+(i/vH.length)*gW,py=gY+gH/2-vH[i]*(gH/2-10)/10;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.beginPath();
+    for(let i=0;i<iH.length;i++){const px=gX+(i/iH.length)*gW,py=gY+gH/2-iH[i]*(gH/2-10)/I0/10;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=0.7;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+  }
+  const pX=710,pY=130,pR=90;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(pX,pY,pR,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(pX-pR-10,pY);ctx.lineTo(pX+pR+10,pY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pX,pY-pR-10);ctx.lineTo(pX,pY+pR+10);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('phasors',pX,pY-pR-14);
+  const vA=omega*time,iA=omega*time-phi;
+  ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(pX,pY);ctx.lineTo(pX+pR*Math.cos(vA),pY-pR*Math.sin(vA));ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1.2;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(pX,pY);ctx.lineTo(pX+pR*0.8*Math.cos(iA),pY-pR*0.8*Math.sin(iA));ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.fillText('V',pX+pR*0.5*Math.cos(vA),pY-pR*0.5*Math.sin(vA)-8);
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillText('I',pX+pR*0.4*Math.cos(iA),pY-pR*0.4*Math.sin(iA)-8);
+  const lx=570,ly=200;
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('Z = '+Z.toFixed(2)+' Ω',lx,ly+14);
+  ctx.fillText('I₀ = '+(I0*1000).toFixed(2)+' mA',lx,ly+28);
+  ctx.fillText('φ = '+(phi*180/Math.PI).toFixed(2)+'°',lx,ly+42);
+  ctx.fillText('X_L = '+XL.toFixed(2)+' Ω  X_C = '+XC.toFixed(2)+' Ω',lx,ly+56);
+  ctx.fillText('R = '+R+' Ω  f = '+f+' Hz',lx,ly+70);
+  ctx.fillText('ω = '+omega.toFixed(1)+' rad/s',lx,ly+84);
+  const S=10*I0/2,P=S*Math.cos(phi),Q=S*Math.sin(phi);
+  const f0=1/(2*Math.PI*Math.sqrt(L*Cv));
+  ctx.fillText('P = '+P.toFixed(4)+' W  Q = '+Q.toFixed(4)+' VAR',lx,ly+98);
+  ctx.fillText('f₀ = '+f0.toFixed(1)+' Hz  Q_f = '+(f0*L/R).toFixed(1),lx,ly+112);
+  const BW=f0/(f0*L/R);
+  ctx.fillText('BW = '+BW.toFixed(2)+' Hz',lx,ly+126);
+  ctx.fillStyle='rgba(0,0,0,0.04)';ctx.font='6px monospace';ctx.fillText('Z('+Z.toFixed(1)+') I('+(I*1000).toFixed(1)+') V('+V.toFixed(1)+')',lx,ly+140);
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>R</label><input type="range" id="rS" min="10" max="200" step="5" value="'+R+'"><span class="val" id="rV">'+R+'</span></div>'+
+    '<div class="ctrl-group"><label>L (mH)</label><input type="range" id="lS" min="10" max="200" step="5" value="'+(L*1000).toFixed(0)+'"><span class="val" id="lV">'+(L*1000).toFixed(0)+'</span></div>'+
+    '<div class="ctrl-group"><label>C (μF)</label><input type="range" id="cS" min="10" max="200" step="5" value="'+(Cv*1e6).toFixed(0)+'"><span class="val" id="cV">'+(Cv*1e6).toFixed(0)+'</span></div>'+
+    '<div class="ctrl-group"><label>f</label><input type="range" id="fS" min="10" max="200" step="5" value="'+f+'"><span class="val" id="fV">'+f+'</span></div>'+
+    '<div class="ctrl-group"><label>spd</label><input type="range" id="spS" min="0" max="5" step="0.5" value="'+spd+'"><span class="val" id="spV">'+spd.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>';
+  document.getElementById('rS').oninput=function(){R=+this.value;document.getElementById('rV').textContent=R;};
+  document.getElementById('lS').oninput=function(){L=+this.value/1000;document.getElementById('lV').textContent=(L*1000).toFixed(0);};
+  document.getElementById('cS').oninput=function(){Cv=+this.value*1e-6;document.getElementById('cV').textContent=(Cv*1e6).toFixed(0);};
+  document.getElementById('fS').oninput=function(){f=+this.value;document.getElementById('fV').textContent=f;};
+  document.getElementById('spS').oninput=function(){spd=+this.value;document.getElementById('spV').textContent=spd.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=reset;
+}
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">V =</span> <span class="val">'+V.toFixed(3)+'</span> V</span>'+
+    '<span><span class="label">I =</span> <span class="val">'+(I*1000).toFixed(3)+'</span> mA</span>'+
+    '<span><span class="label">Z =</span> <span class="val">'+Z.toFixed(2)+'</span> Ω</span>'+
+    '<span><span class="label">φ =</span> <span class="val">'+(phi*180/Math.PI).toFixed(2)+'</span>°</span>'+
+    '<span><span class="label">cos φ =</span> <span class="val">'+Math.cos(phi).toFixed(4)+'</span></span>'+
+    '<span><span class="label">P =</span> <span class="val">'+P.toFixed(4)+'</span> W</span>'+
+    '<span><span class="label">Q =</span> <span class="val">'+Q.toFixed(4)+'</span> VAR</span>'+
+    '<span><span class="label">S =</span> <span class="val">'+S.toFixed(4)+'</span> VA</span>'+
+    '<span><span class="label">f₀ =</span> <span class="val">'+f0.toFixed(1)+'</span> Hz</span>'+
+    '<span><span class="label">Q_f =</span> <span class="val">'+(f0*L/R).toFixed(2)+'</span></span>'+
+    '<span><span class="label">BW =</span> <span class="val">'+BW.toFixed(2)+'</span> Hz</span>'+
+    '<span><span class="label">t =</span> <span class="val">'+time.toFixed(2)+'</span> s</span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

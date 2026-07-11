@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dipole Antenna · Hertzian dipole</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px;font-size:0.7em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Dipole Antenna</h1>
+<p>E<sub>θ</sub> ∝ sin θ · cos(ωt−kr)/r — Hertzian dipole far-field radiation</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=900,H=500,cx=160,cy=250;
+let freq=1,time=0,paused=false,spd=1,aH=80,wl=70;
+const eH=[],rH=[],tH=[];const maxH=400;
+function step(){
+  if(paused)return;
+  time+=0.05*spd;
+  const omega=2*Math.PI*freq;eH.length=0;
+  for(let i=0;i<180;i+=2){
+    const ang=Math.PI*i/180,r=20+i*2.5;
+    if(r>450)continue;
+    const x=cx+r*Math.cos(ang),y=cy+r*Math.sin(ang);
+    const k=2*Math.PI/wl,Et=Math.sin(ang)*Math.cos(omega*time-k*r)/(r/10+1);
+    eH.push({x,y,Et,r});
+  }
+  const Efar=Math.cos(omega*time-2*Math.PI*3)/3*100;
+  const Bfar=Math.cos(omega*time-2*Math.PI*3)/3*100;
+  rH.push(Efar);tH.push(time);
+  if(rH.length>maxH){rH.shift();tH.shift();}
+}
+function reset(){time=0;rH.length=0;tH.length=0;paused=false;document.getElementById('pauseBtn').textContent='Pause';}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const omega=2*Math.PI*freq;
+  ctx.strokeStyle='#111';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(cx,cy-aH);ctx.lineTo(cx,cy+aH);ctx.stroke();
+  ctx.lineWidth=1;ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx-8,cy);ctx.lineTo(cx+8,cy);ctx.stroke();
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('feed',cx,cy+16);
+  const iAnt=Math.sin(omega*time);
+  ctx.strokeStyle='rgba(0,0,0,'+(0.1+0.2*Math.abs(iAnt))+')';ctx.lineWidth=2;
+  for(let y=cy-aH;y<=cy+aH;y+=2){
+    const amp=Math.sin((y-cy)/aH*Math.PI/2)*iAnt*20;
+    ctx.fillRect(cx-amp/2,y,amp,1);
+  }
+  ctx.strokeStyle='rgba(0,0,0,0.04)';ctx.lineWidth=0.3;
+  for(let f of eH){
+    const val=f.Et*20;
+    if(Math.abs(val)>0.1){
+      const dx=f.x-cx,dy=f.y-cy,rad=Math.sqrt(dx*dx+dy*dy),nx=-dy/rad,ny=dx/rad;
+      ctx.strokeStyle='rgba(0,0,0,'+Math.min(Math.abs(val)/5,0.4)+')';
+      ctx.beginPath();ctx.moveTo(f.x-nx*val,f.y-ny*val);ctx.lineTo(f.x+nx*val,f.y+ny*val);ctx.stroke();
+    }
+  }
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.5;
+  ctx.beginPath();
+  for(let i=0;i<=360;i++){const ang=Math.PI*i/180,r=100*Math.sin(ang)**2,x=cx+r*Math.cos(ang),y=cy+r*Math.sin(ang);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();
+  for(let i=0;i<=360;i++){const ang=Math.PI*i/180,r=100*Math.sin(ang)**2,x=cx+r*Math.cos(ang+Math.PI),y=cy+r*Math.sin(ang+Math.PI);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('radiation pattern sin²θ',cx+60,cy-10);
+  const Efar=Math.cos(omega*time-2*Math.PI*3)/3*100,Bfar=Math.cos(omega*time-2*Math.PI*3)/3*100;
+  const gX=430,gY=30,gW=440,gH=180;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gX,gY,gW,gH);
+  ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(gX,gY+gH/2);ctx.lineTo(gX+gW,gY+gH/2);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('E_far(t) ∝ cos(ωt−kr)/r',gX+3,gY+10);
+  if(rH.length>2){
+    ctx.beginPath();
+    for(let i=0;i<rH.length;i++){const px=gX+(i/rH.length)*gW,py=gY+gH/2-rH[i]*(gH/2-10)/100;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();
+  }
+  const k=2*Math.PI/wl,lambda=wl/freq/10,fc=3e8/(2*aH/100);
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    '<div class="ctrl-group"><label>freq</label><input type="range" id="fS" min="0.2" max="3" step="0.1" value="'+freq+'"><span class="val" id="fV">'+freq.toFixed(1)+'</span></div>'+
+    '<div class="ctrl-group"><label>len</label><input type="range" id="aS" min="40" max="140" step="5" value="'+aH+'"><span class="val" id="aV">'+aH+'</span></div>'+
+    '<div class="ctrl-group"><label>wl</label><input type="range" id="wS" min="30" max="150" step="5" value="'+wl+'"><span class="val" id="wV">'+wl+'</span></div>'+
+    '<div class="ctrl-group"><label>spd</label><input type="range" id="spS" min="0" max="5" step="0.5" value="'+spd+'"><span class="val" id="spV">'+spd.toFixed(1)+'</span></div>'+
+    '<button id="pauseBtn">'+(paused?'Play':'Pause')+'</button><button id="resetBtn">Reset</button>';
+  document.getElementById('fS').oninput=function(){freq=+this.value;document.getElementById('fV').textContent=freq.toFixed(1);};
+  document.getElementById('aS').oninput=function(){aH=+this.value;document.getElementById('aV').textContent=aH;};
+  document.getElementById('wS').oninput=function(){wl=+this.value;document.getElementById('wV').textContent=wl;};
+  document.getElementById('spS').oninput=function(){spd=+this.value;document.getElementById('spV').textContent=spd.toFixed(1);};
+  document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'Play':'Pause';};
+  document.getElementById('resetBtn').onclick=reset;
+}
+  document.getElementById('stats').innerHTML=
+    '<span><span class="label">f =</span> <span class="val">'+freq.toFixed(1)+'</span> GHz</span>'+
+    '<span><span class="label">λ =</span> <span class="val">'+(wl/freq).toFixed(0)+'</span> mm</span>'+
+    '<span><span class="label">L/λ =</span> <span class="val">'+(aH/(wl/freq)*10).toFixed(3)+'</span></span>'+
+    '<span><span class="label">E_far ∝</span> <span class="val">'+Efar.toFixed(2)+'</span></span>'+
+    '<span><span class="label">B_far ∝</span> <span class="val">'+Bfar.toFixed(2)+'</span></span>'+
+    '<span><span class="label">k =</span> <span class="val">'+k.toFixed(2)+'</span> rad/m</span>'+
+    '<span><span class="label">Pattern</span> <span class="val">sin²θ</span></span>'+
+    '<span><span class="label">I_ant</span> <span class="val">'+iAnt.toFixed(3)+'</span></span>'+
+    '<span><span class="label">λ/2</span> <span class="val">'+(wl/freq/2).toFixed(0)+'</span> mm</span>'+
+    '<span><span class="label">Res f (λ=2L)</span> <span class="val">'+(wl/freq/(2*aH/100)*freq).toFixed(2)+'</span> GHz</span>'+
+    '<span><span class="label">D = 1.5</span> <span class="val">'+(1.5).toFixed(1)+'</span></span>'+
+    '<span><span class="label">t =</span> <span class="val">'+time.toFixed(2)+'</span> ns</span>';
+}
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

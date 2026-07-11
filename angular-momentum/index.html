@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Angular Momentum · L conserved</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+p{font-size:0.7em;color:#666;margin-bottom:6px}.eq{color:#888;font-size:0.65em}
+canvas{border:1px solid #000;display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+.c{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin:6px 0;max-width:900px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:3px 8px;border-radius:2px}
+.cg label{font-size:0.6em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:70px;accent-color:#000;height:14px}
+.cg .v{font-size:0.65em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:3px 10px;font-family:'Courier New',monospace;font-size:0.65em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.s{display:flex;flex-wrap:wrap;gap:2px 12px;margin:4px 0;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.s span{white-space:nowrap}.s .l{color:#999}.s .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Angular Momentum</h1>
+<p>L = Iω conserved &nbsp;·&nbsp; <span class="eq">L = Iω · KE = ½Iω²</span></p>
+<canvas id="c" width="900" height="460"></canvas>
+<div class="c" id="ctrls"></div>
+<div class="s" id="stats"></div>
+<script>
+const ca=document.getElementById('c'),ctx=ca.getContext('2d'),W=900,H=460,cx=320,cy=230;
+let om=0,Ip=5,rp=120,mp=60,L=0,sp=0,p=0,st=0,drg=0,sm=1;
+const h={t:[],om:[],I:[],L:[],ke:[],rp:[]};
+function gi(){return Ip+rp*rp*mp}
+function gke(){const I=gi();return 0.5*I*om*om}
+function stp(){
+  if(p||!sp)return;
+  for(let s=0;s<sm;s++){
+    const dt=0.008,I=gi();om=L/I;st+=dt;
+    h.t.push(st);h.om.push(om);h.I.push(I);h.L.push(L);h.ke.push(gke());h.rp.push(rp);
+    while(h.t.length>400){h.t.shift();h.om.shift();h.I.shift();h.L.shift();h.ke.shift();h.rp.shift()}
+  }
+}
+function spin(){if(!sp){L=gi()*2;om=L/gi();sp=1}}
+function rs(){om=0;L=0;sp=0;st=0;h.t.length=0;h.om.length=0;h.I.length=0;h.L.length=0;h.ke.length=0;h.rp.length=0;p=0;document.getElementById('pb').textContent='Pause'}
+function dr(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.translate(cx,cy);
+  if(sp)ctx.rotate(om*st);
+  ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,200,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.5;
+  for(let r=40;r<200;r+=40){ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke()}
+  for(let i=0;i<24;i++){const a=i*Math.PI/12;ctx.beginPath();ctx.moveTo(180*Math.cos(a),180*Math.sin(a));ctx.lineTo(200*Math.cos(a),200*Math.sin(a));ctx.stroke()}
+  const pr=Math.min(rp,180);
+  const g2=ctx.createRadialGradient(pr-4,0,2,pr,0,12);g2.addColorStop(0,'#444');g2.addColorStop(1,'#000');
+  ctx.fillStyle=g2;ctx.beginPath();ctx.arc(pr,0,11,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.08)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('PERSON',pr,14);
+  ctx.restore();
+  const I=gi(),ke=gke(),lval=I*om;
+  const lx=580,ly=15;
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';
+  if(sp){ctx.fillText(`ω = ${om.toFixed(3)} rad/s`,lx,ly+14);ctx.fillText(`I = ${I.toFixed(2)} kg·m²`,lx,ly+28);ctx.fillText(`L = ${lval.toFixed(3)} kg·m²/s`,lx,ly+42);ctx.fillText(`KE = ${ke.toFixed(3)} J`,lx,ly+56);ctx.fillText(`r = ${rp.toFixed(0)} m`,lx,ly+70);ctx.fillText(`L₀ = ${L.toFixed(3)} kg·m²/s`,lx,ly+84)}else{ctx.fillText(`I = ${I.toFixed(2)} kg·m²`,lx,ly+14);ctx.fillText(`r = ${rp.toFixed(0)} m`,lx,ly+28);ctx.fillText(`m_p = ${mp.toFixed(0)} kg`,lx,ly+42);ctx.fillText(`I_p = ${Ip.toFixed(1)} kg·m²`,lx,ly+56);ctx.fillText('Click SPIN',lx,ly+78)}
+  const gx=560,gy=110,gw=310,gh=70;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('ω vs time',gx+3,gy+10);
+  if(h.om.length>2){const omMax=Math.max(...h.om)*1.1||1;ctx.beginPath();for(let i=0;i<h.om.length;i++){const px=gx+(i/h.om.length)*gw,py=gy+gh-(h.om[i]/omMax)*gh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=0.8;ctx.stroke()}
+  const kgx=560,kgy=190,kgw=310,kgh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(kgx,kgy,kgw,kgh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('KE vs time',kgx+3,kgy+10);
+  if(h.ke.length>2){const km=Math.max(...h.ke)*1.1||1;ctx.beginPath();for(let i=0;i<h.ke.length;i++){const px=kgx+(i/h.ke.length)*kgw,py=kgy+kgh-(h.ke[i]/km)*kgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=0.7;ctx.stroke()}
+  const lgx=560,lgy=255,lgw=310,lgh=55;
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;ctx.strokeRect(lgx,lgy,lgw,lgh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('I vs time',lgx+3,lgy+10);
+  if(h.I.length>2){const iMin=Math.min(...h.I),iMax=Math.max(...h.I),iR=iMax-iMin||1;ctx.beginPath();for(let i=0;i<h.I.length;i++){const px=lgx+(i/h.I.length)*lgw,py=lgy+lgh-(h.I[i]-iMin)/iR*lgh;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;ctx.stroke()}
+  ca.onmousedown=function(e){const r2=ca.getBoundingClientRect(),mx=e.clientX-r2.left-cx,my=e.clientY-r2.top-cy;if(Math.abs(Math.hypot(mx,my)-rp)<25){drg=1;ca.style.cursor='grabbing'}};
+  ca.onmousemove=function(e){if(!drg)return;const r2=ca.getBoundingClientRect(),mx=e.clientX-r2.left-cx,my=e.clientY-r2.top-cy;rp=Math.max(20,Math.min(180,Math.hypot(mx,my)))};
+  ca.onmouseup=ca.onmouseleave=function(){drg=0;ca.style.cursor='grab'};
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>I<sub>plat</sub></label><input type="range" id="iS" min="1" max="15" step="0.5" value="${Ip}"><span class="v" id="iV">${Ip.toFixed(1)}</span></div>`+
+    `<div class="cg"><label>m<sub>p</sub></label><input type="range" id="mS" min="20" max="120" step="5" value="${mp}"><span class="v" id="mV">${mp}</span></div>`+
+    `<div class="cg"><label>r<sub>p</sub></label><input type="range" id="rS" min="20" max="180" step="5" value="${rp}"><span class="v" id="rV">${rp}</span></div>`+
+    `<button id="sb">Spin</button><button id="pb">Pause</button><button id="rb">Reset</button>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="spS" min="1" max="10" step="1" value="${sm}"><span class="v" id="spV">${sm}x</span></div>`;
+  document.getElementById('iS').oninput=function(){Ip=+this.value;document.getElementById('iV').textContent=Ip.toFixed(1)};
+  document.getElementById('mS').oninput=function(){mp=+this.value;document.getElementById('mV').textContent=mp};
+  document.getElementById('rS').oninput=function(){rp=+this.value;document.getElementById('rV').textContent=rp};
+  document.getElementById('sb').onclick=spin;
+  document.getElementById('pb').onclick=function(){p=!p;this.textContent=p?'Play':'Pause'};
+  document.getElementById('rb').onclick=rs;
+  document.getElementById('spS').oninput=function(){sm=+this.value;document.getElementById('spV').textContent=sm+'x'};
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="l">ω =</span> <span class="v">${om.toFixed(4)}</span> rad/s</span>`+
+    `<span><span class="l">I =</span> <span class="v">${I.toFixed(4)}</span> kg·m²</span>`+
+    `<span><span class="l">L =</span> <span class="v">${lval.toFixed(4)}</span> kg·m²/s</span>`+
+    `<span><span class="l">KE =</span> <span class="v">${ke.toFixed(4)}</span> J</span>`+
+    `<span><span class="l">r =</span> <span class="v">${rp.toFixed(1)}</span> m</span>`+
+    `<span><span class="l">m<sub>p</sub> =</span> <span class="v">${mp.toFixed(1)}</span> kg</span>`+
+    `<span><span class="l">I<sub>p</sub> =</span> <span class="v">${Ip.toFixed(1)}</span></span>`+
+    `<span><span class="l">L₀ =</span> <span class="v">${sp?L.toFixed(3):'—'}</span></span>`+
+    `<span><span class="l">L·r =</span> <span class="v">${sp?(L*rp*rp*mp/gi()).toFixed(4):'—'}</span></span>`+
+    `<span><span class="l">State =</span> <span class="v">${sp?'SPINNING':'IDLE'}</span></span>`+
+    `<span><span class="l">t =</span> <span class="v">${st.toFixed(2)}</span> s</span>`
+}
+function lp(){stp();dr();requestAnimationFrame(lp)}
+lp();
+</script>
+</body>
+</html>

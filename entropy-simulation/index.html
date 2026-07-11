@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entropy · S = -k_B Σ p_i ln p_i</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.3em;font-weight:900;text-transform:uppercase;letter-spacing:2px}
+.eq{font-size:0.7em;color:#666;margin-bottom:5px}
+canvas{border:1px solid #000;display:block}
+.ctrl{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:5px;max-width:920px}
+.cg{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid #eee;padding:2px 7px;border-radius:2px}
+.cg label{font-size:0.58em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.cg input[type=range]{width:65px;accent-color:#000;height:14px}
+.cg .v{font-size:0.6em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:2px 9px;font-family:'Courier New',monospace;font-size:0.6em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .12s}
+button:hover{background:#000;color:#fff}
+.st{display:flex;flex-wrap:wrap;gap:1px 10px;margin-top:3px;font-size:0.6em;color:#666;max-width:920px;justify-content:center}
+.st span{white-space:nowrap}
+.st .l{color:#999}
+.st .v{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Entropy · Second Law</h1>
+<p class="eq">S = -k_B Σ p_i ln p_i — ΔS ≥ 0 for isolated systems</p>
+<canvas id="c" width="920" height="520"></canvas>
+<div class="ctrl" id="ctrls"></div>
+<div class="st" id="st"></div>
+<script>
+const C=document.getElementById('c'),ctx=C.getContext('2d'),W=920,H=520;
+const BOX={x:90,y:70,w:500,h:360},PX=BOX.x+BOX.w/2,R=5;
+let nL=25,nR=25,speed=1,paused=0,reset=0,part=1,time=0;
+const P=[],sHist=[],eHist=[],mHist=[],tHist=[],maxH=400;
+
+function init(){
+  P.length=0;function mk(t){return{x:BOX.x+10+Math.random()*(BOX.w-20),y:BOX.y+10+Math.random()*(BOX.h-20),vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,type:t}}
+  for(let i=0;i<nL;i++){const p=mk(0);while(p.x>=PX-5)p.x=BOX.x+10+Math.random()*(PX-BOX.x-15);P.push(p)}
+  for(let i=0;i<nR;i++){const p=mk(1);while(p.x<PX+5)p.x=PX+10+Math.random()*(BOX.x+BOX.w-PX-15);P.push(p)}
+  time=0;part=1;sHist.length=0;eHist.length=0;mHist.length=0;tHist.length=0
+}
+init();
+
+function entropy(){const nx=12,ny=10,cw=BOX.w/nx,ch=BOX.h/ny;let cnt=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let c=0;for(const p of P)if(p.x>=BOX.x+i*cw&&p.x<BOX.x+(i+1)*cw&&p.y>=BOX.y+j*ch&&p.y<BOX.y+(j+1)*ch)c++;cnt.push(c)}let S=0;const T=P.length;for(const c of cnt)if(c>0){const p=c/T;S-=p*Math.log(p)}return S*T}
+
+function step(){
+  if(paused)return;
+  const sdt=0.02*speed;time+=sdt;
+  for(let p of P){if(part&&p.x<BOX.x+BOX.w&&p.x>PX-R&&p.x<PX+R)continue;p.x+=p.vx*sdt;p.y+=p.vy*sdt;if(p.x<BOX.x+R){p.vx=-p.vx;p.x=BOX.x+R}if(p.x>BOX.x+BOX.w-R){p.vx=-p.vx;p.x=BOX.x+BOX.w-R}if(p.y<BOX.y+R){p.vy=-p.vy;p.y=BOX.y+R}if(p.y>BOX.y+BOX.h-R){p.vy=-p.vy;p.y=BOX.y+BOX.h-R}}
+  for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){const a=P[i],b=P[j],dx=a.x-b.x,dy=a.y-b.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<R*2&&dist>0.1){const nx=dx/dist,ny=dy/dist,ov=R*2-dist;a.x+=nx*ov/2;a.y+=ny*ov/2;b.x-=nx*ov/2;b.y-=ny*ov/2;const dvx=a.vx-b.vx,dvy=a.vy-b.vy,dvn=dvx*nx+dvy*ny;if(dvn>0){a.vx-=dvn*nx;a.vy-=dvn*ny;b.vx+=dvn*nx;b.vy+=dvn*ny}}}
+  if(Math.floor(time*4)>sHist.length){const S=entropy(),E=P.reduce((s,p)=>s+p.vx*p.vx+p.vy*p.vy,0)/P.length;sHist.push(S);eHist.push(E);tHist.push(time);mHist.push(Math.max(...sHist,0.1));if(sHist.length>maxH){sHist.shift();eHist.shift();tHist.shift();mHist.shift()}}
+}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.strokeRect(BOX.x,BOX.y,BOX.w,BOX.h);
+  ctx.fillStyle='#fafafa';ctx.fillRect(BOX.x,BOX.y,BOX.w,BOX.h);
+  if(part){ctx.strokeStyle='#000';ctx.lineWidth=3;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(PX,BOX.y);ctx.lineTo(PX,BOX.y+BOX.h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#000';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('PARTITION',PX,BOX.y-6)}
+  for(const p of P){ctx.beginPath();ctx.arc(p.x,p.y,R,0,Math.PI*2);ctx.fillStyle=p.type===0?'#111':'#bbb';ctx.fill();ctx.strokeStyle='#000';ctx.lineWidth=0.3;ctx.stroke()}
+  const S=entropy();let lc=0,rc=0;for(const p of P)p.x<PX?lc++:rc++;
+  // entropy graph
+  const gx=620,gy=30,gw=270,gh=150;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('S(t) = -k Σ p ln p',gx+3,gy+10);
+  if(sHist.length>1){const mS=Math.max(...mHist,0.1);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<sHist.length;i++){const px=gx+(i/sHist.length)*gw,py=gy+gh-sHist[i]/mS*(gh-15);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke()}
+  // KE graph
+  const gx2=gx,gy2=gy+gh+10,gw2=gw,gh2=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('⟨KE⟩ per particle',gx2+3,gy2+10);
+  if(eHist.length>1){const mE=Math.max(...eHist,0.1);ctx.strokeStyle='#444';ctx.lineWidth=0.8;ctx.beginPath();for(let i=0;i<eHist.length;i++){const px=gx2+(i/eHist.length)*gw2,py=gy2+gh2-eHist[i]/mE*(gh2-10);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.stroke()}
+  const eAvg=P.length>0?P.reduce((s,p)=>s+p.vx*p.vx+p.vy*p.vy,0)/P.length:0;
+if(!document.getElementById('ctrls').querySelector('button')){
+  document.getElementById('ctrls').innerHTML=
+    `<div class="cg"><label>N_L</label><input type="range" id="sL" min="5" max="60" step="5" value="${nL}"><span class="v" id="vL">${nL}</span></div>`+
+    `<div class="cg"><label>N_R</label><input type="range" id="sR" min="5" max="60" step="5" value="${nR}"><span class="v" id="vR">${nR}</span></div>`+
+    `<div class="cg"><label>Speed</label><input type="range" id="sSp" min="0" max="5" step="0.1" value="${speed}"><span class="v" id="vSp">${speed.toFixed(1)}</span></div>`+
+    `<button id="partBtn">${part?'REMOVE PARTITION':'INSERT PARTITION'}</button>`+
+    `<button id="pb">${paused?'PLAY':'PAUSE'}</button><button id="rs">RESET</button>`;
+  document.getElementById('sL').oninput=function(){nL=+this.value;init();document.getElementById('vL').textContent=nL};
+  document.getElementById('sR').oninput=function(){nR=+this.value;init();document.getElementById('vR').textContent=nR};
+  document.getElementById('sSp').oninput=function(){speed=+this.value;document.getElementById('vSp').textContent=speed.toFixed(1)};
+  document.getElementById('partBtn').onclick=function(){part=!part;this.textContent=part?'REMOVE PARTITION':'INSERT PARTITION'};
+  document.getElementById('pb').onclick=function(){paused=!paused;this.textContent=paused?'PLAY':'PAUSE'};
+  document.getElementById('rs').onclick=function(){init();sHist.length=0;eHist.length=0;tHist.length=0;mHist.length=0};
+}
+  const Smax=Math.max(...mHist,0.1);
+  document.getElementById('st').innerHTML=
+    `<span><span class="l">t =</span> <span class="v">${time.toFixed(2)}</span> s</span>`+
+    `<span><span class="l">S =</span> <span class="v">${S.toFixed(3)}</span></span>`+
+    `<span><span class="l">S_max =</span> <span class="v">${Smax.toFixed(3)}</span></span>`+
+    `<span><span class="l">S/S_max =</span> <span class="v">${(S/Smax*100).toFixed(1)}</span>%</span>`+
+    `<span><span class="l">Left =</span> <span class="v">${lc}</span></span>`+
+    `<span><span class="l">Right =</span> <span class="v">${rc}</span></span>`+
+    `<span><span class="l">ΔN =</span> <span class="v">${lc-rc}</span></span>`+
+    `<span><span class="l">⟨KE⟩ =</span> <span class="v">${eAvg.toFixed(2)}</span></span>`+
+    `<span><span class="l">N_total =</span> <span class="v">${P.length}</span></span>`+
+    `<span><span class="l">Partition</span> <span class="v">${part?'YES':'NO'}</span></span>`+
+    `<span><span class="l">microp =</span> <span class="v">${nL*nR}</span></span>`+
+    `<span><span class="l">2nd Law</span> <span class="v">${S>0?'ΔS≥0 ✓':'—'}</span></span>`
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

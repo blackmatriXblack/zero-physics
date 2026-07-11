@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Chamber · dE/dx ∝ Z²/β² · Track Visualization</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;color:#ddd;font-family:'Courier New',monospace;overflow:hidden;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;right:10px;pointer-events:none;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:10px;pointer-events:auto;flex-wrap:wrap;align-items:center}
+.panel{background:rgba(20,20,20,0.9);border:1px solid rgba(255,255,255,0.12);padding:5px 10px;font-size:11px;line-height:1.5}
+.panel .eq{font-size:12px;margin-bottom:3px;color:#aaa}
+button{background:transparent;border:1px solid #888;padding:4px 10px;font:11px/1.4 'Courier New',monospace;cursor:pointer;color:#ddd;pointer-events:auto;letter-spacing:1px;text-transform:uppercase}
+button:hover{background:#ddd;color:#111}
+input[type=range]{accent-color:#888;width:72px;vertical-align:middle;pointer-events:auto}
+label{font-size:11px;pointer-events:auto;white-space:nowrap;color:#aaa}
+#data{position:absolute;bottom:8px;left:8px;right:8px;pointer-events:none;display:flex;gap:4px;flex-wrap:wrap}
+.dbox{border:1px solid rgba(255,255,255,0.1);padding:2px 5px;font-size:9px;line-height:1.4;background:rgba(20,20,20,0.85);min-width:55px}
+.dbox b{font-size:10px;color:#ddd}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div class="row">
+<div class="panel"><div class="eq">−dE/dx = 4πnZ²/mₑβ² · (e²/4πε₀)² · ln(2mₑβ²γ²/I) &nbsp; r = p/qB</div></div>
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<button id="playBtn">⏸</button>
+<button id="resetBtn">↺</button>
+<button id="emitBtn">EMIT</button>
+<label>Speed <input type="range" id="speed" min="0" max="4" step="0.5" value="1"></label>
+</div>
+</div>
+<div class="row">
+<div class="panel" style="display:flex;gap:6px;align-items:center">
+<label>B(T) <input type="range" id="bSl" min="0" max="1.5" step="0.1" value="0.5"></label>
+<label>emit/s <input type="range" id="rateSl" min="0" max="15" step="1" value="5"></label>
+<label>E_scale <input type="range" id="eSl" min="0.2" max="2" step="0.1" value="1"></label>
+<label>vapor <input type="range" id="vapSl" min="0.1" max="1" step="0.05" value="0.5"></label>
+</div>
+</div>
+</div>
+<div id="data"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H,CX,CY;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;CX=Math.min(W*0.15,150);CY=H*0.5}
+window.addEventListener('resize',resize);resize();
+let tracks=[],paused=false,speed=1,bField=0.5,emitRate=5,energyScale=1,vaporDensity=0.5;
+const types=['α','β','γ','β'];
+const tStyles={'alpha':{thick:5,sp:1.8,wob:0.02,len:90,ion:20,l:'α'},'beta':{thick:1.8,sp:3.5,wob:0.35,len:160,ion:3,l:'β'},'gamma':{thick:2.2,sp:5.5,wob:0.08,len:250,ion:0.5,l:'γ'}};
+let trackCounts={alpha:0,beta:0,gamma:0},totalEmitted=0;
+let lengthHist=[],maxHist=400;
+function emitRandom(){const t=types[Math.floor(Math.random()*types.length)];emitParticle(t)}
+function emitParticle(type){
+  const s=tStyles[type];totalEmitted++;trackCounts[type]++;
+  const ang=(Math.random()-0.5)*Math.PI*0.7,sp=s.sp*energyScale*(0.7+Math.random()*0.6);
+  const maxLen=s.len*energyScale*(0.7+Math.random()*0.6),wig=s.wob*(0.8+Math.random()*0.4);
+  const charge=type==='beta'?-1:type==='alpha'?2:0;
+  const curv=charge!==0?charge*bField/(sp*10+0.01)*300:0;
+  tracks.push({x:CX,y:CY,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,type,trail:[],maxLen,len:0,wiggle:wig,active:true,phase:Math.random()*6.28,thick:s.thick,curv,charge,label:s.l,ion:s.ion,spd:sp,angle:ang});
+}
+function step(){
+  if(paused)return;
+  if(emitRate>0&&Math.random()<emitRate*0.005*speed){emitRandom()}
+  for(let i=tracks.length-1;i>=0;i--){
+    const t=tracks[i];if(!t.active)continue;
+    t.phase+=0.04*speed;const wb=t.wiggle*Math.sin(t.phase)*1.5;
+    if(t.curv!==0){const sp=Math.sqrt(t.vx*t.vx+t.vy*t.vy);if(sp>0){const px=-t.vy/sp,py=t.vx/sp;const fc=t.curv*sp*0.02*speed;t.vx+=px*fc;t.vy+=py*fc}}
+    t.x+=t.vx*0.5*speed+wb*(t.vy!==0?t.vy/Math.abs(t.vy):0)*vaporDensity;
+    t.y+=t.vy*0.5*speed+wb*(t.vx!==0?-t.vx/Math.abs(t.vx):0)*vaporDensity;
+    t.len++;t.trail.push({x:t.x,y:t.y});if(t.trail.length>300)t.trail.shift();
+    const spd=Math.sqrt(t.vx*t.vx+t.vy*t.vy);t.vx*=0.995;t.vy*=0.995;
+    if(t.len>t.maxLen||t.x<-30||t.x>W+30||t.y<-30||t.y>H+30||spd<0.01){t.active=false;if(t.trail.length>10)lengthHist.push(t.trail.length);if(lengthHist.length>maxHist)lengthHist.shift()}
+  }
+  if(tracks.length>400){tracks.splice(0,tracks.length-400)}
+}
+function reset(){tracks=[];trackCounts={alpha:0,beta:0,gamma:0};totalEmitted=0;lengthHist=[]}
+function draw(){
+  ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);
+  for(let i=0;i<W;i+=25){ctx.strokeStyle='rgba(255,255,255,0.02)';ctx.lineWidth=0.3;ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke()}
+  for(let i=0;i<H;i+=25){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke()}
+  for(const t of tracks){
+    if(!t.active||t.trail.length<2)continue;
+    const bright=t.type==='alpha'?220:t.type==='beta'?160:100;
+    const a=Math.min(0.9,0.2+t.len/t.maxLen*0.7);
+    ctx.strokeStyle='rgba('+bright+','+bright+','+bright+','+a+')';
+    ctx.lineWidth=t.thick*vaporDensity;ctx.beginPath();
+    for(let j=0;j<t.trail.length;j++){j===0?ctx.moveTo(t.trail[j].x,t.trail[j].y):ctx.lineTo(t.trail[j].x,t.trail[j].y)}
+    ctx.stroke();
+  }
+  ctx.fillStyle='#ddd';ctx.beginPath();ctx.arc(CX,CY,10,0,6.28);ctx.fill();
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('Sr-90',CX,CY+2.5);
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('α:thick/straight β:thin/wiggly γ:faint/long',10,20);
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillText('−dE/dx ∝ Z²/β² · B='+bField.toFixed(1)+'T · Bragg peak for α',10,35);
+  ctx.fillStyle='rgba(255,255,255,0.08)';ctx.font='7px monospace';ctx.fillText('ionization density → particle ID | curvature → charge sign',10,48);
+  const gx=W*0.68,gw=W*0.3,gy=H*0.05,gh=H*0.35;
+  ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=0.5;ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px monospace';ctx.fillText('track length L (px)',gx+4,gy+12);
+  if(lengthHist.length>5){
+    const maxL=Math.max(...lengthHist,50),bins=20,bw=gw/bins;const hB=new Array(bins).fill(0);
+    for(const l of lengthHist){const idx=Math.min(bins-1,Math.floor(l/maxL*bins));hB[idx]++}
+    const maxC=Math.max(...hB,1);
+    for(let i=0;i<bins;i++){const bh=hB[i]/maxC*gh*0.85;const br=Math.round(40+180*(1-hB[i]/maxC));ctx.fillStyle='rgba('+br+','+br+','+br+',0.7)';ctx.fillRect(gx+i*bw+1,gy+gh-bh,bw-2,bh)}
+    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='8px monospace';ctx.fillText('L_max='+maxL.toFixed(0)+' n='+lengthHist.length,gx+4,gy+gh-6);
+  }
+  const gx2=W*0.68,gy2=H*0.44,gw2=gw,gh2=H*0.2;
+  ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=0.5;ctx.strokeRect(gx2,gy2,gw2,gh2);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px monospace';ctx.fillText('particle type ratio',gx2+4,gy2+12);
+  const actT=tracks.filter(t=>t.active),cAlpha=actT.filter(t=>t.type==='alpha').length,cBeta=actT.filter(t=>t.type==='beta').length,cGamma=actT.filter(t=>t.type==='gamma').length,cTot=cAlpha+cBeta+cGamma||1;
+  const bars=[{l:'α',v:cAlpha/cTot,c:'rgba(220,220,220,0.8)'},{l:'β',v:cBeta/cTot,c:'rgba(160,160,160,0.6)'},{l:'γ',v:cGamma/cTot,c:'rgba(100,100,100,0.4)'}];
+  let bx=gx2+4;const bw3=(gw2-8)/3;
+  for(const b of bars){const bh=b.v*gh2*0.7;ctx.fillStyle=b.c;ctx.fillRect(bx,gy2+gh2-bh,bw3-2,bh);ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(b.l+' '+(b.v*100).toFixed(0)+'%',bx+bw3/2,gy2+gh2-6);bx+=bw3}
+  const dataEl=document.getElementById('data');
+  let html='';
+  const act=tracks.filter(t=>t.active),nAct=act.length;
+  const alpha=act.filter(t=>t.type==='alpha').length,beta=act.filter(t=>t.type==='beta').length,gamma=act.filter(t=>t.type==='gamma').length;
+  const avgLen=lengthHist.length>0?lengthHist.reduce((a,b)=>a+b,0)/lengthHist.length:0;
+  const avgSpd=act.length>0?act.reduce((s,t)=>s+Math.sqrt(t.vx**2+t.vy**2),0)/act.length:0;
+  const avgIon=act.length>0?act.reduce((s,t)=>s+t.ion,0)/act.length:0;
+  const alphaRatio=nAct>0?alpha/nAct:0;
+  const maxL=lengthHist.length>0?Math.max(...lengthHist):0;
+  const minL=lengthHist.length>0?Math.min(...lengthHist):0;
+  const lenStd=lengthHist.length>1?Math.sqrt(lengthHist.reduce((s,v)=>s+(v-avgLen)**2,0)/lengthHist.length):0;
+  const totalTracks=alpha+beta+gamma;
+  const betaFrac=nAct>0?beta/nAct:0;
+  const gammaFrac=nAct>0?gamma/nAct:0;
+  const totalEvap=totalEmitted-nAct;const curvRatio=act.filter(t=>Math.abs(t.curv)>0.1).length;
+  const trackDensity=nAct>0?nAct/(W*H/10000):0;
+  const disp=[
+    {k:'active',v:nAct},{k:'α',v:alpha},{k:'β',v:beta},{k:'γ',v:gamma},{k:'emitted',v:totalEmitted},{k:'<L>(px)',v:avgLen.toFixed(1)},{k:'L_max',v:maxL.toFixed(0)},{k:'L_min',v:minL.toFixed(0)},{k:'σ_L',v:lenStd.toFixed(1)},{k:'<v>(px/f)',v:avgSpd.toFixed(2)},{k:'B(T)',v:bField.toFixed(1)},{k:'vapor',v:vaporDensity.toFixed(2)},{k:'emit/s',v:emitRate},{k:'<dE/dx>',v:avgIon.toFixed(1)},{k:'α/β',v:beta>0?(alpha/beta).toFixed(2):'—'},    {k:'decayed',v:totalEvap},{k:'curved',v:curvRatio},{k:'ρ(tr/cm²)',v:trackDensity.toFixed(2)},{k:'α%',v:(alphaRatio*100).toFixed(1)+'%'},{k:'β%',v:(betaFrac*100).toFixed(1)+'%'},{k:'γ%',v:(gammaFrac*100).toFixed(1)+'%'}];
+  for(const kv of disp)html+=`<div class="dbox"><b>${kv.k}</b><br>${kv.v}</div>`;
+  dataEl.innerHTML=html;
+}
+document.getElementById('playBtn').onclick=()=>{paused=!paused;document.getElementById('playBtn').textContent=paused?'▶':'⏸'}
+document.getElementById('resetBtn').onclick=reset;
+document.getElementById('emitBtn').onclick=emitRandom;
+document.getElementById('speed').oninput=function(){speed=parseFloat(this.value)};
+document.getElementById('bSl').oninput=function(){bField=parseFloat(this.value)};
+document.getElementById('rateSl').oninput=function(){emitRate=parseInt(this.value)};
+document.getElementById('eSl').oninput=function(){energyScale=parseFloat(this.value)};
+document.getElementById('vapSl').oninput=function(){vaporDensity=parseFloat(this.value)};
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

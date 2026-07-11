@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bouncing Ball · e = √(h₁/h₀) = v<sub>after</sub>/v<sub>before</sub></title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:80px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:28px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Bouncing Ball</h1>
+<p>e = v<sub>after</sub>/v<sub>before</sub> | ΔE = (1−e²)×KE<sub>before</sub> per bounce</p>
+<canvas id="c" width="900" height="480"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),W=900,H=480,gnd=440;
+let coe=.75,g=9.81,x=350,y=50,vy=0,r=10,bounces=0,simTime=0,paused=false,speed=1;
+let hist={t:[],y:[],v:[],ke:[],pe:[],te:[],mom:[],peaks:[]},bounceTimes=[];
+let prevV=0,lastPeakH=0;
+function E(){const ke=.5*vy*vy,pe=g*(gnd-y-r);return{ke,pe,te:ke+pe}}
+function step(){if(paused)return;const n=Math.ceil(speed);for(let s=0;s<n;s++){
+  const dt=.003;vy+=g*dt;y+=vy*dt;
+  if(y+r>gnd){prevV=-vy;y=gnd-r;vy=-vy*coe;if(Math.abs(vy)<.3)vy=0;bounces++;bounceTimes.push(simTime);if(bounceTimes.length>30)bounceTimes.shift()}
+  if(y<0){y=0;vy=0}
+  const e=E(),p=m=>m*vy;simTime+=dt;hist.t.push(simTime);hist.y.push(gnd-y-r);hist.v.push(vy);hist.ke.push(e.ke);hist.pe.push(e.pe);hist.te.push(e.te);hist.mom.push(vy);
+  if(hist.te.length>2&&hist.te[hist.te.length-1]<hist.te[hist.te.length-2]*.99)hist.peaks.push({t:simTime,h:gnd-y-r});
+  if(hist.t.length>500)for(let k in hist)hist[k].shift()
+}}
+function reset(){x=350;y=50;vy=0;bounces=0;simTime=0;bounceTimes=[];for(let k in hist)hist[k]=[];paused=false;const pb=document.getElementById('pauseBtn');if(pb)pb.textContent='Pause'}
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,.03)';ctx.fillRect(0,gnd,W,H-gnd);ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,gnd);ctx.lineTo(W,gnd);ctx.stroke();
+  for(let i=0;i<W;i+=12){ctx.fillStyle='rgba(0,0,0,.06)';ctx.fillRect(i,gnd+3,6,1)}
+  for(let i=0;i<gnd;i+=5){ctx.fillStyle=`rgba(0,0,0,${.005*(1-i/gnd)})`;ctx.fillRect(0,i,W,5)}
+  const gr=ctx.createRadialGradient(x-3,y-3,2,x,y,r+3);gr.addColorStop(0,'#444');gr.addColorStop(1,'#000');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=.5;ctx.beginPath();ctx.arc(x-2,y-2,4,0,Math.PI*2);ctx.stroke();
+  // Trail
+  if(hist.y.length>2)for(let i=1;i<hist.y.length;i+=3){const f=i/hist.y.length;ctx.fillStyle=`rgba(0,0,0,${.02+.06*f})`;ctx.beginPath();ctx.arc(x,Math.max(50,gnd-hist.y[i]),1.5+f,0,Math.PI*2);ctx.fill()}
+  // Height graph
+  const gX=480,gY=20,gW=390,gH=110;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(gX,gY,gW,gH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('height vs time',gX+3,gY+10);
+  if(hist.y.length>2){const yM=Math.max(...hist.y)*1.1||1;ctx.beginPath();for(let i=0;i<hist.y.length;i++){const px=gX+(i/hist.y.length)*gW,py=gY+gH-(hist.y[i]/yM)*gH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=.8;ctx.stroke()}
+  // Energy graph
+  const egX=480,egY=140,egW=390,egH=65;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(egX,egY,egW,egH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('E = KE + PE (dashed = PE)',egX+3,egY+10);
+  if(hist.te.length>2){const eM=Math.max(...hist.te)*1.1||1;ctx.beginPath();for(let i=0;i<hist.ke.length;i++){const px=egX+(i/hist.ke.length)*egW,py=egY+egH-(hist.ke[i]/eM)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.7;ctx.stroke();ctx.beginPath();for(let i=0;i<hist.pe.length;i++){const px=egX+(i/hist.pe.length)*egW,py=egY+egH-(hist.pe[i]/eM)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.15)';ctx.lineWidth=.5;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();for(let i=0;i<hist.te.length;i++){const px=egX+(i/hist.te.length)*egW,py=egY+egH-(hist.te[i]/eM)*egH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='#111';ctx.lineWidth=.5;ctx.stroke()}
+  // Bounce height decay graph
+  const bgX=480,bgY=215,bgW=390,bgH=50;ctx.strokeStyle='#ddd';ctx.lineWidth=.5;ctx.strokeRect(bgX,bgY,bgW,bgH);ctx.fillStyle='#999';ctx.font='7px monospace';ctx.fillText('peak heights (bounce #)',bgX+3,bgY+10);
+  if(hist.peaks.length>2){const pM=Math.max(...hist.peaks.map(p=>p.h))*1.1||1;ctx.beginPath();for(let i=0;i<hist.peaks.length;i++){const px=bgX+(i/hist.peaks.length)*bgW,py=bgY+bgH-(hist.peaks[i].h/pM)*bgH;i===0?ctx.moveTo(px,py):ctx.lineTo(px,py)}ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.7;ctx.stroke()}
+  // Velocity arrow
+  if(Math.abs(vy)>.5){ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+15,y);ctx.lineTo(x+15+vy*2,y);ctx.stroke();ctx.fillStyle='rgba(0,0,0,.2)';ctx.font='7px monospace';ctx.fillText('v',x+15+vy*2+2,y+2)}
+  const e=E();const eDrift=hist.te.length>2?((Math.max(...hist.te)-Math.min(...hist.te))/(Math.abs(Math.max(...hist.te))||1)*100):0;
+  const th=hist.peaks.length>1?hist.peaks[hist.peaks.length-1].h:0,th2=hist.peaks.length>2?hist.peaks[hist.peaks.length-2].h:0;
+  const measE=th>0&&th2>0?Math.sqrt(th/th2):0;
+  // Info
+  ctx.fillStyle='#111';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText(`h=${(gnd-y-r).toFixed(2)}m | v=${vy.toFixed(3)}m/s | KE=${e.ke.toFixed(3)}J`,480,290);
+  ctx.fillText(`PE=${e.pe.toFixed(3)}J | E=${e.te.toFixed(3)}J | bounces=${bounces}`,480,306);
+  ctx.fillText(`COR=${coe.toFixed(3)} | e(meas)=${measE.toFixed(3)} | ΔE=${((1-coe*coe)*100).toFixed(1)}%/bounce`,480,322);
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>e (COR)</label><input type="range" id="coeS" min=".05" max="1" step=".01" value="${coe}"><span class="val" id="coeV">${coe.toFixed(2)}</span></div>`+
+    `<div class="ctrl-group"><label>g</label><input type="range" id="gravS" min="1" max="30" step=".5" value="${g}"><span class="val" id="gravV">${g.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Drop h</label><input type="range" id="dropS" min="30" max="380" step="5" value="${H-gnd-50-r}"><span class="val" id="dropV">${H-gnd-50-r}</span></div>`+
+    `<div class="ctrl-group"><label>Mass</label><input type="range" id="massS" min=".1" max="5" step=".1" value="1"><span class="val" id="massV">1.0</span></div>`+
+    `<button id="pauseBtn">Pause</button><button id="resetBtn">Reset</button>`+
+    `<div class="ctrl-group"><label>Speed</label><input type="range" id="speedS" min="1" max="8" step="1" value="${speed}"><span class="val" id="speedV">${speed}x</span></div>`;
+  document.getElementById('coeS').addEventListener('input',function(){coe=parseFloat(this.value);document.getElementById('coeV').textContent=coe.toFixed(2)});
+  document.getElementById('gravS').addEventListener('input',function(){g=parseFloat(this.value);document.getElementById('gravV').textContent=g.toFixed(1)});
+  document.getElementById('dropS').addEventListener('input',function(){const dh=parseFloat(this.value);y=Math.max(10,gnd-dh-r);document.getElementById('dropV').textContent=dh});
+  document.getElementById('massS').addEventListener('input',function(){document.getElementById('massV').textContent=parseFloat(this.value).toFixed(1)});
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause'});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('speedS').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('speedV').textContent=speed+'x'});
+}
+  const p=vy;const pDrift=hist.mom.length>2?((Math.max(...hist.mom)-Math.min(...hist.mom))/(Math.abs(Math.max(...hist.mom))||1)*100):0;
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">h =</span> <span class="val">${(gnd-y-r).toFixed(2)}</span> m</span>`+
+    `<span><span class="label">v =</span> <span class="val">${vy.toFixed(3)}</span> m/s</span>`+
+    `<span><span class="label">KE =</span> <span class="val">${e.ke.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">PE =</span> <span class="val">${e.pe.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">E =</span> <span class="val">${e.te.toFixed(4)}</span> J</span>`+
+    `<span><span class="label">p =</span> <span class="val">${p.toFixed(4)}</span> kg·m/s</span>`+
+    `<span><span class="label">Bounces =</span> <span class="val">${bounces}</span></span>`+
+    `<span><span class="label">COR =</span> <span class="val">${coe.toFixed(3)}</span></span>`+
+    `<span><span class="label">e(meas) =</span> <span class="val">${measE.toFixed(3)}</span></span>`+
+    `<span><span class="label">ΔE/E =</span> <span class="val">${eDrift.toFixed(4)}%</span></span>`+
+    `<span><span class="label">Loss/bounce =</span> <span class="val">${((1-coe*coe)*100).toFixed(2)}%</span></span>`+
+    `<span><span class="label">Time to rest =</span> <span class="val">${simTime>0?(simTime).toFixed(2):0}</span> s</span>`;
+}
+function loop(){step();draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
+</html>

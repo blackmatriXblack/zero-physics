@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elastic Collision 2D · Momentum & Energy Conservation</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}p{font-size:0.75em;color:#666;margin-bottom:10px}canvas{border:1px solid #000;display:block}.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}.ctrl-group input[type=range]{width:70px;accent-color:#000}.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}button:hover{background:#000;color:#fff}.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}.stats span{white-space:nowrap}.stats .label{color:#999}.stats .val{color:#000;font-weight:700}</style>
+</head>
+<body>
+<h1>Elastic Collision 2D</h1>
+<p>Momentum & kinetic energy conservation in 2D collisions</p>
+<canvas id="c" width="900" height="500"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c');const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+const restitution=1;
+let gravityOn=false,paused=false;
+let totalPx=0,totalPy=0,totalKE=0;
+
+class Ball{
+  constructor(x,y,r,m,vx,vy,c){
+    this.x=x;this.y=y;this.r=r;this.m=m;
+    this.vx=vx;this.vy=vy;
+    this.trail=[];this.color=c||'#111';
+  }
+}
+
+const balls=[];
+let ballId=0;
+function initBalls(){
+  balls.length=0;ballId=0;
+  balls.push(new Ball(250,250,22,3,120,40,'#111'));
+  balls.push(new Ball(450,200,18,2,-100,-50,'#333'));
+  balls.push(new Ball(550,320,26,5,-70,80,'#222'));
+  balls.push(new Ball(350,380,14,1.5,90,-70,'#444'));
+  balls.push(new Ball(480,130,20,2.5,-50,110,'#555'));
+}
+
+function addBall(){
+  const r=8+Math.random()*20;
+  const m=r/4;
+  const colors=['#111','#222','#333','#444','#555'];
+  balls.push(new Ball(100+Math.random()*500,50+Math.random()*300,r,m,
+    (Math.random()-0.5)*200,(Math.random()-0.5)*200,colors[ballId%5]));
+  ballId++;
+}
+
+function resolveCollision(a,b){
+  const dx=b.x-a.x,dy=b.y-a.y;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  const minDist=a.r+b.r;
+  if(dist>=minDist||dist<0.001)return;
+  const nx=dx/dist,ny=dy/dist;
+  const overlap=minDist-dist;
+  const totalMass=a.m+b.m;
+  a.x-=nx*overlap*(b.m/totalMass);a.y-=ny*overlap*(b.m/totalMass);
+  b.x+=nx*overlap*(a.m/totalMass);b.y+=ny*overlap*(a.m/totalMass);
+  const dvx=a.vx-b.vx,dvy=a.vy-b.vy;
+  const dvn=dvx*nx+dvy*ny;
+  if(dvn>0)return;
+  const impulse=(2*dvn)/totalMass;
+  a.vx-=impulse*b.m*nx;a.vy-=impulse*b.m*ny;
+  b.vx+=impulse*a.m*nx;b.vy+=impulse*a.m*ny;
+}
+
+function step(){
+  if(paused)return;
+  for(const b of balls){
+    if(gravityOn)b.vy+=800*0.016;
+    b.x+=b.vx*0.016;b.y+=b.vy*0.016;
+    if(b.x-b.r<0){b.x=b.r;b.vx=-b.vx*restitution;}
+    if(b.x+b.r>W){b.x=W-b.r;b.vx=-b.vx*restitution;}
+    if(b.y-b.r<0){b.y=b.r;b.vy=-b.vy*restitution;}
+    if(b.y+b.r>H){b.y=H-b.r;b.vy=-b.vy*restitution;}
+    b.trail.push({x:b.x,y:b.y});
+    if(b.trail.length>80)b.trail.shift();
+  }
+  for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)resolveCollision(balls[i],balls[j]);
+}
+
+function resetSim(){
+  initBalls();paused=false;
+  document.getElementById('pauseBtn').textContent='Pause';
+}
+initBalls();
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  totalPx=0;totalPy=0;totalKE=0;
+  for(const b of balls){
+    totalPx+=b.m*b.vx;totalPy+=b.m*b.vy;
+    totalKE+=0.5*b.m*(b.vx*b.vx+b.vy*b.vy);
+
+    // Trail
+    if(b.trail.length>1){
+      ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);
+      for(let k=1;k<b.trail.length;k++)ctx.lineTo(b.trail[k].x,b.trail[k].y);
+      ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=0.3;ctx.stroke();
+    }
+
+    // Ball
+    const grad=ctx.createRadialGradient(b.x-b.r*0.3,b.y-b.r*0.3,2,b.x,b.y,b.r);
+    grad.addColorStop(0,'#666');grad.addColorStop(1,b.color);
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#000';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.stroke();
+
+    // Mass label
+    ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='7px monospace';ctx.textAlign='center';
+    ctx.fillText(b.m.toFixed(1),b.x,b.y+3);
+
+    // Velocity arrow
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x+b.vx*0.3,b.y+b.vy*0.3);ctx.stroke();
+  }
+
+  // Stats panel
+  const sx=620,sy=30;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(sx,sy,260,120);
+  ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+  ctx.fillText('COLLISION STATS',sx+5,sy+14);
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+  ctx.fillText(`Balls: ${balls.length}`,sx+5,sy+30);
+  ctx.fillText(`Σp_x = ${totalPx.toFixed(2)}`,sx+5,sy+44);
+  ctx.fillText(`Σp_y = ${totalPy.toFixed(2)}`,sx+5,sy+58);
+  ctx.fillText(`|Σp| = ${Math.sqrt(totalPx*totalPx+totalPy*totalPy).toFixed(2)}`,sx+5,sy+72);
+  ctx.fillText(`ΣKE = ${totalKE.toFixed(2)}`,sx+5,sy+86);
+  ctx.fillText(`e = ${restitution.toFixed(1)} (elastic)`,sx+5,sy+100);
+  ctx.fillText(`Gravity: ${gravityOn?'ON':'OFF'}`,sx+5,sy+114);
+
+  // Momentum vector (total)
+  ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=2;
+  const psx=750,psy=200;
+  ctx.beginPath();ctx.moveTo(psx,psy);ctx.lineTo(psx+totalPx*0.05,psy+totalPy*0.05);ctx.stroke();
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='6px monospace';ctx.fillText('Σp',psx+totalPx*0.05+5,psy+totalPy*0.05);
+
+  // Energy bar
+  const ex=620,ey=180,eW=260,eH=30;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(ex,ey,eW,eH);
+  const keMax=Math.max(totalKE,0.01);
+  const keNorm=Math.min(totalKE/120,1);
+  ctx.fillStyle='#111';
+  ctx.fillRect(ex+1,ey+1,keNorm*(eW-2),eH-2);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('KE',ex+eW/2,ey+eH/2+3);
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<button id="gravBtn">${gravityOn?'ON':'OFF'}</button>`+
+    `<button id="addBtn">+Ball</button>`+
+    `<button id="pauseBtn">Pause</button>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('gravBtn').addEventListener('click',function(){gravityOn=!gravityOn;this.textContent=gravityOn?'ON':'OFF';});
+  document.getElementById('addBtn').addEventListener('click',addBall);
+  document.getElementById('pauseBtn').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Play':'Pause';});
+  document.getElementById('resetBtn').addEventListener('click',resetSim);
+
+}
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">Balls:</span> <span class="val">${balls.length}</span></span>`+
+    `<span><span class="label">ΣKE:</span> <span class="val">${totalKE.toFixed(2)}</span></span>`+
+    `<span><span class="label">Σp_x:</span> <span class="val">${totalPx.toFixed(2)}</span></span>`+
+    `<span><span class="label">Σp_y:</span> <span class="val">${totalPy.toFixed(2)}</span></span>`+
+    `<span><span class="label">|Σp|:</span> <span class="val">${Math.sqrt(totalPx*totalPx+totalPy*totalPy).toFixed(2)}</span></span>`;
+}
+
+function loop(){step();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>

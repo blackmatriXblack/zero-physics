@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finite Well · Bound states & exponential decay</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;color:#111;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:15px}
+h1{font-size:1.4em;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:2px}
+p{font-size:0.75em;color:#666;margin-bottom:10px}
+canvas{border:1px solid #000;display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;max-width:900px}
+.ctrl-group{display:flex;align-items:center;gap:4px;background:#fafafa;border:1px solid #eee;padding:4px 10px;border-radius:2px}
+.ctrl-group label{font-size:0.65em;color:#666;text-transform:uppercase;letter-spacing:1px}
+.ctrl-group input[type=range]{width:70px;accent-color:#000}
+.ctrl-group .val{font-size:0.7em;color:#000;min-width:24px;text-align:right}
+button{background:#fff;border:1px solid #000;color:#000;padding:4px 12px;font-family:'Courier New',monospace;font-size:0.7em;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+button:hover{background:#000;color:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:6px;font-size:0.65em;color:#666;max-width:900px;justify-content:center}
+.stats span{white-space:nowrap}
+.stats .label{color:#999}
+.stats .val{color:#000;font-weight:700}
+</style>
+</head>
+<body>
+<h1>Finite Potential Well</h1>
+<p>V₀ = 10 — bound state wavefunction with classically forbidden penetration</p>
+<canvas id="c" width="900" height="520"></canvas>
+<div class="controls" id="controls"></div>
+<div class="stats" id="stats"></div>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+let V0=10,E=6,wellW=200,showDecay=true;
+const ox=150,oy=300,paused=false;
+const history={Evals:[]};
+
+function countBound(V0,w){
+  const z=Math.sqrt(2*V0)*w/2;
+  return Math.floor(2*z/Math.PI+1);
+}
+
+function solveBound(V0,w,state){
+  const z0=Math.sqrt(2*V0)*w/2;
+  const guess=(state)*Math.PI/2;
+  let z=Math.min(guess+0.3,z0*0.99);
+  for(let iter=0;iter<50;iter++){
+    const f=z*Math.tan(z)-Math.sqrt(z0*z0-z*z);
+    const df=Math.tan(z)+z/(Math.cos(z)*Math.cos(z))+z/Math.sqrt(Math.max(z0*z0-z*z,1e-10));
+    const dz=-f/(df+1e-10);
+    z=Math.max(0.01,Math.min(z+dz,z0*0.999));
+    if(Math.abs(dz)<1e-8)break;
+  }
+  const E=(2*z*z)/(w*w);
+  return E<V0?E:V0*0.99;
+}
+
+function draw(){
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const bound=E<V0;
+  const nStates=countBound(V0,wellW);
+  const curState=Math.max(1,Math.min(nStates,Math.floor(Math.sqrt(E*2)*wellW/Math.PI)+1));
+
+  // Well potential
+  ctx.fillStyle='rgba(0,0,0,0.02)';ctx.fillRect(ox-wellW/2,40,wellW,420);
+  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(ox-wellW/2,40);ctx.lineTo(ox-wellW/2,oy);
+  ctx.lineTo(ox+wellW/2,oy);ctx.lineTo(ox+wellW/2,40);ctx.stroke();
+  ctx.fillStyle='#999';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText('V₀ = '+V0.toFixed(1),ox+wellW/2+50,oy-5);
+  ctx.fillText('E = '+E.toFixed(2),ox-wellW/2-50,oy-5);
+
+  // Energy level
+  const eY=oy-E*10;
+  ctx.strokeStyle='rgba(0,0,0,0.08)';ctx.lineWidth=0.3;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(40,eY);ctx.lineTo(W-40,eY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='left';ctx.fillText('E',W-50,eY+4);
+
+  if(bound){
+    const k=Math.sqrt(2*E);
+    const kappa=Math.sqrt(2*(V0-E));
+    const A=1/Math.sqrt(wellW/2+1/kappa);
+    const half=wellW/2;
+
+    // Wavefunction inside well
+    ctx.strokeStyle='#111';ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let x=-half;x<=half;x++){
+      const psi=A*Math.cos(k*x);
+      const py=oy-psi*80;
+      x===-half?ctx.moveTo(ox+x,py):ctx.lineTo(ox+x,py);
+    }
+    ctx.stroke();
+
+    // Exponential decay outside (left)
+    if(showDecay){
+      ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.6;
+      ctx.beginPath();
+      for(let x=-150;x<=0;x++){
+        const decay=A*Math.cos(k*half)*Math.exp(kappa*(x+half));
+        const py=oy-decay*80;
+        x===-150?ctx.moveTo(ox-half+x,py):ctx.lineTo(ox-half+x,py);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for(let x=0;x<=150;x++){
+        const decay=A*Math.cos(k*half)*Math.exp(-kappa*(x-half));
+        const py=oy-decay*80;
+        x===0?ctx.moveTo(ox+half+x,py):ctx.lineTo(ox+half+x,py);
+      }
+      ctx.stroke();
+    }
+
+    // Probability density (|ψ|²)
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    for(let x=-half;x<=half;x++){
+      const psi=A*Math.cos(k*x);
+      const prob=psi*psi;
+      const py=oy-prob*200;
+      x===-half?ctx.moveTo(ox+x,py):ctx.lineTo(ox+x,py);
+    }
+    ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#999';ctx.font='6px monospace';ctx.textAlign='center';
+    ctx.fillText('ψ — |ψ|² - -',ox,oy-160);
+
+    // Info box
+    const ix=570,iy=330;
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+    ctx.strokeRect(ix,iy,300,110);
+    ctx.fillStyle='#111';ctx.font='8px monospace';ctx.textAlign='left';
+    ctx.fillText('BOUND STATE PARAMETERS',ix+5,iy+14);
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.font='7px monospace';
+    ctx.fillText(`k = √(2mE)/ℏ = ${k.toFixed(4)}`,ix+5,iy+28);
+    ctx.fillText(`κ = √(2m(V₀-E))/ℏ = ${kappa.toFixed(4)}`,ix+5,iy+42);
+    ctx.fillText(`Penetration depth δ = 1/κ = ${(1/kappa).toFixed(3)}`,ix+5,iy+56);
+    ctx.fillText(`Tunneling ∝ exp(-2κa) ≈ ${Math.exp(-2*kappa*half).toExponential(3)}`,ix+5,iy+70);
+    ctx.fillText(`Bound states available: ${nStates}`,ix+5,iy+84);
+    ctx.fillText(`Current state index: ~${curState}`,ix+5,iy+98);
+  }else{
+    // Scattering state
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=0.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();
+    for(let x=0;x<=600;x++){
+      const val=Math.sin(0.08*x+0.3*Math.sin(x/100));
+      const py=oy-val*80;
+      x===0?ctx.moveTo(ox+100,py):ctx.lineTo(ox+100+x,py);
+    }
+    ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='center';
+    ctx.fillText('E > V₀: SCATTERING STATE — unbound continuum',ox+250,oy+50);
+  }
+
+  // Transmission prob vs energy mini graph
+  const gx=570,gy=30,gw=300,gh=80;
+  ctx.strokeStyle='#ddd';ctx.lineWidth=0.5;
+  ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle='#111';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('T(E) TRANSMISSION vs ENERGY',gx+3,gy+10);
+  ctx.beginPath();
+  for(let i=0;i<=gw;i+=2){
+    const e=(i/gw)*V0*1.5;
+    const kk=Math.sqrt(2*Math.min(e,V0));
+    const kap=Math.sqrt(2*Math.max(V0-e,0));
+    const T=e<V0?Math.exp(-2*kap*wellW/2):0.5+0.5*Math.sin(kk*wellW/2);
+    const ty=gy+gh-5-(e>V0?1:Math.exp(-2*kap*wellW/2))*gh*0.8;
+    i===0?ctx.moveTo(gx+i,ty):ctx.lineTo(gx+i,ty);
+  }
+  ctx.strokeStyle='#111';ctx.lineWidth=0.6;ctx.stroke();
+  ctx.fillStyle='#666';ctx.font='5px monospace';ctx.textAlign='left';
+  ctx.fillText('E=0',gx,gy+gh-2);
+  ctx.fillText('V₀',gx+V0/(V0*1.5)*gw,gy+gh-2);
+
+  // T(E=current) marker
+  const eRatio=Math.min(E/(V0*1.5),1);
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(gx+eRatio*gw,gy+gh-5,3,0,Math.PI*2);ctx.fill();
+
+  // Controls
+if(!document.getElementById('controls').querySelector('button')){
+  document.getElementById('controls').innerHTML=
+    `<div class="ctrl-group"><label>V₀</label><input type="range" id="vS" min="2" max="25" step="0.5" value="${V0}"><span class="val" id="vV">${V0.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>E</label><input type="range" id="eS" min="0.5" max="30" step="0.1" value="${E}"><span class="val" id="eV">${E.toFixed(1)}</span></div>`+
+    `<div class="ctrl-group"><label>Width</label><input type="range" id="wS" min="50" max="400" step="10" value="${wellW}"><span class="val" id="wV">${wellW}</span></div>`+
+    `<button id="resetBtn">Reset</button>`;
+
+  document.getElementById('vS').addEventListener('input',function(){V0=parseFloat(this.value);document.getElementById('vV').textContent=V0.toFixed(1);});
+  document.getElementById('eS').addEventListener('input',function(){E=parseFloat(this.value);document.getElementById('eV').textContent=E.toFixed(1);});
+  document.getElementById('wS').addEventListener('input',function(){wellW=parseFloat(this.value);document.getElementById('wV').textContent=wellW;});
+  document.getElementById('resetBtn').addEventListener('click',function(){V0=10;E=6;wellW=200;});
+}
+
+  // Stats
+  const k=Math.sqrt(2*Math.min(E,V0));
+  const kappa=Math.sqrt(2*Math.max(V0-E,0));
+  const T=bound?Math.exp(-2*kappa*wellW/2):1;
+  let totP=0;
+  if(bound){
+    const A=1/Math.sqrt(wellW/2+1/kappa);
+    for(let x=-wellW/2;x<=wellW/2;x++)totP+=(A*Math.cos(k*x))**2*0.5;
+  }
+  document.getElementById('stats').innerHTML=
+    `<span><span class="label">E =</span> <span class="val">${E.toFixed(2)}</span></span>`+
+    `<span><span class="label">V₀ =</span> <span class="val">${V0.toFixed(1)}</span></span>`+
+    `<span><span class="label">State</span> <span class="val">${bound?'Bound':'Scattering'}</span></span>`+
+    `<span><span class="label">k =</span> <span class="val">${k.toFixed(4)}</span></span>`+
+    `<span><span class="label">κ =</span> <span class="val">${kappa.toFixed(4)}</span></span>`+
+    `<span><span class="label">T ∝</span> <span class="val">${bound?T.toExponential(3):'1'}</span></span>`+
+    `<span><span class="label">States avail.</span> <span class="val">${nStates}</span></span>`+
+    `<span><span class="label">Well width</span> <span class="val">${wellW}</span></span>`+
+    `<span><span class="label">E/V₀ ratio</span> <span class="val">${(E/V0).toFixed(3)}</span></span>`+
+    `<span><span class="label">E>V₀?</span> <span class="val">${E>V0?'Yes':'No'}</span></span>`;
+}
+draw();
+</script>
+</body>
+</html>
